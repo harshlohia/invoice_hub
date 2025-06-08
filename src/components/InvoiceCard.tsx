@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { Eye, Edit, Download, Trash2, CheckCircle, AlertCircle, Clock, FilePenLine, MoreVertical, Loader2, Send } from 'lucide-react';
 import {format} from 'date-fns';
-import type { Timestamp as FirestoreTimestamp } from 'firebase/firestore'; // Renamed to avoid conflict if needed, or ensure Timestamp is imported
+import type { Timestamp as FirestoreTimestamp } from 'firebase/firestore';
 import { useState, useEffect } from 'react';
 import {
   DropdownMenu,
@@ -19,12 +19,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { db } from '@/lib/firebase';
-import { doc, updateDoc, serverTimestamp, Timestamp } from "firebase/firestore"; // Added Timestamp import
+import { doc, updateDoc, serverTimestamp, Timestamp } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 
 interface InvoiceCardProps {
   invoice: Invoice;
-  onStatusUpdate?: (invoiceId: string, newStatus: Invoice['status']) => void; // Callback for parent
+  onStatusUpdate?: (invoiceId: string, newStatus: Invoice['status']) => void;
 }
 
 const statusStyles: Record<Invoice['status'], string> = {
@@ -48,7 +48,6 @@ const ensureDate = (dateValue: Date | FirestoreTimestamp | undefined): Date => {
   if (dateValue instanceof Date) {
     return dateValue;
   }
-  // Make sure Timestamp is from firebase/firestore for .toDate()
   return (dateValue as FirestoreTimestamp).toDate();
 };
 
@@ -59,7 +58,7 @@ export function InvoiceCard({ invoice: initialInvoice, onStatusUpdate }: Invoice
   const { toast } = useToast();
 
   useEffect(() => {
-    setInvoice(initialInvoice); // Sync with parent prop changes
+    setInvoice(initialInvoice);
   }, [initialInvoice]);
 
   const invoiceDate = ensureDate(invoice.invoiceDate);
@@ -76,10 +75,9 @@ export function InvoiceCard({ invoice: initialInvoice, onStatusUpdate }: Invoice
       const invoiceRef = doc(db, 'invoices', invoice.id);
       await updateDoc(invoiceRef, {
         status: newStatus,
-        updatedAt: serverTimestamp(), // serverTimestamp() correctly returns a Timestamp placeholder
+        updatedAt: serverTimestamp(),
       });
       
-      // For local state update, use new Timestamp() after ensuring it's imported
       const updatedInvoiceLocal = { ...invoice, status: newStatus, updatedAt: new Timestamp(Math.floor(new Date().getTime() / 1000), 0) };
       setInvoice(updatedInvoiceLocal); 
 
@@ -145,11 +143,12 @@ export function InvoiceCard({ invoice: initialInvoice, onStatusUpdate }: Invoice
         <Button variant="outline" size="sm" asChild>
           <Link href={`/dashboard/invoices/${invoice.id}/edit`}><Edit className="mr-1 h-4 w-4" /> Edit</Link>
         </Button>
-        <Button variant="ghost" size="sm" className="text-primary hover:text-primary/80" disabled>
-          <Download className="mr-1 h-4 w-4" /> PDF
+        <Button variant="ghost" size="sm" className="text-primary hover:text-primary/80" asChild>
+          <Link href={`/dashboard/invoices/${invoice.id}?initiatePdfDownload=true`}>
+            <Download className="mr-1 h-4 w-4" /> PDF
+          </Link>
         </Button>
       </CardFooter>
     </Card>
   );
 }
-

@@ -1,8 +1,8 @@
 
 "use client";
 
-import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useEffect, useState, useRef } from 'react';
+import { useParams, useSearchParams } from 'next/navigation';
 import { doc, getDoc, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Invoice } from '@/lib/types';
@@ -13,12 +13,19 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 
+interface InvoicePreviewHandle {
+  downloadPdf: () => Promise<void>;
+}
+
 export default function ViewInvoicePage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const invoiceId = params.id as string;
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const invoicePreviewRef = useRef<InvoicePreviewHandle>(null);
+  const [downloadTriggered, setDownloadTriggered] = useState(false);
 
   useEffect(() => {
     if (invoiceId) {
@@ -31,7 +38,6 @@ export default function ViewInvoicePage() {
 
           if (invoiceDocSnap.exists()) {
             const data = invoiceDocSnap.data();
-            // Ensure dates are JS Date objects
             const fetchedInvoice = {
               id: invoiceDocSnap.id,
               ...data,
@@ -39,6 +45,7 @@ export default function ViewInvoicePage() {
               dueDate: (data.dueDate as Timestamp).toDate(),
               createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate() : undefined,
               updatedAt: data.updatedAt ? (data.updatedAt as Timestamp).toDate() : undefined,
+              currency: data.currency || "INR", // Ensure currency is available
             } as Invoice;
             setInvoice(fetchedInvoice);
           } else {
@@ -54,6 +61,25 @@ export default function ViewInvoicePage() {
       fetchInvoice();
     }
   }, [invoiceId]);
+
+  useEffect(() => {
+    const initiateDownload = searchParams.get('initiatePdfDownload');
+    if (initiateDownload === 'true' && invoice && invoicePreviewRef.current && !downloadTriggered) {
+      setDownloadTriggered(true); // Prevent re-triggering
+      // Adding a small delay to ensure content is rendered before PDF generation
+      setTimeout(() => {
+        invoicePreviewRef.current?.downloadPdf().catch(pdfError => {
+          console.error("Error triggering PDF download from ViewInvoicePage:", pdfError);
+          // Optionally, show a toast message to the user about the error
+        });
+      }, 500); // 500ms delay
+    }
+  }, [searchParams, invoice, downloadTriggered]);
+
+
+  const handleStatusChangeFromPreview = (updatedInvoice: Invoice) => {
+    setInvoice(updatedInvoice); // Update the state on this page if status changes in preview
+  };
 
   if (loading) {
     return (
@@ -83,7 +109,7 @@ export default function ViewInvoicePage() {
   }
 
   if (!invoice) {
-     return ( // Should be caught by error state, but as a fallback
+     return (
       <div className="max-w-2xl mx-auto text-center py-12">
         <Alert variant="destructive" className="text-left">
           <AlertTriangle className="h-5 w-5"/>
@@ -105,7 +131,7 @@ export default function ViewInvoicePage() {
         <h1 className="text-3xl font-headline font-bold tracking-tight">Invoice {invoice.invoiceNumber}</h1>
         <p className="text-muted-foreground">Viewing details for invoice sent to {invoice.client.name}.</p>
       </div>
-      <InvoicePreview invoice={invoice} />
+      <InvoicePreview ref={invoicePreviewRef} invoice={invoice} onStatusChange={handleStatusChangeFromPreview} />
     </div>
   );
 }
