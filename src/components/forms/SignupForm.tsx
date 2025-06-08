@@ -52,27 +52,26 @@ export function SignupForm() {
     try {
       const authInstance: Auth = getFirebaseAuthInstance(); 
       const userCredential = await createUserWithEmailAndPassword(authInstance, values.email, values.password);
-      const user = userCredential.user;
-      console.log("Firebase user created successfully:", user);
+      console.log("Firebase user created successfully:", userCredential.user);
+      const firestoreUser = userCredential.user; // Renamed to avoid confusion with User icon import
 
-      // Store additional user information in Firestore
-      if (user && user.email) { // Ensure user and user.email are populated
-        console.log(`Attempting to store user data in Firestore for UID: ${user.uid}, Email: ${user.email}`);
+      if (firestoreUser && firestoreUser.email) { 
+        console.log(`Attempting to store user data in Firestore for UID: ${firestoreUser.uid}, Email: ${firestoreUser.email}`);
         try {
-          await setDoc(doc(db, "users", user.uid), {
-            uid: user.uid,
-            email: user.email,
+          await setDoc(doc(db, "users", firestoreUser.uid), {
+            uid: firestoreUser.uid,
+            email: firestoreUser.email,
             businessName: values.businessName,
             createdAt: serverTimestamp(),
             firstName: "", 
             lastName: "",
           });
-          console.log("User data stored in Firestore for UID:", user.uid);
+          console.log("User data stored in Firestore for UID:", firestoreUser.uid);
           toast({
             title: "Account Created Successfully",
             description: "User profile created. Please log in to continue.",
           });
-          router.push("/login"); // Redirect after both auth and firestore success
+          router.push("/login"); 
         } catch (firestoreError: any) {
           console.error("Firestore Error Code:", firestoreError.code);
           console.error("Firestore Error Message:", firestoreError.message);
@@ -82,7 +81,7 @@ export function SignupForm() {
             description: `User account created, but failed to save profile details to Firestore: ${firestoreError.message}. Please update in settings or check console.`,
             variant: "destructive",
           });
-          router.push("/login"); // Still redirect, as auth account was made
+          router.push("/login"); 
         }
       } else {
         console.error("User object from Firebase Auth was not fully populated. Cannot save to Firestore.");
@@ -91,20 +90,31 @@ export function SignupForm() {
           description: "User account was created, but profile details could not be saved due to an unexpected issue. Please contact support or try updating in settings.",
           variant: "destructive",
         });
-        router.push("/login"); // Redirect to login
+        router.push("/login"); 
       }
     } catch (error: any) {
-      console.error("Firebase Signup Error Details:", error);
-      console.error("Error Code:", error.code);
-      console.error("Error Message:", error.message);
+      let errorMessage = "Failed to create account. Please try again.";
+      let isExpectedAuthError = false;
 
-      let errorMessage = "Failed to create account. Please try again. Check the console for more details.";
       if (error.code === 'auth/email-already-in-use') {
         errorMessage = "This email address is already in use.";
+        isExpectedAuthError = true;
+        console.warn(`Firebase Auth: ${error.message} (Code: ${error.code})`);
       } else if (error.code === 'auth/weak-password') {
-        errorMessage = "The password is too weak. Please use a stronger password."; 
+        errorMessage = "The password is too weak. Please use a stronger password.";
+        isExpectedAuthError = true;
+        console.warn(`Firebase Auth: ${error.message} (Code: ${error.code})`);
       } else if (error.code === 'auth/invalid-email') {
         errorMessage = "The email address is not valid.";
+        isExpectedAuthError = true;
+        console.warn(`Firebase Auth: ${error.message} (Code: ${error.code})`);
+      }
+      
+      if (!isExpectedAuthError) {
+        console.error("Firebase Signup Error Details:", error);
+        console.error("Error Code:", error.code);
+        console.error("Error Message:", error.message);
+        errorMessage = `An unexpected error occurred: ${error.message}. Check console for details.`;
       }
       
       toast({
