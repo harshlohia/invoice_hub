@@ -15,8 +15,8 @@ import { Header } from './Header';
 import { Button } from '../ui/button';
 import { LogOut } from 'lucide-react';
 import Link from 'next/link';
-import { auth } from '@/lib/firebase';
-import { signOut } from 'firebase/auth';
+import { getFirebaseAuthInstance } from '@/lib/firebase'; // Changed import
+import { signOut, type Auth } from 'firebase/auth'; // Added Auth type
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 
@@ -30,7 +30,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const handleLogout = async () => {
     try {
-      await signOut(auth);
+      const authInstance: Auth = getFirebaseAuthInstance(); // Get Auth instance
+      await signOut(authInstance);
       toast({ title: "Logged Out", description: "You have been successfully logged out." });
       router.push('/login');
     } catch (error) {

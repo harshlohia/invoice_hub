@@ -17,8 +17,8 @@ import { Menu, Bell, UserCircle, Settings, LogOut, Sun, Moon } from 'lucide-reac
 import { AppLogo } from './AppLogo';
 import { SidebarNav } from './SidebarNav'; 
 import { useState, useEffect } from 'react';
-import { auth } from '@/lib/firebase';
-import { signOut } from 'firebase/auth';
+import { getFirebaseAuthInstance } from '@/lib/firebase'; // Changed import
+import { signOut, type Auth } from 'firebase/auth'; // Ensured Auth type is imported
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 
@@ -46,7 +46,8 @@ export function Header() {
 
   const handleLogout = async () => {
     try {
-      await signOut(auth);
+      const authInstance: Auth = getFirebaseAuthInstance(); // Get Auth instance
+      await signOut(authInstance);
       toast({ title: "Logged Out", description: "You have been successfully logged out." });
       router.push('/login');
     } catch (error) {

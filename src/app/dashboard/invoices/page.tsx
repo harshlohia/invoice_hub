@@ -2,17 +2,17 @@
 "use client";
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { InvoiceCard } from '@/components/InvoiceCard';
 import type { Invoice } from '@/lib/types'; 
 import { PlusCircle, Search, Filter, Loader2, AlertTriangle, FileText } from 'lucide-react';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
-import { db, auth } from '@/lib/firebase';
+import { collection, query, where, getDocs, orderBy, Timestamp } from 'firebase/firestore';
+import { db, getFirebaseAuthInstance } from '@/lib/firebase'; // Updated import
 import { useToast } from '@/hooks/use-toast';
-import { onAuthStateChanged, type User } from 'firebase/auth';
+import { onAuthStateChanged, type User, type Auth } from 'firebase/auth'; // Auth type for instance
 
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -23,26 +23,11 @@ export default function InvoicesPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const { toast } = useToast();
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
-      if (user) {
-        fetchInvoices(user.uid);
-      } else {
-        setLoading(false);
-        setInvoices([]);
-        // Optionally redirect to login or show a message
-      }
-    });
-    return () => unsubscribe();
-  }, [toast]);
-
-  const fetchInvoices = async (userId: string) => {
+  const fetchInvoices = useCallback(async (userId: string) => {
     setLoading(true);
     setError(null);
     try {
       const invoicesRef = collection(db, "invoices");
-      // Query invoices for the current user, ordered by invoiceDate descending
       const q = query(invoicesRef, where("userId", "==", userId), orderBy("invoiceDate", "desc"));
       const querySnapshot = await getDocs(q);
       const invoicesData = querySnapshot.docs.map(doc => {
@@ -50,9 +35,8 @@ export default function InvoicesPage() {
         return { 
           id: doc.id, 
           ...data,
-          // Ensure dates are JS Date objects if they are Firestore Timestamps
-          invoiceDate: data.invoiceDate.toDate ? data.invoiceDate.toDate() : new Date(data.invoiceDate),
-          dueDate: data.dueDate.toDate ? data.dueDate.toDate() : new Date(data.dueDate),
+          invoiceDate: data.invoiceDate instanceof Timestamp ? data.invoiceDate.toDate() : new Date(data.invoiceDate),
+          dueDate: data.dueDate instanceof Timestamp ? data.dueDate.toDate() : new Date(data.dueDate),
         } as Invoice;
       });
       setInvoices(invoicesData);
@@ -63,7 +47,21 @@ export default function InvoicesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]); // Added toast to useCallback dependencies
+
+  useEffect(() => {
+    const authInstance: Auth = getFirebaseAuthInstance(); // Get Auth instance
+    const unsubscribe = onAuthStateChanged(authInstance, (user) => {
+      setCurrentUser(user);
+      if (user) {
+        fetchInvoices(user.uid);
+      } else {
+        setLoading(false);
+        setInvoices([]);
+      }
+    });
+    return () => unsubscribe();
+  }, [fetchInvoices]); // fetchInvoices is now a dependency
   
   const filteredInvoices = invoices.filter(invoice => {
     const searchTermMatch = 
@@ -112,7 +110,6 @@ export default function InvoicesPage() {
             <SelectItem value="cancelled">Cancelled</SelectItem>
           </SelectContent>
         </Select>
-        {/* <Button variant="outline" className="w-full md:w-auto">Apply Filters</Button> */}
       </div>
 
       {loading && (
