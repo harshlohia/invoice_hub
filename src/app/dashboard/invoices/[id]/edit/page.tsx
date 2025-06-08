@@ -8,6 +8,7 @@ import { db } from '@/lib/firebase';
 import type { Invoice } from '@/lib/types';
 import { InvoiceForm } from "@/components/forms/InvoiceForm";
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Card, CardHeader, CardContent } from '@/components/ui/card'; // Added Card, CardHeader, CardContent
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
