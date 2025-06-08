@@ -41,9 +41,9 @@ export default function InvoicesPage() {
       });
       setInvoices(invoicesData);
     } catch (err) {
-      console.error("Error fetching invoices:", err);
-      setError("Failed to load invoices. Please try again.");
-      toast({ title: "Error", description: "Could not fetch invoices.", variant: "destructive" });
+      console.error("Detailed error fetching invoices:", err); // Enhanced logging
+      setError("Failed to load invoices. Please try again. Check the browser console for more details.");
+      toast({ title: "Error", description: "Could not fetch invoices. Check console.", variant: "destructive" });
     } finally {
       setLoading(false);
     }
