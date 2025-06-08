@@ -8,7 +8,7 @@ import { Download, Printer, Send, Edit, Loader2, CheckCircle, AlertCircle, Clock
 import { format } from 'date-fns';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, forwardRef, useImperativeHandle } from 'react'; // Added forwardRef, useImperativeHandle
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { useToast } from "@/hooks/use-toast";
@@ -25,7 +25,11 @@ import {
 
 interface InvoicePreviewProps {
   invoice: Invoice;
-  onStatusChange?: (updatedInvoice: Invoice) => void; // Optional: To update parent state
+  onStatusChange?: (updatedInvoice: Invoice) => void; 
+}
+
+export interface InvoicePreviewHandle { // Exposed handle type
+  downloadPdf: () => Promise<void>;
 }
 
 const statusIcons: Record<Invoice['status'], React.ReactElement> = {
@@ -36,7 +40,7 @@ const statusIcons: Record<Invoice['status'], React.ReactElement> = {
   cancelled: <CancelIcon className="h-4 w-4 text-yellow-600" />,
 };
 
-export function InvoicePreview({ invoice: initialInvoice, onStatusChange }: InvoicePreviewProps) {
+export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewProps>(({ invoice: initialInvoice, onStatusChange }, ref) => {
   const invoiceCardRef = useRef<HTMLDivElement>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
@@ -44,7 +48,7 @@ export function InvoicePreview({ invoice: initialInvoice, onStatusChange }: Invo
   const [invoice, setInvoice] = useState<Invoice>(initialInvoice);
 
   useEffect(() => {
-    setInvoice(initialInvoice); // Update local state if prop changes
+    setInvoice(initialInvoice); 
   }, [initialInvoice]);
 
   const handleUpdateStatus = async (newStatus: Invoice['status']) => {
@@ -60,8 +64,7 @@ export function InvoicePreview({ invoice: initialInvoice, onStatusChange }: Invo
         updatedAt: serverTimestamp() as Timestamp,
       });
       
-      // Optimistically update local state. Firestore listener would be more robust for real-time.
-      const updatedInvoice = { ...invoice, status: newStatus, updatedAt: new Timestamp(new Date().getTime() / 1000, 0) }; // Approximate updatedAt
+      const updatedInvoice = { ...invoice, status: newStatus, updatedAt: new Timestamp(new Date().getTime() / 1000, 0) }; 
       setInvoice(updatedInvoice);
       if (onStatusChange) {
         onStatusChange(updatedInvoice);
@@ -139,6 +142,11 @@ export function InvoicePreview({ invoice: initialInvoice, onStatusChange }: Invo
     }
   };
 
+  useImperativeHandle(ref, () => ({ // Expose downloadPdf function
+    downloadPdf: handleDownloadPdf,
+  }));
+
+
   const invoiceDate = invoice.invoiceDate instanceof Timestamp ? invoice.invoiceDate.toDate() : new Date(invoice.invoiceDate);
   const dueDate = invoice.dueDate instanceof Timestamp ? invoice.dueDate.toDate() : new Date(invoice.dueDate);
   const currencySymbol = invoice.currency === "INR" ? "Rs." : (invoice.currency || "Rs.");
@@ -146,12 +154,20 @@ export function InvoicePreview({ invoice: initialInvoice, onStatusChange }: Invo
 
   return (
     <Card className="max-w-4xl mx-auto shadow-lg">
-      <div ref={invoiceCardRef}> {/* This div wraps content to be captured for PDF */}
+      <div ref={invoiceCardRef}> 
         <CardHeader className="bg-muted/30 p-6">
           <div className="flex flex-col md:flex-row justify-between items-start gap-4">
             <div>
               {invoice.billerInfo.logoUrl ? (
-                <Image src={invoice.billerInfo.logoUrl} alt={`${invoice.billerInfo.businessName} logo`} width={120} height={60} className="mb-2" data-ai-hint="company logo"/>
+                <Image
+                  src={invoice.billerInfo.logoUrl}
+                  alt={`${invoice.billerInfo.businessName} logo`}
+                  width={120}
+                  height={60}
+                  className="mb-2"
+                  style={{ objectFit: 'contain' }} 
+                  data-ai-hint="company logo"
+                />
               ) : (
                 <div className="h-16 w-32 bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-muted-foreground mb-2 rounded text-sm" data-ai-hint="logo placeholder">
                   Logo
@@ -268,7 +284,7 @@ export function InvoicePreview({ invoice: initialInvoice, onStatusChange }: Invo
           </div>
           )}
         </CardContent>
-      </div> {/* End of div for PDF capture */}
+      </div> 
       <CardFooter className="p-6 border-t bg-muted/30 flex flex-col sm:flex-row justify-end items-center gap-2 do-not-print-in-pdf">
         <Button variant="outline" asChild>
           <Link href={`/dashboard/invoices/${invoice.id}/edit`}><Edit className="mr-2 h-4 w-4" /> Edit Invoice</Link>
@@ -293,7 +309,7 @@ export function InvoicePreview({ invoice: initialInvoice, onStatusChange }: Invo
           </DropdownMenuContent>
         </DropdownMenu>
         
-        <Button variant="outline" disabled><Printer className="mr-2 h-4 w-4" /> Print</Button>
+        <Button variant="outline" onClick={() => window.print()} disabled={isDownloading}><Printer className="mr-2 h-4 w-4" /> Print</Button> {/* Simple print */}
         <Button 
           className="bg-accent hover:bg-accent/90 text-accent-foreground"
           onClick={handleDownloadPdf}
@@ -309,5 +325,6 @@ export function InvoicePreview({ invoice: initialInvoice, onStatusChange }: Invo
       </CardFooter>
     </Card>
   );
-}
+});
 
+InvoicePreview.displayName = 'InvoicePreview';
