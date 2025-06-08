@@ -94,7 +94,7 @@ export function ClientForm({ initialData, onSave }: ClientFormProps) {
       return;
     }
     
-    form.formState.isSubmitting = true;
+    // REMOVED: form.formState.isSubmitting = true; (This was the error)
     try {
       if (initialData?.id) {
         // Update existing client
@@ -108,8 +108,7 @@ export function ClientForm({ initialData, onSave }: ClientFormProps) {
         if (!updateValues.userId) {
             toast({ title: "Error", description: "User ID missing for update.", variant: "destructive" });
             console.error("ClientForm onSubmit: User ID missing for update. Values:", updateValues);
-            form.formState.isSubmitting = false;
-            return;
+            return; // Removed form.formState.isSubmitting = false;
         }
         console.log("ClientForm onSubmit: Data for update:", updateValues);
         await updateDoc(clientRef, updateValues);
@@ -128,8 +127,7 @@ export function ClientForm({ initialData, onSave }: ClientFormProps) {
         if (!currentUser) { 
              toast({ title: "Error", description: "Authentication error, please re-login.", variant: "destructive" });
              console.error("ClientForm onSubmit: CurrentUser is null when trying to add new client.");
-             form.formState.isSubmitting = false;
-             return;
+             return; // Removed form.formState.isSubmitting = false;
         }
         console.log("ClientForm onSubmit: Adding new client for user ID:", currentUser.uid);
         const clientDataWithUser = {
@@ -161,10 +159,8 @@ export function ClientForm({ initialData, onSave }: ClientFormProps) {
         description: `Failed to save client. ${error.message || "Please try again."}`,
         variant: "destructive",
       });
-    } finally {
-      form.formState.isSubmitting = false;
-      // form.reset(form.getValues()); // Consider if resetting is desired after save or if navigation handles it
-    }
+    } 
+    // REMOVED: finally { form.formState.isSubmitting = false; }
   }
 
   const isSubmitDisabled = form.formState.isSubmitting || loadingAuth || (!currentUser && !initialData);
@@ -312,4 +308,3 @@ export function ClientForm({ initialData, onSave }: ClientFormProps) {
     </Form>
   );
 }
-
