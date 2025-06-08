@@ -31,8 +31,8 @@ import { CalendarIcon, PlusCircle, Trash2, Edit2, Loader2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { collection, getDocs, addDoc, doc, getDoc, serverTimestamp, Timestamp, updateDoc } from 'firebase/firestore';
-import { db, auth } from '@/lib/firebase';
-import { onAuthStateChanged, type User } from "firebase/auth";
+import { db, getFirebaseAuthInstance } from '@/lib/firebase'; // Updated import
+import { onAuthStateChanged, type User, type Auth } from "firebase/auth"; // Added Auth type
 
 const lineItemSchema = z.object({
   id: z.string().default(() => crypto.randomUUID()),
@@ -89,10 +89,11 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
   const [selectedClientData, setSelectedClientData] = useState<Client | null>(null);
   const [loadingClients, setLoadingClients] = useState(!initialData); // Only load clients if creating new
   const [loadingBillerInfo, setLoadingBillerInfo] = useState(!initialData); // Only load biller if creating new
-  const [currentUser, setCurrentUser] = useState<User | null>(auth.currentUser);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const authInstance: Auth = getFirebaseAuthInstance();
+    const unsubscribe = onAuthStateChanged(authInstance, (user) => {
       setCurrentUser(user);
     });
     return () => unsubscribe();
@@ -159,8 +160,8 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
 
     if (initialData) {
       // Populate form if editing
-      const invoiceDate = initialData.invoiceDate instanceof Timestamp ? initialData.invoiceDate.toDate() : initialData.invoiceDate;
-      const dueDate = initialData.dueDate instanceof Timestamp ? initialData.dueDate.toDate() : initialData.dueDate;
+      const invoiceDate = initialData.invoiceDate instanceof Timestamp ? initialData.invoiceDate.toDate() : new Date(initialData.invoiceDate);
+      const dueDate = initialData.dueDate instanceof Timestamp ? initialData.dueDate.toDate() : new Date(initialData.dueDate);
       
       form.reset({
         invoiceNumber: initialData.invoiceNumber,
@@ -287,7 +288,10 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
         const invoiceRef = doc(db, "invoices", initialData.id);
         const updatePayload = { ...invoiceData };
         if (initialData.createdAt) { // Preserve original createdAt
-            (updatePayload as Invoice).createdAt = initialData.createdAt;
+             const originalCreatedAt = initialData.createdAt instanceof Timestamp 
+                ? initialData.createdAt 
+                : Timestamp.fromDate(new Date(initialData.createdAt));
+            (updatePayload as Invoice).createdAt = originalCreatedAt;
         }
         await updateDoc(invoiceRef, updatePayload);
         toast({

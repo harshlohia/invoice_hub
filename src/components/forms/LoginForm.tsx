@@ -18,8 +18,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Mail, Lock, Loader2 } from "lucide-react";
-import { auth } from "@/lib/firebase";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { getFirebaseAuthInstance } from "@/lib/firebase"; // Changed import
+import { signInWithEmailAndPassword, type Auth } from "firebase/auth"; // Added Auth type
 
 const loginFormSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address." }),
@@ -42,7 +42,8 @@ export function LoginForm() {
   async function onSubmit(values: LoginFormValues) {
     console.log("Attempting login with:", values.email);
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, values.email, values.password);
+      const authInstance: Auth = getFirebaseAuthInstance(); // Get Auth instance
+      const userCredential = await signInWithEmailAndPassword(authInstance, values.email, values.password);
       console.log("Firebase user logged in successfully:", userCredential.user);
       toast({
         title: "Login Successful",

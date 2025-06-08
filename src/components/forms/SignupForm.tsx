@@ -18,8 +18,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { User, Mail, Lock, Loader2 } from "lucide-react";
-import { auth } from "@/lib/firebase";
-import { createUserWithEmailAndPassword } from "firebase/auth";
+import { getFirebaseAuthInstance } from "@/lib/firebase"; // Changed import
+import { createUserWithEmailAndPassword, type Auth } from "firebase/auth"; // Added Auth type
 
 const signupFormSchema = z.object({
   businessName: z.string().min(1, { message: "Business name is required." }),
@@ -49,7 +49,8 @@ export function SignupForm() {
   async function onSubmit(values: SignupFormValues) {
     console.log("Attempting signup with:", values.email);
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
+      const authInstance: Auth = getFirebaseAuthInstance(); // Get Auth instance
+      const userCredential = await createUserWithEmailAndPassword(authInstance, values.email, values.password);
       console.log("Firebase user created successfully:", userCredential.user);
       // In a real app, you might want to save businessName to Firestore user profile here
       // associated with userCredential.user.uid
@@ -68,7 +69,7 @@ export function SignupForm() {
       if (error.code === 'auth/email-already-in-use') {
         errorMessage = "This email address is already in use.";
       } else if (error.code === 'auth/weak-password') {
-        errorMessage = "The password is too weak. It must be at least 6 characters long (Firebase default).";
+        errorMessage = "The password is too weak. Please use a stronger password."; // Updated message
       } else if (error.code === 'auth/invalid-email') {
         errorMessage = "The email address is not valid.";
       }
@@ -150,7 +151,7 @@ export function SignupForm() {
         />
         <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={form.formState.isSubmitting}>
           {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {form.formState.isSubmitting ? "Creating Account..." : "Create Account"}
+          {form.formS_tate.isSubmitting ? "Creating Account..." : "Create Account"}
         </Button>
         <Button variant="outline" className="w-full" type="button" disabled={form.formState.isSubmitting}>
           Sign up with Google
