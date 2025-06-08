@@ -5,12 +5,12 @@ import { getAuth } from "firebase/auth";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyA7X0lfZbW6LoPZixfRHsxx1AdmtImM4MA",
-  authDomain: "invoice-hub-80f7e.firebaseapp.com",
-  projectId: "invoice-hub-80f7e",
-  storageBucket: "invoice-hub-80f7e.appspot.com",
-  messagingSenderId: "1047418322494",
-  appId: "1:1047418322494:web:245928258e77c5ddf15b6f"
+  apiKey: "AIzaSyDZFgHIErLWKfhLDRyUNlpSLLSVzTwBfmg",
+  authDomain: "invoice-hub-1765e.firebaseapp.com",
+  projectId: "invoice-hub-1765e",
+  storageBucket: "invoice-hub-1765e.firebasestorage.app", // Using the one provided by user
+  messagingSenderId: "986012587191",
+  appId: "1:986012587191:web:78b800673eba561686e932"
 };
 
 // Initialize Firebase
