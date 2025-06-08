@@ -34,7 +34,6 @@ export default function InvoicesPage() {
       const invoicesRef = collection(db, "invoices");
       let q = query(invoicesRef, where("userId", "==", userId));
 
-      // Date Range Filtering
       const now = new Date();
       let startDate: Date | null = null;
       let endDate: Date | null = null;
@@ -49,7 +48,7 @@ export default function InvoicesPage() {
           endDate = endOfMonth(subMonths(now, 1));
           break;
         case "last3Months":
-          startDate = startOfMonth(subMonths(now, 2)); // Current month and previous 2
+          startDate = startOfMonth(subMonths(now, 2)); 
           endDate = endOfMonth(now);
           break;
         case "thisYear":
@@ -58,7 +57,6 @@ export default function InvoicesPage() {
           break;
         case "all":
         default:
-          // No date filter for "all"
           break;
       }
 
@@ -66,12 +64,9 @@ export default function InvoicesPage() {
         q = query(q, where("invoiceDate", ">=", Timestamp.fromDate(startDate)));
       }
       if (endDate) {
-        // Adjust end date to include the whole day if necessary, Firestore timestamps are precise.
-        // For simplicity, endOfMonth usually gives a time at the end of the day.
         q = query(q, where("invoiceDate", "<=", Timestamp.fromDate(endDate)));
       }
       
-      // Always order by invoiceDate descending
       q = query(q, orderBy("invoiceDate", "desc"));
       
       const querySnapshot = await getDocs(q);
@@ -82,6 +77,8 @@ export default function InvoicesPage() {
           ...data,
           invoiceDate: data.invoiceDate instanceof Timestamp ? data.invoiceDate.toDate() : new Date(data.invoiceDate),
           dueDate: data.dueDate instanceof Timestamp ? data.dueDate.toDate() : new Date(data.dueDate),
+          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : data.createdAt ? new Date(data.createdAt) : undefined,
+          updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : data.updatedAt ? new Date(data.updatedAt) : undefined,
         } as Invoice;
       });
       setInvoices(invoicesData);
@@ -106,15 +103,24 @@ export default function InvoicesPage() {
       }
     });
     return () => unsubscribe();
-  }, [fetchInvoices, statusFilter, dateRangeFilter]); // Add statusFilter and dateRangeFilter as dependencies
+  }, [fetchInvoices, statusFilter, dateRangeFilter]);
   
+  const handleInvoiceStatusUpdate = (invoiceId: string, newStatus: Invoice['status']) => {
+    setInvoices(prevInvoices =>
+      prevInvoices.map(inv =>
+        inv.id === invoiceId ? { ...inv, status: newStatus, updatedAt: new Date() } : inv
+      )
+    );
+    // Optional: Re-apply client-side filters if necessary, though usually not needed just for status change
+    // unless statusFilter itself is active and the change moves it in/out of the current filter.
+    // The filteredInvoices computed value will handle this automatically.
+  };
+
   const filteredInvoices = invoices.filter(invoice => {
-    // Search term filter (client-side after date and user filtering from Firestore)
     const searchTermMatch = 
       invoice.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
       invoice.client.name.toLowerCase().includes(searchTerm.toLowerCase());
     
-    // Status filter (client-side)
     const statusMatch = statusFilter === "all" || invoice.status === statusFilter;
     
     return searchTermMatch && statusMatch;
@@ -122,15 +128,14 @@ export default function InvoicesPage() {
 
   const handleStatusFilterChange = (value: string) => {
     setStatusFilter(value);
-    if (currentUser) {
-      fetchInvoices(currentUser.uid, value, dateRangeFilter);
-    }
+    // No need to re-fetch from Firestore if only client-side status filter changes.
+    // Firestore fetching is based on userId and dateRange.
   };
 
   const handleDateRangeFilterChange = (value: DateRangeKey) => {
     setDateRangeFilter(value);
     if (currentUser) {
-      fetchInvoices(currentUser.uid, statusFilter, value);
+      fetchInvoices(currentUser.uid, statusFilter, value); // Refetch when date range changes
     }
   };
 
@@ -215,7 +220,7 @@ export default function InvoicesPage() {
       {!loading && !error && currentUser && filteredInvoices.length > 0 && (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {filteredInvoices.map((invoice) => (
-            <InvoiceCard key={invoice.id} invoice={invoice} />
+            <InvoiceCard key={invoice.id} invoice={invoice} onStatusUpdate={handleInvoiceStatusUpdate} />
           ))}
         </div>
       )}
@@ -239,4 +244,3 @@ export default function InvoicesPage() {
     </div>
   );
 }
-
