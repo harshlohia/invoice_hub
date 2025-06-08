@@ -75,13 +75,22 @@ export function ClientForm({ initialData, onSave }: ClientFormProps) {
     const unsubscribe = onAuthStateChanged(authInstance, (user) => {
       setCurrentUser(user);
       setLoadingAuth(false);
+      if (!user && !initialData) {
+        // If not logged in and it's a new client form, consider redirecting or disabling form
+        console.warn("ClientForm: User not logged in for new client.");
+      }
     });
     return () => unsubscribe();
-  }, []);
+  }, [initialData]); // Added initialData to re-evaluate if user is needed
 
   async function onSubmit(values: ClientFormValues) {
-    if (!currentUser && !initialData?.userId) { // For new clients, user must be logged in
+    console.log("ClientForm onSubmit: Values submitted:", values);
+    console.log("ClientForm onSubmit: Current user:", currentUser);
+    console.log("ClientForm onSubmit: Initial data:", initialData);
+
+    if (!currentUser && !initialData?.userId) { 
       toast({ title: "Error", description: "You must be logged in to save a client.", variant: "destructive" });
+      console.error("ClientForm onSubmit: Attempted to save without user.");
       return;
     }
     
@@ -89,63 +98,72 @@ export function ClientForm({ initialData, onSave }: ClientFormProps) {
     try {
       if (initialData?.id) {
         // Update existing client
+        console.log("ClientForm onSubmit: Updating existing client. ID:", initialData.id);
         const clientRef = doc(db, "clients", initialData.id);
-        // Ensure userId is not accidentally changed if it exists, or set it if somehow missing from initialData (shouldn't happen)
         const updateValues = {
             ...values,
             userId: initialData.userId || currentUser?.uid, 
-            // updatedAt: serverTimestamp(), 
+            updatedAt: serverTimestamp(), 
         };
         if (!updateValues.userId) {
             toast({ title: "Error", description: "User ID missing for update.", variant: "destructive" });
+            console.error("ClientForm onSubmit: User ID missing for update. Values:", updateValues);
             form.formState.isSubmitting = false;
             return;
         }
+        console.log("ClientForm onSubmit: Data for update:", updateValues);
         await updateDoc(clientRef, updateValues);
         toast({
           title: "Client Updated",
           description: `${values.name} has been successfully updated.`,
         });
         if (onSave) {
-          onSave({ ...updateValues, id: initialData.id } as Client);
+          onSave({ ...updateValues, id: initialData.id, updatedAt: new Date() } as unknown as Client); // Simulate timestamp for local state
         } else {
           router.push("/dashboard/clients");
           router.refresh(); 
         }
       } else {
         // Add new client
-        if (!currentUser) { // Double check for new client
+        if (!currentUser) { 
              toast({ title: "Error", description: "Authentication error, please re-login.", variant: "destructive" });
+             console.error("ClientForm onSubmit: CurrentUser is null when trying to add new client.");
              form.formState.isSubmitting = false;
              return;
         }
+        console.log("ClientForm onSubmit: Adding new client for user ID:", currentUser.uid);
         const clientDataWithUser = {
           ...values,
           userId: currentUser.uid,
-          // createdAt: serverTimestamp(), 
+          createdAt: serverTimestamp(), 
+          updatedAt: serverTimestamp(),
         };
+        console.log("ClientForm onSubmit: Data for new client:", clientDataWithUser);
         const docRef = await addDoc(collection(db, "clients"), clientDataWithUser);
+        console.log("ClientForm onSubmit: New client added with ID:", docRef.id);
         toast({
           title: "Client Added",
           description: `${values.name} has been successfully added.`,
         });
         if (onSave) {
-          onSave({ ...clientDataWithUser, id: docRef.id });
+          onSave({ ...clientDataWithUser, id: docRef.id, createdAt: new Date(), updatedAt: new Date() } as unknown as Client); // Simulate timestamp
         } else {
           router.push("/dashboard/clients");
           router.refresh(); 
         }
       }
-    } catch (error) {
-      console.error("Error saving client: ", error);
+    } catch (error: any) {
+      console.error("ClientForm onSubmit: Error saving client: ", error);
+      console.error("ClientForm onSubmit: Firestore Error Code:", error.code);
+      console.error("ClientForm onSubmit: Firestore Error Message:", error.message);
       toast({
-        title: "Error",
-        description: "Failed to save client. Please try again.",
+        title: "Error Saving Client",
+        description: `Failed to save client. ${error.message || "Please try again."}`,
         variant: "destructive",
       });
     } finally {
       form.formState.isSubmitting = false;
-      form.reset(form.getValues()); 
+      // form.reset(form.getValues()); // Consider if resetting is desired after save or if navigation handles it
     }
   }
 
@@ -282,15 +300,16 @@ export function ClientForm({ initialData, onSave }: ClientFormProps) {
             )}
           />
         <div className="flex justify-end gap-3 pt-4">
-            <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmitDisabled}>
+            <Button type="button" variant="outline" onClick={() => router.back()} disabled={form.formState.isSubmitting}>
             Cancel
             </Button>
             <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={isSubmitDisabled}>
             {(form.formState.isSubmitting || loadingAuth) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {loadingAuth && !initialData ? "Loading..." : form.formState.isSubmitting ? (initialData ? "Saving..." : "Adding Client...") : (initialData ? "Save Changes" : "Add Client")}
+            {loadingAuth && !initialData ? "Authenticating..." : form.formState.isSubmitting ? (initialData ? "Saving..." : "Adding Client...") : (initialData ? "Save Changes" : "Add Client")}
             </Button>
         </div>
       </form>
     </Form>
   );
 }
+
