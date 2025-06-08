@@ -1,10 +1,11 @@
+
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import Link from 'next/link';
-import { useRouter } from 'next/navigation'; // Changed from 'next/navigation'
+import { useRouter } from 'next/navigation'; 
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -16,7 +17,9 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, Lock } from "lucide-react";
+import { Mail, Lock, Loader2 } from "lucide-react";
+import { auth } from "@/lib/firebase";
+import { signInWithEmailAndPassword } from "firebase/auth";
 
 const loginFormSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address." }),
@@ -37,14 +40,25 @@ export function LoginForm() {
   });
 
   async function onSubmit(values: LoginFormValues) {
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    console.log("Login data:", values);
-    toast({
-      title: "Login Successful",
-      description: "Redirecting to dashboard...",
-    });
-    router.push("/dashboard");
+    try {
+      await signInWithEmailAndPassword(auth, values.email, values.password);
+      toast({
+        title: "Login Successful",
+        description: "Redirecting to dashboard...",
+      });
+      router.push("/dashboard");
+    } catch (error: any) {
+      console.error("Login error:", error);
+      let errorMessage = "Failed to log in. Please check your credentials.";
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+        errorMessage = "Invalid email or password. Please try again.";
+      }
+      toast({
+        title: "Login Failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    }
   }
 
   return (
@@ -88,10 +102,10 @@ export function LoginForm() {
           )}
         />
         <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={form.formState.isSubmitting}>
+          {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {form.formState.isSubmitting ? "Logging in..." : "Log In"}
         </Button>
         <Button variant="outline" className="w-full" type="button" disabled={form.formState.isSubmitting}>
-          {/* Placeholder for Google OAuth */}
           Log in with Google
         </Button>
         <p className="text-center text-sm text-muted-foreground">

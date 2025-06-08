@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from 'next/link';
@@ -14,17 +15,22 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Menu, Bell, UserCircle, Settings, LogOut, Sun, Moon } from 'lucide-react';
 import { AppLogo } from './AppLogo';
-import { SidebarNav } from './SidebarNav'; // Assuming SidebarNav exists or will be created
+import { SidebarNav } from './SidebarNav'; 
 import { useState, useEffect } from 'react';
+import { auth } from '@/lib/firebase';
+import { signOut } from 'firebase/auth';
+import { useRouter } from 'next/navigation';
+import { useToast } from '@/hooks/use-toast';
 
 
 export function Header() {
   const [mounted, setMounted] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const router = useRouter();
+  const { toast } = useToast();
 
   useEffect(() => {
     setMounted(true);
-    // Check initial theme, assuming 'dark' class is on <html>
     setIsDarkMode(document.documentElement.classList.contains('dark'));
   }, []);
   
@@ -38,8 +44,19 @@ export function Header() {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      toast({ title: "Logged Out", description: "You have been successfully logged out." });
+      router.push('/login');
+    } catch (error) {
+      console.error("Logout error:", error);
+      toast({ title: "Logout Failed", description: "Could not log you out. Please try again.", variant: "destructive" });
+    }
+  };
+
   if (!mounted) {
-    return ( // Return a placeholder or null during SSR to avoid hydration mismatch for theme toggle
+    return ( 
       <header className="sticky top-0 z-40 flex h-16 items-center gap-4 border-b bg-card px-4 md:px-6 animate-pulse">
         <div className="h-8 w-32 bg-muted rounded"></div>
         <div className="ml-auto flex items-center gap-4">
@@ -70,7 +87,6 @@ export function Header() {
       </div>
 
       <div className="hidden md:block">
-        {/* Placeholder for global search or breadcrumbs */}
       </div>
 
       <div className="ml-auto flex items-center gap-4">
@@ -83,7 +99,7 @@ export function Header() {
             <Button variant="ghost" size="icon" className="relative">
               <Bell className="h-5 w-5" />
               <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full transform translate-x-1/2 -translate-y-1/2">
-                3 {/* Example notification count */}
+                3
               </span>
               <span className="sr-only">Toggle notifications</span>
             </Button>
@@ -134,14 +150,14 @@ export function Header() {
             <DropdownMenuLabel>My Account</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              <Link href="/dashboard/profile"><Settings className="mr-2 h-4 w-4" />Profile</Link>
+              <Link href="/dashboard/profile"><UserCircle className="mr-2 h-4 w-4" />Profile</Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
               <Link href="/dashboard/settings"><Settings className="mr-2 h-4 w-4" />Settings</Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link href="/login"><LogOut className="mr-2 h-4 w-4" />Log out</Link>
+            <DropdownMenuItem onClick={handleLogout} className="cursor-pointer">
+              <LogOut className="mr-2 h-4 w-4" />Log out
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

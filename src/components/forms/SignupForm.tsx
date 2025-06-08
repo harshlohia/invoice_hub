@@ -1,3 +1,4 @@
+
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -16,7 +17,9 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { User, Mail, Lock } from "lucide-react";
+import { User, Mail, Lock, Loader2 } from "lucide-react";
+import { auth } from "@/lib/firebase";
+import { createUserWithEmailAndPassword } from "firebase/auth";
 
 const signupFormSchema = z.object({
   businessName: z.string().min(1, { message: "Business name is required." }),
@@ -44,14 +47,28 @@ export function SignupForm() {
   });
 
   async function onSubmit(values: SignupFormValues) {
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    console.log("Signup data:", values);
-    toast({
-      title: "Account Created Successfully",
-      description: "Please log in to continue.",
-    });
-    router.push("/login");
+    try {
+      // In a real app, you might want to save businessName to Firestore user profile
+      await createUserWithEmailAndPassword(auth, values.email, values.password);
+      toast({
+        title: "Account Created Successfully",
+        description: "Please log in to continue.",
+      });
+      router.push("/login");
+    } catch (error: any) {
+      console.error("Signup error:", error);
+      let errorMessage = "Failed to create account. Please try again.";
+      if (error.code === 'auth/email-already-in-use') {
+        errorMessage = "This email address is already in use.";
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = "The password is too weak.";
+      }
+      toast({
+        title: "Signup Failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    }
   }
 
   return (
@@ -122,10 +139,10 @@ export function SignupForm() {
           )}
         />
         <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={form.formState.isSubmitting}>
+          {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {form.formState.isSubmitting ? "Creating Account..." : "Create Account"}
         </Button>
         <Button variant="outline" className="w-full" type="button" disabled={form.formState.isSubmitting}>
-          {/* Placeholder for Google OAuth */}
           Sign up with Google
         </Button>
         <p className="text-center text-sm text-muted-foreground">
