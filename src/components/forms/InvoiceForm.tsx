@@ -66,11 +66,12 @@ const invoiceFormSchema = z.object({
   invoiceDate: z.date({ required_error: "Invoice date is required."}),
   dueDate: z.date({ required_error: "Due date is required."}),
   clientId: z.string().min(1, "Client is required."),
+  status: z.enum(['draft', 'sent', 'paid', 'overdue', 'cancelled']).default('draft'),
   isInterState: z.boolean().default(false),
   lineItems: z.array(lineItemSchema).min(1, "At least one line item is required."),
   notes: z.string().optional(),
   termsAndConditions: z.string().optional(),
-  billerInfo: billerInfoFormSchema, // This will hold the biller info fetched from user's doc for new invoices
+  billerInfo: billerInfoFormSchema, 
 });
 
 type InvoiceFormValues = z.infer<typeof invoiceFormSchema>;
@@ -98,10 +99,11 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
   const form = useForm<InvoiceFormValues>({
     resolver: zodResolver(invoiceFormSchema),
     defaultValues: {
-      invoiceNumber: `INV-${String(new Date().getFullYear())}${String(new Date().getMonth() + 1).padStart(2, '0')}-${Math.floor(Math.random()*1000)+1}`,
-      invoiceDate: new Date(),
-      dueDate: addDays(new Date(), 15),
+      invoiceNumber: initialData?.invoiceNumber || `INV-${String(new Date().getFullYear())}${String(new Date().getMonth() + 1).padStart(2, '0')}-${Math.floor(Math.random()*1000)+1}`,
+      invoiceDate: initialData?.invoiceDate ? (initialData.invoiceDate instanceof Timestamp ? initialData.invoiceDate.toDate() : new Date(initialData.invoiceDate)) : new Date(),
+      dueDate: initialData?.dueDate ? (initialData.dueDate instanceof Timestamp ? initialData.dueDate.toDate() : new Date(initialData.dueDate)) : addDays(new Date(), 15),
       clientId: initialData ? initialData.client.id : searchParams.get('clientId') || "",
+      status: initialData ? initialData.status : 'draft',
       isInterState: initialData ? initialData.isInterState : false,
       lineItems: initialData 
         ? initialData.lineItems.map(item => ({ ...item, id: item.id || crypto.randomUUID() }))
@@ -125,7 +127,6 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
     setLoadingClients(true);
     setLoadingBillerInfo(true);
     try {
-      // Fetch Clients
       const clientsRef = collection(db, "clients");
       const q = query(clientsRef, where("userId", "==", userId));
       const clientsQuerySnapshot = await getDocs(q);
@@ -141,16 +142,16 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
           }
       }
 
-      // Fetch BillerInfo from User's document
       const userDocRef = doc(db, "users", userId);
       const userDocSnap = await getDoc(userDocRef);
       if (userDocSnap.exists() && userDocSnap.data()?.billerInfo) {
         form.setValue("billerInfo", userDocSnap.data()?.billerInfo as BillerInfo);
       } else {
         toast({ 
-            title: "Biller Info Not Found", 
-            description: "Your business information is not set up. Default values will be used. Please update in Settings.", 
-            variant: "default" 
+            title: "Biller Info Recommended", 
+            description: "Your business information isn't fully set up. Please update it in Settings for complete invoices.", 
+            variant: "default",
+            duration: 5000,
         });
         form.setValue("billerInfo", defaultBillerInfo); 
       }
@@ -177,6 +178,7 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
         invoiceDate: invoiceDate,
         dueDate: dueDate,
         clientId: initialData.client.id,
+        status: initialData.status,
         isInterState: initialData.isInterState,
         lineItems: initialData.lineItems.map(item => ({
           ...item,
@@ -201,7 +203,6 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
     if (clientToUse && billerStateFromForm) {
       form.setValue("isInterState", clientToUse.state !== billerStateFromForm);
     }
-  // form.watch is used here, so including the specific watched field as a dependency.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientData, initialData, form.watch("billerInfo.state"), form.setValue, form.getValues]);
 
@@ -252,14 +253,14 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
       return;
     }
 
-    const clientForInvoice = initialData ? initialData.client : selectedClientData;
+    const clientForInvoice = initialData ? initialData.client : clients.find(c => c.id === values.clientId);
     if (!clientForInvoice) {
       toast({ title: "Client Not Selected", description: "Please select a client.", variant: "destructive" });
       return;
     }
     
     const billerInfoForInvoice = values.billerInfo; 
-    if (!billerInfoForInvoice?.businessName) {
+    if (!billerInfoForInvoice?.businessName && !initialData?.billerInfo?.businessName) {
          toast({ title: "Biller Info Missing", description: "Your business information is required. Please check settings.", variant: "destructive" });
         return;
     }
@@ -282,7 +283,7 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
       notes: values.notes,
       termsAndConditions: values.termsAndConditions,
       isInterState: values.isInterState,
-      status: initialData ? initialData.status : 'draft',
+      status: values.status, // Get status from form
       subTotal: currentTotals.subTotal,
       totalCGST: currentTotals.totalCGST,
       totalSGST: currentTotals.totalSGST,
@@ -291,7 +292,6 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
       updatedAt: serverTimestamp() as Timestamp, 
     };
     
-    // form.formState.isSubmitting = true; // This is handled by react-hook-form automatically
     try {
       if (initialData?.id) {
         const invoiceRef = doc(db, "invoices", initialData.id);
@@ -325,7 +325,6 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
         variant: "destructive",
       });
     } 
-    // finally { form.formState.isSubmitting = false; } // This is handled by react-hook-form automatically
   }
 
 
@@ -391,55 +390,70 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
                     <FormLabel>Client*</FormLabel>
                     <Select 
                       onValueChange={(value) => {
-                        if (!initialData) { 
-                           field.onChange(value);
-                           const client = clients.find(c => c.id === value);
-                           setSelectedClientData(client || null);
-                        }
+                        field.onChange(value); // Always update form value
+                        const client = clients.find(c => c.id === value);
+                        setSelectedClientData(client || null);
                       }} 
                       value={field.value}
-                      disabled={loadingAuth || loadingClients || !!initialData} 
+                      disabled={loadingAuth || loadingClients } 
                     >
                       <FormControl><SelectTrigger>
                         <SelectValue placeholder={
-                            initialData ? initialData.client.name :
                             (loadingAuth || (loadingClients && !initialData)) ? "Loading..." : 
                             (!currentUser && !initialData) ? "Please log in" :
                             "Select a client"
                         } />
                       </SelectTrigger></FormControl>
                       <SelectContent>
-                        {initialData ? (
-                             <SelectItem value={initialData.client.id} disabled>{initialData.client.name}</SelectItem>
-                        ) : (loadingAuth || loadingClients) ? (
+                        {(loadingAuth || loadingClients) && !initialData ? (
                             <SelectItem value="loading" disabled>
                                 <div className="flex items-center">
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading...
                                 </div>
                             </SelectItem>
-                        ) : clients.length === 0 ? (
+                        ) : clients.length === 0 && !initialData ? (
                             <SelectItem value="no-clients" disabled>No clients found. Add one first.</SelectItem>
                         ) : (
                             clients.map(client => <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>)
                         )}
+                         {initialData && <SelectItem value={initialData.client.id} disabled>{initialData.client.name}</SelectItem>}
                       </SelectContent>
                     </Select>
                     <FormMessage />
                   </FormItem>
                 )} />
-               <Button type="button" variant="outline" onClick={() => router.push('/dashboard/clients/new')} className="w-full md:w-auto" disabled={!!initialData || !currentUser}>
+               <Button type="button" variant="outline" onClick={() => router.push('/dashboard/clients/new')} className="w-full md:w-auto" disabled={!currentUser}>
                   <PlusCircle className="mr-2 h-4 w-4" /> Add New Client
                 </Button>
             </div>
-             <FormField control={form.control} name="isInterState" render={({ field }) => (
-                <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-4 shadow-sm">
-                    <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
-                    <div className="space-y-1 leading-none">
-                    <FormLabel>Inter-State Supply (Different State)?</FormLabel>
-                    <FormDescription>Check if client's state is different from yours for IGST calculation. Auto-detected if client is selected.</FormDescription>
-                    </div>
-                </FormItem>
-            )} />
+            <div className="grid md:grid-cols-2 gap-4">
+                <FormField control={form.control} name="status" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Status*</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl><SelectTrigger>
+                            <SelectValue placeholder="Select status" />
+                        </SelectTrigger></FormControl>
+                        <SelectContent>
+                            <SelectItem value="draft">Draft</SelectItem>
+                            <SelectItem value="sent">Sent</SelectItem>
+                            <SelectItem value="paid">Paid</SelectItem>
+                            <SelectItem value="overdue">Overdue</SelectItem>
+                            <SelectItem value="cancelled">Cancelled</SelectItem>
+                        </SelectContent>
+                        </Select>
+                        <FormMessage />
+                    </FormItem>
+                )} />
+                <FormField control={form.control} name="isInterState" render={({ field }) => (
+                    <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-4 shadow-sm mt-auto h-10">
+                        <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                        <div className="space-y-1 leading-none">
+                        <FormLabel>Inter-State Supply?</FormLabel>
+                        </div>
+                    </FormItem>
+                )} />
+            </div>
           </CardContent>
         </Card>
 
@@ -461,7 +475,7 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
                     <p>State: {form.getValues("billerInfo.state")}</p>
                   </>
                 ) : (
-                  <p className="text-destructive">Your business information is not set up. Please update in Settings to ensure correct invoices.</p>
+                  <p className="text-destructive-foreground bg-destructive/80 p-2 rounded-md">Your business information is not set up. Please update in Settings to ensure correct invoices.</p>
                 )}
             </CardContent>
         </Card>
@@ -583,3 +597,4 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
     </Form>
   );
 }
+

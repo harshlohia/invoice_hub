@@ -4,24 +4,78 @@ import type { Invoice } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
-import { Download, Printer, Send, Edit, Loader2 } from "lucide-react";
+import { Download, Printer, Send, Edit, Loader2, CheckCircle, AlertCircle, Clock, FilePenLine, MoreVertical, Trash2 as CancelIcon } from "lucide-react";
 import { format } from 'date-fns';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { useToast } from "@/hooks/use-toast";
-
+import { db } from '@/lib/firebase';
+import { doc, updateDoc, serverTimestamp, Timestamp } from "firebase/firestore";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface InvoicePreviewProps {
   invoice: Invoice;
+  onStatusChange?: (updatedInvoice: Invoice) => void; // Optional: To update parent state
 }
 
-export function InvoicePreview({ invoice }: InvoicePreviewProps) {
+const statusIcons: Record<Invoice['status'], React.ReactElement> = {
+  paid: <CheckCircle className="h-4 w-4 text-green-500" />,
+  sent: <Send className="h-4 w-4 text-blue-500" />, 
+  overdue: <AlertCircle className="h-4 w-4 text-red-500" />,
+  draft: <FilePenLine className="h-4 w-4 text-gray-500" />,
+  cancelled: <CancelIcon className="h-4 w-4 text-yellow-600" />,
+};
+
+export function InvoicePreview({ invoice: initialInvoice, onStatusChange }: InvoicePreviewProps) {
   const invoiceCardRef = useRef<HTMLDivElement>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const { toast } = useToast();
+  const [invoice, setInvoice] = useState<Invoice>(initialInvoice);
+
+  useEffect(() => {
+    setInvoice(initialInvoice); // Update local state if prop changes
+  }, [initialInvoice]);
+
+  const handleUpdateStatus = async (newStatus: Invoice['status']) => {
+    if (!invoice.id) {
+      toast({ title: "Error", description: "Invoice ID is missing.", variant: "destructive" });
+      return;
+    }
+    setIsUpdatingStatus(true);
+    try {
+      const invoiceRef = doc(db, 'invoices', invoice.id);
+      await updateDoc(invoiceRef, {
+        status: newStatus,
+        updatedAt: serverTimestamp() as Timestamp,
+      });
+      
+      // Optimistically update local state. Firestore listener would be more robust for real-time.
+      const updatedInvoice = { ...invoice, status: newStatus, updatedAt: new Timestamp(new Date().getTime() / 1000, 0) }; // Approximate updatedAt
+      setInvoice(updatedInvoice);
+      if (onStatusChange) {
+        onStatusChange(updatedInvoice);
+      }
+
+      toast({ title: "Status Updated", description: `Invoice marked as ${newStatus}.` });
+    } catch (error) {
+      console.error("Error updating invoice status:", error);
+      toast({ title: "Error", description: "Failed to update status.", variant: "destructive" });
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
 
   const handleDownloadPdf = async () => {
     if (!invoiceCardRef.current) {
@@ -85,6 +139,10 @@ export function InvoicePreview({ invoice }: InvoicePreviewProps) {
     }
   };
 
+  const invoiceDate = invoice.invoiceDate instanceof Timestamp ? invoice.invoiceDate.toDate() : new Date(invoice.invoiceDate);
+  const dueDate = invoice.dueDate instanceof Timestamp ? invoice.dueDate.toDate() : new Date(invoice.dueDate);
+
+
   return (
     <Card className="max-w-4xl mx-auto shadow-lg">
       <div ref={invoiceCardRef}> {/* This div wraps content to be captured for PDF */}
@@ -92,7 +150,7 @@ export function InvoicePreview({ invoice }: InvoicePreviewProps) {
           <div className="flex flex-col md:flex-row justify-between items-start gap-4">
             <div>
               {invoice.billerInfo.logoUrl ? (
-                <Image src={invoice.billerInfo.logoUrl} alt={`${invoice.billerInfo.businessName} logo`} width={120} height={60} className="mb-2" data-ai-hint="company logo" />
+                <Image src={invoice.billerInfo.logoUrl} alt={`${invoice.billerInfo.businessName} logo`} width={120} height={60} className="mb-2" data-ai-hint="company logo"/>
               ) : (
                 <div className="h-16 w-32 bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-muted-foreground mb-2 rounded text-sm" data-ai-hint="logo placeholder">
                   Logo
@@ -107,9 +165,13 @@ export function InvoicePreview({ invoice }: InvoicePreviewProps) {
             <div className="text-left md:text-right">
               <h1 className="text-3xl font-headline font-bold uppercase text-gray-700 dark:text-gray-300">Invoice</h1>
               <p className="text-lg text-muted-foreground"># {invoice.invoiceNumber}</p>
+              <div className="flex items-center justify-start md:justify-end gap-2 my-1">
+                 {statusIcons[invoice.status]}
+                <span className="text-sm font-medium capitalize">{invoice.status}</span>
+              </div>
               <Separator className="my-2"/>
-              <p className="text-sm"><span className="font-medium text-foreground">Date:</span> {format(new Date(invoice.invoiceDate), "dd MMM, yyyy")}</p>
-              <p className="text-sm"><span className="font-medium text-foreground">Due Date:</span> {format(new Date(invoice.dueDate), "dd MMM, yyyy")}</p>
+              <p className="text-sm"><span className="font-medium text-foreground">Date:</span> {format(invoiceDate, "dd MMM, yyyy")}</p>
+              <p className="text-sm"><span className="font-medium text-foreground">Due Date:</span> {format(dueDate, "dd MMM, yyyy")}</p>
             </div>
           </div>
         </CardHeader>
@@ -210,7 +272,26 @@ export function InvoicePreview({ invoice }: InvoicePreviewProps) {
         <Button variant="outline" asChild>
           <Link href={`/dashboard/invoices/${invoice.id}/edit`}><Edit className="mr-2 h-4 w-4" /> Edit Invoice</Link>
         </Button>
-        <Button variant="outline" disabled><Send className="mr-2 h-4 w-4" /> Send to Client</Button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" disabled={isUpdatingStatus}>
+                {isUpdatingStatus ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MoreVertical className="mr-2 h-4 w-4" />}
+                Change Status
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuLabel>Mark as...</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {invoice.status !== 'sent' && <DropdownMenuItem onClick={() => handleUpdateStatus('sent')} disabled={isUpdatingStatus}>Sent</DropdownMenuItem>}
+            {invoice.status !== 'paid' && <DropdownMenuItem onClick={() => handleUpdateStatus('paid')} disabled={isUpdatingStatus}>Paid</DropdownMenuItem>}
+            {invoice.status !== 'overdue' && (invoice.status === 'sent' || invoice.status === 'draft') && <DropdownMenuItem onClick={() => handleUpdateStatus('overdue')} disabled={isUpdatingStatus}>Overdue</DropdownMenuItem>}
+            <DropdownMenuSeparator />
+            {invoice.status !== 'draft' && <DropdownMenuItem onClick={() => handleUpdateStatus('draft')} disabled={isUpdatingStatus}>Draft</DropdownMenuItem>}
+            {invoice.status !== 'cancelled' && <DropdownMenuItem onClick={() => handleUpdateStatus('cancelled')} disabled={isUpdatingStatus || invoice.status === 'paid'} className="text-destructive focus:text-destructive focus:bg-destructive/10">Cancelled</DropdownMenuItem>}
+          </DropdownMenuContent>
+        </DropdownMenu>
+        
         <Button variant="outline" disabled><Printer className="mr-2 h-4 w-4" /> Print</Button>
         <Button 
           className="bg-accent hover:bg-accent/90 text-accent-foreground"
