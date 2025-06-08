@@ -1,6 +1,8 @@
 
+import type { Timestamp } from "firebase/firestore";
+
 export interface LineItem {
-  id: string;
+  id: string; // Can be a locally generated UUID for new items
   productName: string;
   quantity: number;
   rate: number;
@@ -25,8 +27,8 @@ export interface Client {
   state: string;
   postalCode: string;
   country: string; // Default to India
-  // createdAt?: any; // For Firestore Timestamp, handle during operations
-  // updatedAt?: any; 
+  // createdAt?: Timestamp; 
+  // updatedAt?: Timestamp; 
 }
 
 export interface BillerInfo {
@@ -39,7 +41,7 @@ export interface BillerInfo {
   postalCode: string;
   country: string; // Default to India
   phone?: string;
-  email?: string;
+  email?: string; // This is business email
   logoUrl?: string;
   bankName?: string;
   accountNumber?: string;
@@ -48,13 +50,14 @@ export interface BillerInfo {
 }
 
 export interface Invoice {
-  id: string;
+  id?: string; // Firestore document ID, optional before save
+  userId: string; // ID of the user who created the invoice
   invoiceNumber: string;
-  invoiceDate: Date; // Will be Firestore Timestamp
-  dueDate: Date; // Will be Firestore Timestamp
-  billerInfo: BillerInfo;
-  client: Client; // Store client snapshot or just ID
-  shippingAddress?: Client; 
+  invoiceDate: Date | Timestamp; 
+  dueDate: Date | Timestamp; 
+  billerInfo: BillerInfo; // Snapshot of biller info at time of creation
+  client: Client; // Snapshot of client info or just client ID to refetch - for simplicity, let's start with a snapshot
+  shippingAddress?: Partial<Client>; 
   lineItems: LineItem[];
   notes?: string;
   termsAndConditions?: string;
@@ -65,95 +68,27 @@ export interface Invoice {
   grandTotal: number; 
   status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
   isInterState: boolean; 
-  // userId?: string; // For multi-user apps
-  // createdAt?: any;
-  // updatedAt?: any;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
 }
 
-// Mock data for Biller (will be moved to settings later)
+// Mock data for Biller (used as a fallback if settings not found, or for structure reference)
+// Ideally, InvoiceForm should always fetch this from user settings.
 export const mockBiller: BillerInfo = {
-  businessName: "My Awesome Company Pvt Ltd",
-  gstin: "29ABCDE1234F1Z5",
-  addressLine1: "789 Main Road, Koramangala",
-  city: "Bengaluru",
-  state: "Karnataka",
-  postalCode: "560034",
+  businessName: "Default Business Name",
+  gstin: "00AAAAA0000A0Z0",
+  addressLine1: "Default Address Line 1",
+  city: "Default City",
+  state: "Default State",
+  postalCode: "000000",
   country: "India",
-  phone: "080-12345678",
-  email: "accounts@myawesomecompany.com",
-  bankName: "Awesome Bank",
-  accountNumber: "123456789012",
-  ifscCode: "AWSM0001234",
-  upiId: "myawesomecompany@upi"
+  phone: "000-000-0000",
+  email: "default@example.com",
+  bankName: "Default Bank",
+  accountNumber: "000000000000",
+  ifscCode: "DEFB0000000",
+  upiId: "default@upi"
 };
 
-
-// Mock data for Invoices (will be replaced by Firestore later)
-const tempMockClients: Client[] = [
-   {
-    id: 'client-1',
-    name: 'Acme Corp (Sample)',
-    gstin: '29AAAAA0000A1Z5',
-    email: 'contact@acme.com',
-    phone: '9876543210',
-    addressLine1: '123 Business St',
-    city: 'Bangalore',
-    state: 'Karnataka',
-    postalCode: '560001',
-    country: 'India',
-  },
-  {
-    id: 'client-2',
-    name: 'Innovate Hub (Sample)',
-    gstin: '27BBBBB0000B1Z5',
-    email: 'hello@innovate.co',
-    phone: '8765432109',
-    addressLine1: '456 Tech Park',
-    city: 'Mumbai',
-    state: 'Maharashtra',
-    postalCode: '400001',
-    country: 'India',
-  },
-];
-
-export const mockInvoices: Invoice[] = [
-  {
-    id: 'inv-1',
-    invoiceNumber: 'INV001',
-    invoiceDate: new Date('2023-10-01'),
-    dueDate: new Date('2023-10-15'),
-    billerInfo: mockBiller,
-    client: tempMockClients[0],
-    isInterState: false,
-    lineItems: [
-      { id: 'item-1', productName: 'Web Development', quantity: 1, rate: 50000, discountPercentage: 10, taxRate: 18, amount: 45000, cgst: 4050, sgst: 4050, igst: 0, totalAmount: 53100 },
-      { id: 'item-2', productName: 'Hosting Services', quantity: 12, rate: 1000, discountPercentage: 0, taxRate: 18, amount: 12000, cgst: 1080, sgst: 1080, igst: 0, totalAmount: 14160 },
-    ],
-    subTotal: 57000,
-    totalCGST: 5130,
-    totalSGST: 5130,
-    totalIGST: 0,
-    grandTotal: 67260,
-    status: 'paid',
-    termsAndConditions: 'Payment due within 15 days. Late fee of 2% per month.',
-  },
-  {
-    id: 'inv-2',
-    invoiceNumber: 'INV002',
-    invoiceDate: new Date('2023-10-05'),
-    dueDate: new Date('2023-10-20'),
-    billerInfo: mockBiller,
-    client: tempMockClients[1],
-    isInterState: true, // Example of inter-state
-    lineItems: [
-      { id: 'item-3', productName: 'Consulting Services', quantity: 20, rate: 2500, discountPercentage: 0, taxRate: 18, amount: 50000, cgst: 0, sgst: 0, igst: 9000, totalAmount: 59000 },
-    ],
-    subTotal: 50000,
-    totalCGST: 0,
-    totalSGST: 0,
-    totalIGST: 9000,
-    grandTotal: 59000,
-    status: 'sent',
-    notes: 'Thank you for your business!',
-  },
-];
+// tempMockClients removed as clients are fetched from Firestore.
+// mockInvoices removed as invoices will be fetched from Firestore.
