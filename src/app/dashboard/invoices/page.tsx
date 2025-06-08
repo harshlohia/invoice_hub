@@ -8,11 +8,14 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { InvoiceCard } from '@/components/InvoiceCard';
 import type { Invoice } from '@/lib/types'; 
-import { PlusCircle, Search, Filter, Loader2, AlertTriangle, FileText } from 'lucide-react';
+import { PlusCircle, Search, Filter, Loader2, AlertTriangle, FileText, CalendarDays } from 'lucide-react';
 import { collection, query, where, getDocs, orderBy, Timestamp } from 'firebase/firestore';
-import { db, getFirebaseAuthInstance } from '@/lib/firebase'; // Updated import
+import { db, getFirebaseAuthInstance } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
-import { onAuthStateChanged, type User, type Auth } from 'firebase/auth'; // Auth type for instance
+import { onAuthStateChanged, type User, type Auth } from 'firebase/auth';
+import { startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear } from 'date-fns';
+
+type DateRangeKey = "all" | "currentMonth" | "lastMonth" | "last3Months" | "thisYear";
 
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -21,14 +24,56 @@ export default function InvoicesPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [dateRangeFilter, setDateRangeFilter] = useState<DateRangeKey>("all");
   const { toast } = useToast();
 
-  const fetchInvoices = useCallback(async (userId: string) => {
+  const fetchInvoices = useCallback(async (userId: string, currentStatusFilter: string, currentDateRangeFilter: DateRangeKey) => {
     setLoading(true);
     setError(null);
     try {
       const invoicesRef = collection(db, "invoices");
-      const q = query(invoicesRef, where("userId", "==", userId), orderBy("invoiceDate", "desc"));
+      let q = query(invoicesRef, where("userId", "==", userId));
+
+      // Date Range Filtering
+      const now = new Date();
+      let startDate: Date | null = null;
+      let endDate: Date | null = null;
+
+      switch (currentDateRangeFilter) {
+        case "currentMonth":
+          startDate = startOfMonth(now);
+          endDate = endOfMonth(now);
+          break;
+        case "lastMonth":
+          startDate = startOfMonth(subMonths(now, 1));
+          endDate = endOfMonth(subMonths(now, 1));
+          break;
+        case "last3Months":
+          startDate = startOfMonth(subMonths(now, 2)); // Current month and previous 2
+          endDate = endOfMonth(now);
+          break;
+        case "thisYear":
+          startDate = startOfYear(now);
+          endDate = endOfYear(now);
+          break;
+        case "all":
+        default:
+          // No date filter for "all"
+          break;
+      }
+
+      if (startDate) {
+        q = query(q, where("invoiceDate", ">=", Timestamp.fromDate(startDate)));
+      }
+      if (endDate) {
+        // Adjust end date to include the whole day if necessary, Firestore timestamps are precise.
+        // For simplicity, endOfMonth usually gives a time at the end of the day.
+        q = query(q, where("invoiceDate", "<=", Timestamp.fromDate(endDate)));
+      }
+      
+      // Always order by invoiceDate descending
+      q = query(q, orderBy("invoiceDate", "desc"));
+      
       const querySnapshot = await getDocs(q);
       const invoicesData = querySnapshot.docs.map(doc => {
         const data = doc.data();
@@ -41,36 +86,53 @@ export default function InvoicesPage() {
       });
       setInvoices(invoicesData);
     } catch (err) {
-      console.error("Detailed error fetching invoices:", err); // Enhanced logging
+      console.error("Detailed error fetching invoices:", err);
       setError("Failed to load invoices. Please try again. Check the browser console for more details.");
       toast({ title: "Error", description: "Could not fetch invoices. Check console.", variant: "destructive" });
     } finally {
       setLoading(false);
     }
-  }, [toast]); // Added toast to useCallback dependencies
+  }, [toast]);
 
   useEffect(() => {
-    const authInstance: Auth = getFirebaseAuthInstance(); // Get Auth instance
+    const authInstance: Auth = getFirebaseAuthInstance();
     const unsubscribe = onAuthStateChanged(authInstance, (user) => {
       setCurrentUser(user);
       if (user) {
-        fetchInvoices(user.uid);
+        fetchInvoices(user.uid, statusFilter, dateRangeFilter);
       } else {
         setLoading(false);
         setInvoices([]);
       }
     });
     return () => unsubscribe();
-  }, [fetchInvoices]); // fetchInvoices is now a dependency
+  }, [fetchInvoices, statusFilter, dateRangeFilter]); // Add statusFilter and dateRangeFilter as dependencies
   
   const filteredInvoices = invoices.filter(invoice => {
+    // Search term filter (client-side after date and user filtering from Firestore)
     const searchTermMatch = 
       invoice.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
       invoice.client.name.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    // Status filter (client-side)
     const statusMatch = statusFilter === "all" || invoice.status === statusFilter;
+    
     return searchTermMatch && statusMatch;
   });
 
+  const handleStatusFilterChange = (value: string) => {
+    setStatusFilter(value);
+    if (currentUser) {
+      fetchInvoices(currentUser.uid, value, dateRangeFilter);
+    }
+  };
+
+  const handleDateRangeFilterChange = (value: DateRangeKey) => {
+    setDateRangeFilter(value);
+    if (currentUser) {
+      fetchInvoices(currentUser.uid, statusFilter, value);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -96,7 +158,20 @@ export default function InvoicesPage() {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <Select value={dateRangeFilter} onValueChange={handleDateRangeFilterChange}>
+          <SelectTrigger className="w-full md:w-[180px]">
+            <CalendarDays className="mr-2 h-4 w-4 text-muted-foreground" />
+            <SelectValue placeholder="Filter by date" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Time</SelectItem>
+            <SelectItem value="currentMonth">Current Month</SelectItem>
+            <SelectItem value="lastMonth">Last Month</SelectItem>
+            <SelectItem value="last3Months">Last 3 Months</SelectItem>
+            <SelectItem value="thisYear">This Year</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
           <SelectTrigger className="w-full md:w-[180px]">
             <Filter className="mr-2 h-4 w-4 text-muted-foreground" />
             <SelectValue placeholder="Filter by status" />
@@ -124,7 +199,7 @@ export default function InvoicesPage() {
           <AlertTriangle className="mx-auto h-12 w-12 text-destructive" />
           <h3 className="mt-2 text-xl font-semibold">Error Loading Invoices</h3>
           <p className="mt-1 text-sm text-muted-foreground">{error}</p>
-           <Button onClick={() => currentUser && fetchInvoices(currentUser.uid)} className="mt-4">Retry</Button>
+           <Button onClick={() => currentUser && fetchInvoices(currentUser.uid, statusFilter, dateRangeFilter)} className="mt-4">Retry</Button>
         </div>
       )}
       
@@ -164,3 +239,4 @@ export default function InvoicesPage() {
     </div>
   );
 }
+
