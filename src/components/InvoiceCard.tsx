@@ -6,9 +6,9 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { Eye, Edit, Download, Trash2, CheckCircle, AlertCircle, Clock, FilePenLine, MoreVertical, Loader2, Send } from 'lucide-react'; // Added MoreVertical, Loader2, Send
+import { Eye, Edit, Download, Trash2, CheckCircle, AlertCircle, Clock, FilePenLine, MoreVertical, Loader2, Send } from 'lucide-react';
 import {format} from 'date-fns';
-import type { Timestamp } from 'firebase/firestore';
+import type { Timestamp as FirestoreTimestamp } from 'firebase/firestore'; // Renamed to avoid conflict if needed, or ensure Timestamp is imported
 import { useState, useEffect } from 'react';
 import {
   DropdownMenu,
@@ -19,7 +19,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { db } from '@/lib/firebase';
-import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { doc, updateDoc, serverTimestamp, Timestamp } from "firebase/firestore"; // Added Timestamp import
 import { useToast } from "@/hooks/use-toast";
 
 interface InvoiceCardProps {
@@ -43,12 +43,13 @@ const statusIcons: Record<Invoice['status'], React.ReactElement> = {
   cancelled: <Trash2 className="h-4 w-4" />,
 };
 
-const ensureDate = (dateValue: Date | Timestamp | undefined): Date => {
+const ensureDate = (dateValue: Date | FirestoreTimestamp | undefined): Date => {
   if (!dateValue) return new Date();
   if (dateValue instanceof Date) {
     return dateValue;
   }
-  return (dateValue as Timestamp).toDate();
+  // Make sure Timestamp is from firebase/firestore for .toDate()
+  return (dateValue as FirestoreTimestamp).toDate();
 };
 
 
@@ -74,14 +75,15 @@ export function InvoiceCard({ invoice: initialInvoice, onStatusUpdate }: Invoice
       const invoiceRef = doc(db, 'invoices', invoice.id);
       await updateDoc(invoiceRef, {
         status: newStatus,
-        updatedAt: serverTimestamp() as Timestamp,
+        updatedAt: serverTimestamp(), // serverTimestamp() correctly returns a Timestamp placeholder
       });
       
-      const updatedInvoiceLocal = { ...invoice, status: newStatus, updatedAt: new Timestamp(new Date().getTime() / 1000, 0) };
-      setInvoice(updatedInvoiceLocal); // Update local card state
+      // For local state update, use new Timestamp() after ensuring it's imported
+      const updatedInvoiceLocal = { ...invoice, status: newStatus, updatedAt: new Timestamp(Math.floor(new Date().getTime() / 1000), 0) };
+      setInvoice(updatedInvoiceLocal); 
 
       if (onStatusUpdate && invoice.id) {
-        onStatusUpdate(invoice.id, newStatus); // Notify parent
+        onStatusUpdate(invoice.id, newStatus); 
       }
 
       toast({ title: "Status Updated", description: `Invoice marked as ${newStatus}.` });
