@@ -20,7 +20,6 @@ import {
   ChartTooltipContent,
   ChartLegend,
   ChartLegendContent,
-  ChartStyle,
 } from "@/components/ui/chart";
 import {
   LineChart,
@@ -28,8 +27,8 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip as RechartsTooltip, // Renamed to avoid conflict
-  Legend as RechartsLegend, // Renamed
+  Tooltip as RechartsTooltip,
+  Legend as RechartsLegend,
   ResponsiveContainer,
   PieChart,
   Pie,
@@ -45,6 +44,16 @@ interface DashboardStats {
   momRevenueGrowth: number | null;
   averageInvoiceValue: number | null;
 }
+
+const initialDashboardStats: DashboardStats = {
+  totalRevenue: 0,
+  invoicesCreatedCount: 0,
+  activeClientsCount: 0,
+  overdueInvoicesCount: 0,
+  overdueInvoicesAmount: 0,
+  momRevenueGrowth: null,
+  averageInvoiceValue: null,
+};
 
 interface MonthlyRevenueChartData {
   month: string;
@@ -71,17 +80,17 @@ interface RecentActivityItem {
 type DateFilterOption = "thisMonth" | "lastMonth" | "allTime";
 
 const PIE_CHART_COLORS: Record<Invoice['status'], string> = {
-  paid: "hsl(var(--chart-2))", // Green
-  sent: "hsl(var(--chart-1))", // Blue
-  overdue: "hsl(var(--destructive))", // Red
-  draft: "hsl(var(--muted-foreground))", // Gray
-  cancelled: "hsl(var(--chart-5))", // Orange/Yellow
+  paid: "hsl(var(--chart-2))", 
+  sent: "hsl(var(--chart-1))", 
+  overdue: "hsl(var(--destructive))", 
+  draft: "hsl(var(--muted-foreground))", 
+  cancelled: "hsl(var(--chart-5))", 
 };
 
 export default function DashboardPage() {
   const [currentUser, setCurrentUser] = useState<FirebaseAuthUser | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
-  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [stats, setStats] = useState<DashboardStats>(initialDashboardStats);
   const [recentActivities, setRecentActivities] = useState<RecentActivityItem[]>([]);
   const [monthlyRevenueData, setMonthlyRevenueData] = useState<MonthlyRevenueChartData[]>([]);
   const [invoiceStatusData, setInvoiceStatusData] = useState<InvoiceStatusChartData[]>([]);
@@ -161,9 +170,8 @@ export default function DashboardPage() {
       const clientsDocsSnap = await getDocs(clientsQuery);
       const activeClientsCount = clientsDocsSnap.size;
 
-      // MoM Revenue Growth will be set by fetchChartAndAdvancedAnalytics
       setStats(prevStats => ({
-        ...(prevStats || { momRevenueGrowth: null }), // Preserve MoM if already calculated
+        ...prevStats,
         totalRevenue,
         invoicesCreatedCount,
         activeClientsCount,
@@ -175,7 +183,7 @@ export default function DashboardPage() {
     } catch (err) {
       console.error("Error fetching dashboard stats:", err);
       setError("Failed to load dashboard statistics.");
-      setStats(prevStats => prevStats ? { ...prevStats, totalRevenue: 0, invoicesCreatedCount: 0, activeClientsCount:0, overdueInvoicesCount:0, overdueInvoicesAmount:0, averageInvoiceValue: 0 } : null);
+      setStats(initialDashboardStats); // Reset to initial on error
     } finally {
       setLoadingStats(false);
     }
@@ -184,8 +192,7 @@ export default function DashboardPage() {
   const fetchChartAndAdvancedAnalytics = useCallback(async (userId: string) => {
     setLoadingCharts(true);
     try {
-      // Fetch invoices for the last 7 months for MoM and line chart
-      const sevenMonthsAgo = startOfMonth(subMonths(new Date(), 6)); // 6 full previous months + current month part
+      const sevenMonthsAgo = startOfMonth(subMonths(new Date(), 6)); 
       const invoicesRef = collection(db, "invoices");
       const chartInvoicesQuery = query(
         invoicesRef,
@@ -203,9 +210,8 @@ export default function DashboardPage() {
         } as Invoice;
       });
 
-      // Prepare data for Monthly Revenue Line Chart
       const monthlyRevenue: { [key: string]: number } = {};
-      for (let i = 0; i < 7; i++) { // Initialize last 7 months
+      for (let i = 0; i < 7; i++) { 
         const monthDate = startOfMonth(subMonths(new Date(), i));
         const monthKey = format(monthDate, "MMM yyyy");
         monthlyRevenue[monthKey] = 0;
@@ -222,11 +228,10 @@ export default function DashboardPage() {
       
       const processedMonthlyRevenueData = Object.entries(monthlyRevenue)
         .map(([month, revenue]) => ({ month, revenue }))
-        .sort((a,b) => new Date(a.month).getTime() - new Date(b.month).getTime()) // Sort by date
-        .slice(-6); // Take last 6 for chart
+        .sort((a,b) => new Date(a.month).getTime() - new Date(b.month).getTime()) 
+        .slice(-6); 
       setMonthlyRevenueData(processedMonthlyRevenueData);
 
-      // Calculate MoM Revenue Growth
       let momRevenueGrowth: number | null = null;
       if (processedMonthlyRevenueData.length >= 2) {
         const currentMonthRevenue = processedMonthlyRevenueData[processedMonthlyRevenueData.length - 1].revenue;
@@ -234,13 +239,15 @@ export default function DashboardPage() {
         if (previousMonthRevenue > 0) {
           momRevenueGrowth = ((currentMonthRevenue - previousMonthRevenue) / previousMonthRevenue) * 100;
         } else if (currentMonthRevenue > 0) {
-          momRevenueGrowth = 100; // Or Infinity, handle as per preference
+          momRevenueGrowth = 100; 
         }
       }
-      setStats(prevStats => ({ ...prevStats!, momRevenueGrowth }));
+      setStats(prevStats => ({
+        ...prevStats,
+        momRevenueGrowth
+      }));
 
 
-      // Prepare data for Invoice Status Pie Chart (using all user's invoices for this)
       const allInvoicesQuery = query(invoicesRef, where("userId", "==", userId));
       const allInvoiceDocsSnap = await getDocs(allInvoicesQuery);
       const allFetchedInvoices = allInvoiceDocsSnap.docs.map(docSnap => docSnap.data() as Invoice);
@@ -257,7 +264,7 @@ export default function DashboardPage() {
           value: statusCounts[status],
           fill: PIE_CHART_COLORS[status],
         }))
-        .filter(item => item.value > 0); // Only show statuses with counts
+        .filter(item => item.value > 0); 
       setInvoiceStatusData(processedInvoiceStatusData);
 
     } catch (err) {
@@ -314,23 +321,34 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (currentUser) {
+      setLoadingStats(true); 
+      setLoadingActivities(true); 
+      setLoadingCharts(true);
+      setError(null);
+      setStats(initialDashboardStats); // Reset stats before fetching
+
       fetchDashboardData(currentUser.uid, dateFilter);
       fetchRecentActivities(currentUser.uid);
       fetchChartAndAdvancedAnalytics(currentUser.uid);
     } else if (!loadingAuth) {
-      setStats(null); setRecentActivities([]); setMonthlyRevenueData([]); setInvoiceStatusData([]);
-      setLoadingStats(false); setLoadingActivities(false); setLoadingCharts(false);
+      setStats(initialDashboardStats); 
+      setRecentActivities([]); 
+      setMonthlyRevenueData([]); 
+      setInvoiceStatusData([]);
+      setLoadingStats(false); 
+      setLoadingActivities(false); 
+      setLoadingCharts(false);
     }
   }, [currentUser, dateFilter, fetchDashboardData, fetchRecentActivities, fetchChartAndAdvancedAnalytics, loadingAuth]);
 
   const dateFilterLabel = dateFilter === "thisMonth" ? "MTD" : dateFilter === "lastMonth" ? "Last Month" : "All Time";
   const statCards = [
-    { title: `Total Revenue (${dateFilterLabel})`, value: `Rs. ${stats?.totalRevenue.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2}) || '0.00'}`, icon: IndianRupee, color: "text-green-500", description: "" },
-    { title: `Invoices Created (${dateFilterLabel})`, value: stats?.invoicesCreatedCount.toString() || '0', icon: FileText, color: "text-blue-500", description: "" },
-    { title: "Total Active Clients", value: stats?.activeClientsCount.toString() || '0', icon: Users, color: "text-purple-500", description: "" },
-    { title: `Overdue Invoices (${dateFilterLabel})`, value: `${stats?.overdueInvoicesCount || '0'} (Rs. ${stats?.overdueInvoicesAmount.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2}) || '0.00'})`, icon: AlertTriangle, color: "text-red-500", description: stats?.overdueInvoicesCount ? "Action required" : "No overdue invoices" },
-    { title: "MoM Revenue Growth", value: stats?.momRevenueGrowth !== null ? `${stats.momRevenueGrowth.toFixed(1)}%` : "N/A", icon: TrendingUp, color: stats?.momRevenueGrowth && stats.momRevenueGrowth >= 0 ? "text-green-500" : "text-red-500", description: "Prev. full month" },
-    { title: `Avg. Invoice Value (${dateFilterLabel})`, value: `Rs. ${stats?.averageInvoiceValue?.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2}) || '0.00'}`, icon: BarChartHorizontalBig, color: "text-indigo-500", description: "Based on paid invoices" },
+    { title: `Total Revenue (${dateFilterLabel})`, value: `Rs. ${stats.totalRevenue.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`, icon: IndianRupee, color: "text-green-500", description: "" },
+    { title: `Invoices Created (${dateFilterLabel})`, value: stats.invoicesCreatedCount.toString(), icon: FileText, color: "text-blue-500", description: "" },
+    { title: "Total Active Clients", value: stats.activeClientsCount.toString(), icon: Users, color: "text-purple-500", description: "" },
+    { title: `Overdue Invoices (${dateFilterLabel})`, value: `${stats.overdueInvoicesCount} (Rs. ${stats.overdueInvoicesAmount.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})})`, icon: AlertTriangle, color: "text-red-500", description: stats.overdueInvoicesCount > 0 ? "Action required" : "No overdue invoices" },
+    { title: "MoM Revenue Growth", value: stats.momRevenueGrowth !== null ? `${stats.momRevenueGrowth.toFixed(1)}%` : "N/A", icon: TrendingUp, color: stats.momRevenueGrowth !== null && stats.momRevenueGrowth >= 0 ? "text-green-500" : "text-red-500", description: "Prev. full month" },
+    { title: `Avg. Invoice Value (${dateFilterLabel})`, value: `Rs. ${stats.averageInvoiceValue !== null ? stats.averageInvoiceValue.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '0.00'}`, icon: BarChartHorizontalBig, color: "text-indigo-500", description: "Based on paid invoices" },
   ];
 
   const revenueChartConfig = {
@@ -341,11 +359,28 @@ export default function DashboardPage() {
     return acc;
   }, {} as any);
 
+  const hasMeaningfulStats = stats.invoicesCreatedCount > 0 || stats.totalRevenue > 0 || stats.activeClientsCount > 0 || stats.momRevenueGrowth !== null || stats.averageInvoiceValue !== null;
 
-  if (loadingAuth) { /* ... skeleton UI ... */ }
-  if (!currentUser && !loadingAuth) { /* ... login prompt ... */ }
-  if (error && !loadingStats && !loadingCharts) { /* ... error display ... */ }
-
+  if (loadingAuth) { 
+    return (
+      <div className="space-y-8">
+        <div className="flex justify-between items-center"> <Skeleton className="h-10 w-1/3" /> <Skeleton className="h-10 w-1/4" /> </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"> {[...Array(6)].map((_, i) => ( <Card key={i}><CardHeader><Skeleton className="h-5 w-3/4" /></CardHeader><CardContent><Skeleton className="h-8 w-1/2 mb-2" /><Skeleton className="h-4 w-full" /></CardContent></Card> ))} </div>
+        <div className="grid gap-6 lg:grid-cols-5"> <Card className="lg:col-span-3"><CardHeader><Skeleton className="h-6 w-1/2" /></CardHeader><CardContent><Skeleton className="h-[300px] w-full" /></CardContent></Card> <Card className="lg:col-span-2"><CardHeader><Skeleton className="h-6 w-1/2" /></CardHeader><CardContent><Skeleton className="h-[300px] w-full" /></CardContent></Card> </div>
+      </div>
+    );
+  }
+  if (!currentUser && !loadingAuth) { 
+    return (
+        <div className="text-center py-12">
+          <AlertTriangle className="mx-auto h-12 w-12 text-muted-foreground" />
+          <h3 className="mt-2 text-xl font-semibold">Not Logged In</h3>
+          <p className="mt-1 text-sm text-muted-foreground">Please log in to view your dashboard.</p>
+          <Button asChild className="mt-4"><Link href="/login">Log In</Link></Button>
+        </div>
+    );
+  }
+  
   return (
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -376,7 +411,14 @@ export default function DashboardPage() {
              <Card key={i}><CardHeader><Skeleton className="h-5 w-3/4" /></CardHeader><CardContent><Skeleton className="h-8 w-1/2 mb-2" /><Skeleton className="h-4 w-full" /></CardContent></Card>
           ))}
         </div>
-      ) : stats ? (
+      ) : error && !loadingAuth ? (
+         <div className="text-center py-12">
+          <AlertTriangle className="mx-auto h-12 w-12 text-destructive" />
+          <h3 className="mt-2 text-xl font-semibold">Error Loading Statistics</h3>
+          <p className="mt-1 text-sm text-muted-foreground">{error}</p>
+          <Button onClick={() => currentUser && fetchDashboardData(currentUser.uid, dateFilter)} className="mt-4">Retry</Button>
+        </div>
+      ) : hasMeaningfulStats ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {statCards.map((stat) => (
             <Card key={stat.title} className="hover:shadow-lg transition-shadow duration-200">
@@ -391,9 +433,9 @@ export default function DashboardPage() {
             </Card>
           ))}
         </div>
-      ) : !error ? (
-        <p className="text-muted-foreground">No statistics available for the selected period.</p>
-      ): null}
+      ) : (
+        <p className="text-muted-foreground py-4 text-center">No statistics available for the selected period. Start by creating some invoices!</p>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-5">
         <Card className="lg:col-span-3 hover:shadow-lg transition-shadow duration-200">
