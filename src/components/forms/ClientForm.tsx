@@ -1,3 +1,4 @@
+
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -18,6 +19,9 @@ import { useToast } from "@/hooks/use-toast";
 import type { Client } from "@/lib/types";
 import { GSTIN_REGEX, INDIAN_STATES } from "@/lib/constants";
 import { useRouter } from "next/navigation";
+import { db } from "@/lib/firebase";
+import { collection, addDoc, updateDoc, doc, serverTimestamp } from "firebase/firestore";
+import { Loader2 } from "lucide-react";
 
 const clientFormSchema = z.object({
   name: z.string().min(1, "Client name is required."),
@@ -38,7 +42,7 @@ type ClientFormValues = z.infer<typeof clientFormSchema>;
 
 interface ClientFormProps {
   initialData?: Client | null;
-  onSave?: (data: ClientFormValues) => void; // For use in modals or embedded forms
+  onSave?: (data: Client) => void; 
 }
 
 export function ClientForm({ initialData, onSave }: ClientFormProps) {
@@ -61,17 +65,53 @@ export function ClientForm({ initialData, onSave }: ClientFormProps) {
   });
 
   async function onSubmit(values: ClientFormValues) {
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    console.log("Client data:", values);
-    if (onSave) {
-      onSave(values);
-    } else {
+    form.formState.isSubmitting = true;
+    try {
+      if (initialData?.id) {
+        // Update existing client
+        const clientRef = doc(db, "clients", initialData.id);
+        await updateDoc(clientRef, {
+          ...values,
+          // updatedAt: serverTimestamp(), // TODO: Add if using Firebase.firestore.Timestamp
+        });
+        toast({
+          title: "Client Updated",
+          description: `${values.name} has been successfully updated.`,
+        });
+        if (onSave) {
+          onSave({ ...values, id: initialData.id });
+        } else {
+          router.push("/dashboard/clients");
+          router.refresh(); // To refetch data on the clients page
+        }
+      } else {
+        // Add new client
+        const docRef = await addDoc(collection(db, "clients"), {
+          ...values,
+          // createdAt: serverTimestamp(), // TODO: Add if using Firebase.firestore.Timestamp
+        });
+        toast({
+          title: "Client Added",
+          description: `${values.name} has been successfully added.`,
+        });
+        if (onSave) {
+          onSave({ ...values, id: docRef.id });
+        } else {
+          router.push("/dashboard/clients");
+          router.refresh(); 
+        }
+      }
+    } catch (error) {
+      console.error("Error saving client: ", error);
       toast({
-        title: initialData ? "Client Updated" : "Client Added",
-        description: `${values.name} has been successfully ${initialData ? 'updated' : 'added'}.`,
+        title: "Error",
+        description: "Failed to save client. Please try again.",
+        variant: "destructive",
       });
-      router.push("/dashboard/clients");
+    } finally {
+      form.formState.isSubmitting = false;
+       // Manually trigger re-render if needed, or rely on Next.js router.refresh()
+      form.reset(form.getValues()); // To update isSubmitting state visually if not navigating
     }
   }
 
@@ -198,7 +238,7 @@ export function ClientForm({ initialData, onSave }: ClientFormProps) {
             control={form.control}
             name="country"
             render={({ field }) => (
-              <FormItem className="hidden"> {/* Hidden as default is India */}
+              <FormItem className="hidden"> 
                 <FormLabel>Country</FormLabel>
                 <FormControl><Input {...field} readOnly /></FormControl>
                 <FormMessage />
@@ -210,6 +250,7 @@ export function ClientForm({ initialData, onSave }: ClientFormProps) {
             Cancel
             </Button>
             <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={form.formState.isSubmitting}>
+            {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {form.formState.isSubmitting ? (initialData ? "Saving..." : "Adding Client...") : (initialData ? "Save Changes" : "Add Client")}
             </Button>
         </div>

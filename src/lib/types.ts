@@ -1,3 +1,4 @@
+
 export interface LineItem {
   id: string;
   productName: string;
@@ -13,7 +14,7 @@ export interface LineItem {
 }
 
 export interface Client {
-  id: string;
+  id: string; // Firestore document ID
   name: string;
   gstin?: string;
   email?: string;
@@ -24,6 +25,8 @@ export interface Client {
   state: string;
   postalCode: string;
   country: string; // Default to India
+  // createdAt?: any; // For Firestore Timestamp, handle during operations
+  // updatedAt?: any; 
 }
 
 export interface BillerInfo {
@@ -47,51 +50,27 @@ export interface BillerInfo {
 export interface Invoice {
   id: string;
   invoiceNumber: string;
-  invoiceDate: Date;
-  dueDate: Date;
+  invoiceDate: Date; // Will be Firestore Timestamp
+  dueDate: Date; // Will be Firestore Timestamp
   billerInfo: BillerInfo;
-  client: Client; // or clientId: string and fetch client details
-  shippingAddress?: Client; // Optional, can be same as client address or different
+  client: Client; // Store client snapshot or just ID
+  shippingAddress?: Client; 
   lineItems: LineItem[];
   notes?: string;
   termsAndConditions?: string;
-  subTotal: number; // Sum of all lineItem.amount
+  subTotal: number; 
   totalCGST: number;
   totalSGST: number;
   totalIGST: number;
-  grandTotal: number; // subTotal + totalCGST + totalSGST + totalIGST
+  grandTotal: number; 
   status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
-  isInterState: boolean; // To determine IGST vs CGST/SGST
+  isInterState: boolean; 
+  // userId?: string; // For multi-user apps
+  // createdAt?: any;
+  // updatedAt?: any;
 }
 
-// Mock data for demonstration
-export const mockClients: Client[] = [
-  {
-    id: 'client-1',
-    name: 'Acme Corp',
-    gstin: '29AAAAA0000A1Z5',
-    email: 'contact@acme.com',
-    phone: '9876543210',
-    addressLine1: '123 Business St',
-    city: 'Bangalore',
-    state: 'Karnataka',
-    postalCode: '560001',
-    country: 'India',
-  },
-  {
-    id: 'client-2',
-    name: 'Innovate Hub',
-    gstin: '27BBBBB0000B1Z5',
-    email: 'hello@innovate.co',
-    phone: '8765432109',
-    addressLine1: '456 Tech Park',
-    city: 'Mumbai',
-    state: 'Maharashtra',
-    postalCode: '400001',
-    country: 'India',
-  },
-];
-
+// Mock data for Biller (will be moved to settings later)
 export const mockBiller: BillerInfo = {
   businessName: "My Awesome Company Pvt Ltd",
   gstin: "29ABCDE1234F1Z5",
@@ -108,6 +87,35 @@ export const mockBiller: BillerInfo = {
   upiId: "myawesomecompany@upi"
 };
 
+
+// Mock data for Invoices (will be replaced by Firestore later)
+const tempMockClients: Client[] = [
+   {
+    id: 'client-1',
+    name: 'Acme Corp (Sample)',
+    gstin: '29AAAAA0000A1Z5',
+    email: 'contact@acme.com',
+    phone: '9876543210',
+    addressLine1: '123 Business St',
+    city: 'Bangalore',
+    state: 'Karnataka',
+    postalCode: '560001',
+    country: 'India',
+  },
+  {
+    id: 'client-2',
+    name: 'Innovate Hub (Sample)',
+    gstin: '27BBBBB0000B1Z5',
+    email: 'hello@innovate.co',
+    phone: '8765432109',
+    addressLine1: '456 Tech Park',
+    city: 'Mumbai',
+    state: 'Maharashtra',
+    postalCode: '400001',
+    country: 'India',
+  },
+];
+
 export const mockInvoices: Invoice[] = [
   {
     id: 'inv-1',
@@ -115,7 +123,7 @@ export const mockInvoices: Invoice[] = [
     invoiceDate: new Date('2023-10-01'),
     dueDate: new Date('2023-10-15'),
     billerInfo: mockBiller,
-    client: mockClients[0],
+    client: tempMockClients[0],
     isInterState: false,
     lineItems: [
       { id: 'item-1', productName: 'Web Development', quantity: 1, rate: 50000, discountPercentage: 10, taxRate: 18, amount: 45000, cgst: 4050, sgst: 4050, igst: 0, totalAmount: 53100 },
@@ -135,7 +143,7 @@ export const mockInvoices: Invoice[] = [
     invoiceDate: new Date('2023-10-05'),
     dueDate: new Date('2023-10-20'),
     billerInfo: mockBiller,
-    client: mockClients[1],
+    client: tempMockClients[1],
     isInterState: true, // Example of inter-state
     lineItems: [
       { id: 'item-3', productName: 'Consulting Services', quantity: 20, rate: 2500, discountPercentage: 0, taxRate: 18, amount: 50000, cgst: 0, sgst: 0, igst: 9000, totalAmount: 59000 },
