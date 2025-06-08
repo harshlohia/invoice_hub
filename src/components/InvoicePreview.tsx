@@ -1,19 +1,102 @@
+
+"use client";
 import type { Invoice } from "@/lib/types";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
-import { Download, Printer, Send, Edit } from "lucide-react";
+import { Download, Printer, Send, Edit, Loader2 } from "lucide-react";
 import { format } from 'date-fns';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRef, useState } from 'react';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+import { useToast } from "@/hooks/use-toast";
+
 
 interface InvoicePreviewProps {
   invoice: Invoice;
 }
 
 export function InvoicePreview({ invoice }: InvoicePreviewProps) {
+  const invoiceCardRef = useRef<HTMLDivElement>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const { toast } = useToast();
+
+  const handleDownloadPdf = async () => {
+    if (!invoiceCardRef.current) {
+      toast({
+        title: "Error",
+        description: "Invoice content not found for PDF generation.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsDownloading(true);
+
+    try {
+      const elementToCapture = invoiceCardRef.current;
+      // Ensure the element is fully rendered and visible
+      // For complex layouts, you might need to adjust styles or temporarily modify the DOM
+      // to ensure everything is captured correctly by html2canvas.
+
+      const canvas = await html2canvas(elementToCapture, {
+        scale: 2, // Higher scale can improve quality
+        useCORS: true, // For external images like logos
+        logging: false,
+        // It's often better to capture based on scrollWidth/scrollHeight if content overflows
+        // width: elementToCapture.scrollWidth,
+        // height: elementToCapture.scrollHeight,
+        // windowWidth: elementToCapture.scrollWidth,
+        // windowHeight: elementToCapture.scrollHeight,
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'p', // portrait
+        unit: 'mm',
+        format: 'a4', // A4 page size
+      });
+
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      
+      const canvasWidth = canvas.width;
+      const canvasHeight = canvas.height;
+
+      // Calculate the ratio to fit the image onto the PDF page while maintaining aspect ratio
+      const ratio = Math.min(pdfWidth / canvasWidth, pdfHeight / canvasHeight);
+      
+      const imgWidthInPdf = canvasWidth * ratio;
+      const imgHeightInPdf = canvasHeight * ratio;
+
+      // Calculate x and y offsets to center the image on the PDF page
+      const x = (pdfWidth - imgWidthInPdf) / 2;
+      const y = (pdfHeight - imgHeightInPdf) / 2; // Centered, or 0 for top alignment
+
+      pdf.addImage(imgData, 'PNG', x, y, imgWidthInPdf, imgHeightInPdf);
+      pdf.save(`invoice-${invoice.invoiceNumber || 'details'}.pdf`);
+      
+      toast({
+        title: "Success",
+        description: `Invoice ${invoice.invoiceNumber}.pdf downloaded.`,
+      });
+
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      toast({
+        title: "PDF Generation Failed",
+        description: "An error occurred while trying to generate the PDF. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   return (
-    <Card className="max-w-4xl mx-auto shadow-lg">
+    // The ref is attached to the Card element which is the main container for the invoice preview
+    <Card className="max-w-4xl mx-auto shadow-lg" ref={invoiceCardRef}>
       <CardHeader className="bg-muted/30 p-6">
         <div className="flex flex-col md:flex-row justify-between items-start gap-4">
           <div>
@@ -137,8 +220,17 @@ export function InvoicePreview({ invoice }: InvoicePreviewProps) {
         </Button>
         <Button variant="outline" disabled><Send className="mr-2 h-4 w-4" /> Send to Client</Button>
         <Button variant="outline" disabled><Printer className="mr-2 h-4 w-4" /> Print</Button>
-        <Button className="bg-accent hover:bg-accent/90 text-accent-foreground">
-          <Download className="mr-2 h-4 w-4" /> Download PDF
+        <Button 
+          className="bg-accent hover:bg-accent/90 text-accent-foreground"
+          onClick={handleDownloadPdf}
+          disabled={isDownloading}
+        >
+          {isDownloading ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Download className="mr-2 h-4 w-4" />
+          )}
+          {isDownloading ? 'Downloading...' : 'Download PDF'}
         </Button>
       </CardFooter>
     </Card>
