@@ -47,22 +47,32 @@ export function SignupForm() {
   });
 
   async function onSubmit(values: SignupFormValues) {
+    console.log("Attempting signup with:", values.email);
     try {
-      // In a real app, you might want to save businessName to Firestore user profile
-      await createUserWithEmailAndPassword(auth, values.email, values.password);
+      const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
+      console.log("Firebase user created successfully:", userCredential.user);
+      // In a real app, you might want to save businessName to Firestore user profile here
+      // associated with userCredential.user.uid
+
       toast({
         title: "Account Created Successfully",
         description: "Please log in to continue.",
       });
       router.push("/login");
     } catch (error: any) {
-      console.error("Signup error:", error);
-      let errorMessage = "Failed to create account. Please try again.";
+      console.error("Firebase Signup Error Details:", error);
+      console.error("Error Code:", error.code);
+      console.error("Error Message:", error.message);
+
+      let errorMessage = "Failed to create account. Please try again. Check the console for more details.";
       if (error.code === 'auth/email-already-in-use') {
         errorMessage = "This email address is already in use.";
       } else if (error.code === 'auth/weak-password') {
-        errorMessage = "The password is too weak.";
+        errorMessage = "The password is too weak. It must be at least 6 characters long (Firebase default).";
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = "The email address is not valid.";
       }
+      
       toast({
         title: "Signup Failed",
         description: errorMessage,

@@ -40,19 +40,27 @@ export function LoginForm() {
   });
 
   async function onSubmit(values: LoginFormValues) {
+    console.log("Attempting login with:", values.email);
     try {
-      await signInWithEmailAndPassword(auth, values.email, values.password);
+      const userCredential = await signInWithEmailAndPassword(auth, values.email, values.password);
+      console.log("Firebase user logged in successfully:", userCredential.user);
       toast({
         title: "Login Successful",
         description: "Redirecting to dashboard...",
       });
       router.push("/dashboard");
     } catch (error: any) {
-      console.error("Login error:", error);
-      let errorMessage = "Failed to log in. Please check your credentials.";
-      if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+      console.error("Firebase Login Error Details:", error);
+      console.error("Error Code:", error.code);
+      console.error("Error Message:", error.message);
+      
+      let errorMessage = "Failed to log in. Please check your credentials. Check the console for more details.";
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-email') {
         errorMessage = "Invalid email or password. Please try again.";
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = "Access to this account has been temporarily disabled due to many failed login attempts. You can immediately restore it by resetting your password or you can try again later.";
       }
+      
       toast({
         title: "Login Failed",
         description: errorMessage,
