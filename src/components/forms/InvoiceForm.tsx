@@ -29,10 +29,10 @@ import { cn } from "@/lib/utils";
 import { format, addDays } from "date-fns";
 import { CalendarIcon, PlusCircle, Trash2, Edit2, Loader2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
-import { collection, getDocs, addDoc, doc, getDoc, serverTimestamp, Timestamp, updateDoc } from 'firebase/firestore';
-import { db, getFirebaseAuthInstance } from '@/lib/firebase'; // Updated import
-import { onAuthStateChanged, type User, type Auth } from "firebase/auth"; // Added Auth type
+import { useEffect, useState, useCallback } from "react";
+import { collection, getDocs, addDoc, doc, getDoc, serverTimestamp, Timestamp, updateDoc, query, where } from 'firebase/firestore';
+import { db, getFirebaseAuthInstance } from '@/lib/firebase'; 
+import { onAuthStateChanged, type User, type Auth } from "firebase/auth"; 
 
 const lineItemSchema = z.object({
   id: z.string().default(() => crypto.randomUUID()),
@@ -87,17 +87,10 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
   const { toast } = useToast();
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedClientData, setSelectedClientData] = useState<Client | null>(null);
-  const [loadingClients, setLoadingClients] = useState(!initialData); // Only load clients if creating new
-  const [loadingBillerInfo, setLoadingBillerInfo] = useState(!initialData); // Only load biller if creating new
+  const [loadingClients, setLoadingClients] = useState(!initialData); 
+  const [loadingBillerInfo, setLoadingBillerInfo] = useState(!initialData); 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-
-  useEffect(() => {
-    const authInstance: Auth = getFirebaseAuthInstance();
-    const unsubscribe = onAuthStateChanged(authInstance, (user) => {
-      setCurrentUser(user);
-    });
-    return () => unsubscribe();
-  }, []);
+  const [loadingAuth, setLoadingAuth] = useState(true);
 
   const form = useForm<InvoiceFormValues>({
     resolver: zodResolver(invoiceFormSchema),
@@ -121,45 +114,55 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
   });
 
   useEffect(() => {
-    const fetchClientsAndBillerInfoForNewInvoice = async () => {
-      setLoadingClients(true);
-      setLoadingBillerInfo(true);
-      try {
-        const clientsQuerySnapshot = await getDocs(collection(db, "clients"));
-        const clientsData = clientsQuerySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client));
-        setClients(clientsData);
+    const authInstance: Auth = getFirebaseAuthInstance();
+    const unsubscribe = onAuthStateChanged(authInstance, (user) => {
+      setCurrentUser(user);
+      setLoadingAuth(false);
+    });
+    return () => unsubscribe();
+  }, []);
 
-        const preselectedClientId = searchParams.get('clientId');
-        if (preselectedClientId && clientsData.length > 0) {
-            const client = clientsData.find(c => c.id === preselectedClientId);
-            if (client) {
-              setSelectedClientData(client);
-              form.setValue("clientId", client.id); // Ensure form also knows
-            }
-        }
+  const fetchClientsAndBillerInfoForNewInvoice = useCallback(async (userId: string) => {
+    setLoadingClients(true);
+    setLoadingBillerInfo(true);
+    try {
+      const clientsRef = collection(db, "clients");
+      const q = query(clientsRef, where("userId", "==", userId));
+      const clientsQuerySnapshot = await getDocs(q);
+      const clientsData = clientsQuerySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client));
+      setClients(clientsData);
 
-        const billerDocRef = doc(db, "settings", BUSINESS_SETTINGS_DOC_ID);
-        const billerDocSnap = await getDoc(billerDocRef);
-        if (billerDocSnap.exists()) {
-          form.setValue("billerInfo", billerDocSnap.data() as BillerInfo);
-        } else {
-          toast({ title: "Biller Info Not Found", description: "Please set up your business information in Settings.", variant: "destructive" });
-        }
-      } catch (error) {
-        console.error("Error fetching data for new invoice form:", error);
-        toast({
-          title: "Error Loading Data",
-          description: "Could not load clients or biller info. Please try refreshing.",
-          variant: "destructive",
-        });
-      } finally {
-        setLoadingClients(false);
-        setLoadingBillerInfo(false);
+      const preselectedClientId = searchParams.get('clientId');
+      if (preselectedClientId && clientsData.length > 0) {
+          const client = clientsData.find(c => c.id === preselectedClientId);
+          if (client) {
+            setSelectedClientData(client);
+            form.setValue("clientId", client.id); 
+          }
       }
-    };
 
+      const billerDocRef = doc(db, "settings", BUSINESS_SETTINGS_DOC_ID);
+      const billerDocSnap = await getDoc(billerDocRef);
+      if (billerDocSnap.exists()) {
+        form.setValue("billerInfo", billerDocSnap.data() as BillerInfo);
+      } else {
+        toast({ title: "Biller Info Not Found", description: "Please set up your business information in Settings.", variant: "destructive" });
+      }
+    } catch (error) {
+      console.error("Error fetching data for new invoice form:", error);
+      toast({
+        title: "Error Loading Data",
+        description: "Could not load clients or biller info. Please try refreshing.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingClients(false);
+      setLoadingBillerInfo(false);
+    }
+  }, [form, searchParams, toast]);
+
+  useEffect(() => {
     if (initialData) {
-      // Populate form if editing
       const invoiceDate = initialData.invoiceDate instanceof Timestamp ? initialData.invoiceDate.toDate() : new Date(initialData.invoiceDate);
       const dueDate = initialData.dueDate instanceof Timestamp ? initialData.dueDate.toDate() : new Date(initialData.dueDate);
       
@@ -171,23 +174,21 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
         isInterState: initialData.isInterState,
         lineItems: initialData.lineItems.map(item => ({
           ...item,
-          id: item.id || crypto.randomUUID(), // Ensure ID for form key
+          id: item.id || crypto.randomUUID(), 
         })),
         notes: initialData.notes || "",
         termsAndConditions: initialData.termsAndConditions || "Thank you for your business! Payment is due within the specified date.",
         billerInfo: initialData.billerInfo,
       });
       setSelectedClientData(initialData.client);
-      setLoadingClients(false); // Data is from initialData
-      setLoadingBillerInfo(false); // Data is from initialData
-    } else {
-      // Creating new invoice, fetch necessary data
-      fetchClientsAndBillerInfoForNewInvoice();
+      setLoadingClients(false); 
+      setLoadingBillerInfo(false); 
+    } else if (currentUser) { // Only fetch if creating new AND user is loaded
+      fetchClientsAndBillerInfoForNewInvoice(currentUser.uid);
     }
-  }, [initialData, form, searchParams, toast]);
+  }, [initialData, form, currentUser, fetchClientsAndBillerInfoForNewInvoice]);
   
   useEffect(() => {
-    // Update isInterState when client or biller state changes
     const clientToUse = initialData ? initialData.client : selectedClientData;
     const billerStateFromForm = form.getValues("billerInfo.state");
 
@@ -257,7 +258,7 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
 
     const processedLineItems = values.lineItems.map(item => {
       const itemTotals = calculateLineItemTotals(item);
-      return { ...item, ...itemTotals }; // item.id is already included from form values
+      return { ...item, ...itemTotals }; 
     });
 
     const currentTotals = calculateOverallTotals(); 
@@ -279,7 +280,7 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
       totalSGST: currentTotals.totalSGST,
       totalIGST: currentTotals.totalIGST,
       grandTotal: currentTotals.grandTotal,
-      updatedAt: serverTimestamp() as Timestamp, // Firestore will convert this
+      updatedAt: serverTimestamp() as Timestamp, 
     };
     
     form.formState.isSubmitting = true;
@@ -287,7 +288,7 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
       if (initialData?.id) {
         const invoiceRef = doc(db, "invoices", initialData.id);
         const updatePayload = { ...invoiceData };
-        if (initialData.createdAt) { // Preserve original createdAt
+        if (initialData.createdAt) { 
              const originalCreatedAt = initialData.createdAt instanceof Timestamp 
                 ? initialData.createdAt 
                 : Timestamp.fromDate(new Date(initialData.createdAt));
@@ -383,32 +384,34 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
                     <FormLabel>Client*</FormLabel>
                     <Select 
                       onValueChange={(value) => {
-                        if (!initialData) { // Only allow change if new invoice
+                        if (!initialData) { 
                            field.onChange(value);
                            const client = clients.find(c => c.id === value);
                            setSelectedClientData(client || null);
                         }
                       }} 
                       value={field.value}
-                      disabled={loadingClients || !!initialData} // Disable if editing or still loading clients for new
+                      disabled={loadingAuth || loadingClients || !!initialData} 
                     >
                       <FormControl><SelectTrigger>
                         <SelectValue placeholder={
                             initialData ? initialData.client.name :
-                            (loadingClients && !initialData) ? "Loading clients..." : "Select a client"
+                            (loadingAuth || (loadingClients && !initialData)) ? "Loading..." : 
+                            (!currentUser && !initialData) ? "Please log in" :
+                            "Select a client"
                         } />
                       </SelectTrigger></FormControl>
                       <SelectContent>
                         {initialData ? (
                              <SelectItem value={initialData.client.id} disabled>{initialData.client.name}</SelectItem>
-                        ) : loadingClients ? (
+                        ) : (loadingAuth || loadingClients) ? (
                             <SelectItem value="loading" disabled>
                                 <div className="flex items-center">
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading...
                                 </div>
                             </SelectItem>
                         ) : clients.length === 0 ? (
-                            <SelectItem value="no-clients" disabled>No clients found.</SelectItem>
+                            <SelectItem value="no-clients" disabled>No clients found. Add one first.</SelectItem>
                         ) : (
                             clients.map(client => <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>)
                         )}
@@ -417,7 +420,7 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
                     <FormMessage />
                   </FormItem>
                 )} />
-               <Button type="button" variant="outline" onClick={() => router.push('/dashboard/clients/new')} className="w-full md:w-auto" disabled={!!initialData}>
+               <Button type="button" variant="outline" onClick={() => router.push('/dashboard/clients/new')} className="w-full md:w-auto" disabled={!!initialData || !currentUser}>
                   <PlusCircle className="mr-2 h-4 w-4" /> Add New Client
                 </Button>
             </div>
@@ -441,7 +444,7 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
                 </Button>
             </CardHeader>
             <CardContent className="space-y-2 text-sm text-muted-foreground">
-                {loadingBillerInfo && !initialData ? (
+                {(loadingAuth || (loadingBillerInfo && !initialData)) ? (
                   <div className="space-y-2"> <Loader2 className="h-5 w-5 animate-spin" /> <p>Loading biller information...</p></div>
                 ) : form.getValues("billerInfo.businessName") ? (
                   <>
@@ -558,13 +561,14 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
             className="bg-primary hover:bg-primary/90" 
             disabled={
                 form.formState.isSubmitting || 
+                loadingAuth ||
                 (loadingClients && !initialData) || 
                 (loadingBillerInfo && !initialData) || 
                 !currentUser || 
                 (!initialData && !form.getValues("billerInfo.businessName"))
             }
           >
-            {(form.formState.isSubmitting || (loadingClients && !initialData) || (loadingBillerInfo && !initialData)) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {(form.formState.isSubmitting || loadingAuth || (loadingClients && !initialData) || (loadingBillerInfo && !initialData)) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {form.formState.isSubmitting ? (initialData ? "Saving..." : "Creating Invoice...") : (initialData ? "Save Changes" : "Create Invoice")}
           </Button>
         </div>

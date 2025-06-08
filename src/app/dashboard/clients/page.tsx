@@ -2,14 +2,14 @@
 "use client";
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ClientCard } from '@/components/ClientCard';
 import type { Client } from '@/lib/types';
 import { PlusCircle, Search, Users, Loader2, AlertTriangle } from 'lucide-react';
-import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { collection, getDocs, deleteDoc, doc, query, where } from 'firebase/firestore';
+import { db, getFirebaseAuthInstance } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -20,8 +20,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { onAuthStateChanged, type User, type Auth } from 'firebase/auth';
 
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
@@ -30,25 +30,40 @@ export default function ClientsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
   const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+
+  const fetchClients = useCallback(async (userId: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const clientsRef = collection(db, "clients");
+      const q = query(clientsRef, where("userId", "==", userId));
+      const querySnapshot = await getDocs(q);
+      const clientsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client));
+      setClients(clientsData);
+    } catch (err) {
+      console.error("Error fetching clients:", err);
+      setError("Failed to load clients. Please try again.");
+      toast({ title: "Error", description: "Could not fetch clients.", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
 
   useEffect(() => {
-    const fetchClients = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const querySnapshot = await getDocs(collection(db, "clients"));
-        const clientsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client));
-        setClients(clientsData);
-      } catch (err) {
-        console.error("Error fetching clients:", err);
-        setError("Failed to load clients. Please try again.");
-        toast({ title: "Error", description: "Could not fetch clients.", variant: "destructive" });
-      } finally {
+    const authInstance: Auth = getFirebaseAuthInstance();
+    const unsubscribe = onAuthStateChanged(authInstance, (user) => {
+      setCurrentUser(user);
+      if (user) {
+        fetchClients(user.uid);
+      } else {
         setLoading(false);
+        setClients([]); // Clear clients if user logs out
+        setError("Please log in to view your clients.");
       }
-    };
-    fetchClients();
-  }, [toast]);
+    });
+    return () => unsubscribe();
+  }, [fetchClients]);
 
   const handleDeleteClient = async (clientId: string) => {
     if (!clientId) return;
@@ -67,7 +82,7 @@ export default function ClientsPage() {
         variant: "destructive",
       });
     }
-    setClientToDelete(null); // Close dialog
+    setClientToDelete(null); 
   };
 
   const filteredClients = clients.filter(client =>
@@ -83,7 +98,7 @@ export default function ClientsPage() {
           <h1 className="text-3xl font-headline font-bold tracking-tight">Clients</h1>
           <p className="text-muted-foreground">Manage your client database.</p>
         </div>
-        <Button asChild className="bg-accent hover:bg-accent/90 text-accent-foreground">
+        <Button asChild className="bg-accent hover:bg-accent/90 text-accent-foreground" disabled={!currentUser}>
           <Link href="/dashboard/clients/new">
             <PlusCircle className="mr-2 h-5 w-5" /> Add New Client
           </Link>
@@ -98,9 +113,9 @@ export default function ClientsPage() {
             className="pl-10 w-full" 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            disabled={!currentUser}
           />
         </div>
-        {/* <Button variant="outline" className="w-full md:w-auto">Search</Button> */}
       </div>
 
       {loading && (
@@ -115,10 +130,13 @@ export default function ClientsPage() {
           <AlertTriangle className="mx-auto h-12 w-12 text-destructive" />
           <h3 className="mt-2 text-xl font-semibold">Error Loading Clients</h3>
           <p className="mt-1 text-sm text-muted-foreground">{error}</p>
+          {!currentUser && (
+            <Button asChild className="mt-4"><Link href="/login">Log In</Link></Button>
+          )}
         </div>
       )}
 
-      {!loading && !error && filteredClients.length > 0 && (
+      {!loading && !error && currentUser && filteredClients.length > 0 && (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {filteredClients.map((client) => (
             <ClientCard key={client.id} client={client} onDeleteRequest={() => setClientToDelete(client)} />
@@ -126,7 +144,7 @@ export default function ClientsPage() {
         </div>
       )}
 
-      {!loading && !error && filteredClients.length === 0 && (
+      {!loading && !error && currentUser && filteredClients.length === 0 && (
         <div className="text-center py-12">
           <Users className="mx-auto h-12 w-12 text-muted-foreground" />
           <h3 className="mt-2 text-xl font-semibold">
@@ -142,14 +160,6 @@ export default function ClientsPage() {
           )}
         </div>
       )}
-
-      {/* Pagination placeholder - to be implemented if many clients */}
-      {/* {!loading && !error && filteredClients.length > 10 && (
-         <div className="flex justify-center mt-8">
-            <Button variant="outline" className="mr-2">Previous</Button>
-            <Button variant="outline">Next</Button>
-        </div>
-      )} */}
 
       {clientToDelete && (
         <AlertDialog open={!!clientToDelete} onOpenChange={() => setClientToDelete(null)}>

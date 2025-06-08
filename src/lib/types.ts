@@ -17,6 +17,7 @@ export interface LineItem {
 
 export interface Client {
   id: string; // Firestore document ID
+  userId?: string; // UID of the user who owns this client
   name: string;
   gstin?: string;
   email?: string;
@@ -92,3 +93,4 @@ export const mockBiller: BillerInfo = {
 
 // tempMockClients removed as clients are fetched from Firestore.
 // mockInvoices removed as invoices will be fetched from Firestore.
+

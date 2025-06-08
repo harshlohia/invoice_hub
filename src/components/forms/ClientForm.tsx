@@ -19,9 +19,12 @@ import { useToast } from "@/hooks/use-toast";
 import type { Client } from "@/lib/types";
 import { GSTIN_REGEX, INDIAN_STATES } from "@/lib/constants";
 import { useRouter } from "next/navigation";
-import { db } from "@/lib/firebase";
+import { db, getFirebaseAuthInstance } from "@/lib/firebase";
 import { collection, addDoc, updateDoc, doc, serverTimestamp } from "firebase/firestore";
 import { Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import type { User, Auth } from "firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
 
 const clientFormSchema = z.object({
   name: z.string().min(1, "Client name is required."),
@@ -48,6 +51,9 @@ interface ClientFormProps {
 export function ClientForm({ initialData, onSave }: ClientFormProps) {
   const router = useRouter();
   const { toast } = useToast();
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [loadingAuth, setLoadingAuth] = useState(true);
+
   const form = useForm<ClientFormValues>({
     resolver: zodResolver(clientFormSchema),
     defaultValues: initialData || {
@@ -64,38 +70,67 @@ export function ClientForm({ initialData, onSave }: ClientFormProps) {
     },
   });
 
+  useEffect(() => {
+    const authInstance: Auth = getFirebaseAuthInstance();
+    const unsubscribe = onAuthStateChanged(authInstance, (user) => {
+      setCurrentUser(user);
+      setLoadingAuth(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
   async function onSubmit(values: ClientFormValues) {
+    if (!currentUser && !initialData?.userId) { // For new clients, user must be logged in
+      toast({ title: "Error", description: "You must be logged in to save a client.", variant: "destructive" });
+      return;
+    }
+    
     form.formState.isSubmitting = true;
     try {
       if (initialData?.id) {
         // Update existing client
         const clientRef = doc(db, "clients", initialData.id);
-        await updateDoc(clientRef, {
-          ...values,
-          // updatedAt: serverTimestamp(), // TODO: Add if using Firebase.firestore.Timestamp
-        });
+        // Ensure userId is not accidentally changed if it exists, or set it if somehow missing from initialData (shouldn't happen)
+        const updateValues = {
+            ...values,
+            userId: initialData.userId || currentUser?.uid, 
+            // updatedAt: serverTimestamp(), 
+        };
+        if (!updateValues.userId) {
+            toast({ title: "Error", description: "User ID missing for update.", variant: "destructive" });
+            form.formState.isSubmitting = false;
+            return;
+        }
+        await updateDoc(clientRef, updateValues);
         toast({
           title: "Client Updated",
           description: `${values.name} has been successfully updated.`,
         });
         if (onSave) {
-          onSave({ ...values, id: initialData.id });
+          onSave({ ...updateValues, id: initialData.id } as Client);
         } else {
           router.push("/dashboard/clients");
-          router.refresh(); // To refetch data on the clients page
+          router.refresh(); 
         }
       } else {
         // Add new client
-        const docRef = await addDoc(collection(db, "clients"), {
+        if (!currentUser) { // Double check for new client
+             toast({ title: "Error", description: "Authentication error, please re-login.", variant: "destructive" });
+             form.formState.isSubmitting = false;
+             return;
+        }
+        const clientDataWithUser = {
           ...values,
-          // createdAt: serverTimestamp(), // TODO: Add if using Firebase.firestore.Timestamp
-        });
+          userId: currentUser.uid,
+          // createdAt: serverTimestamp(), 
+        };
+        const docRef = await addDoc(collection(db, "clients"), clientDataWithUser);
         toast({
           title: "Client Added",
           description: `${values.name} has been successfully added.`,
         });
         if (onSave) {
-          onSave({ ...values, id: docRef.id });
+          onSave({ ...clientDataWithUser, id: docRef.id });
         } else {
           router.push("/dashboard/clients");
           router.refresh(); 
@@ -110,10 +145,11 @@ export function ClientForm({ initialData, onSave }: ClientFormProps) {
       });
     } finally {
       form.formState.isSubmitting = false;
-       // Manually trigger re-render if needed, or rely on Next.js router.refresh()
-      form.reset(form.getValues()); // To update isSubmitting state visually if not navigating
+      form.reset(form.getValues()); 
     }
   }
+
+  const isSubmitDisabled = form.formState.isSubmitting || loadingAuth || (!currentUser && !initialData);
 
   return (
     <Form {...form}>
@@ -246,12 +282,12 @@ export function ClientForm({ initialData, onSave }: ClientFormProps) {
             )}
           />
         <div className="flex justify-end gap-3 pt-4">
-            <Button type="button" variant="outline" onClick={() => router.back()} disabled={form.formState.isSubmitting}>
+            <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmitDisabled}>
             Cancel
             </Button>
-            <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={form.formState.isSubmitting}>
-            {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {form.formState.isSubmitting ? (initialData ? "Saving..." : "Adding Client...") : (initialData ? "Save Changes" : "Add Client")}
+            <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={isSubmitDisabled}>
+            {(form.formState.isSubmitting || loadingAuth) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {loadingAuth && !initialData ? "Loading..." : form.formState.isSubmitting ? (initialData ? "Saving..." : "Adding Client...") : (initialData ? "Save Changes" : "Add Client")}
             </Button>
         </div>
       </form>
