@@ -69,6 +69,7 @@ export interface Invoice {
   grandTotal: number; 
   status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
   isInterState: boolean; 
+  currency?: string; // Added currency field
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }
@@ -93,4 +94,5 @@ export const mockBiller: BillerInfo = {
 
 // tempMockClients removed as clients are fetched from Firestore.
 // mockInvoices removed as invoices will be fetched from Firestore.
+
 

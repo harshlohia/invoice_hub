@@ -64,6 +64,7 @@ export function InvoiceCard({ invoice: initialInvoice, onStatusUpdate }: Invoice
 
   const invoiceDate = ensureDate(invoice.invoiceDate);
   const dueDate = ensureDate(invoice.dueDate);
+  const currencySymbol = invoice.currency === "INR" ? "Rs." : (invoice.currency || "Rs.");
 
   const handleUpdateStatusOnCard = async (newStatus: Invoice['status']) => {
     if (!invoice.id) {
@@ -134,7 +135,7 @@ export function InvoiceCard({ invoice: initialInvoice, onStatusUpdate }: Invoice
           <span className="font-medium">Due:</span> {format(dueDate, "dd MMM yyyy")}
         </p>
         <p className="text-lg font-semibold">
-          Total: ₹{invoice.grandTotal.toLocaleString('en-IN')}
+          Total: {currencySymbol}{invoice.grandTotal.toLocaleString('en-IN')}
         </p>
       </CardContent>
       <CardFooter className="flex flex-wrap gap-2 justify-end border-t pt-4 mt-auto">
@@ -151,3 +152,4 @@ export function InvoiceCard({ invoice: initialInvoice, onStatusUpdate }: Invoice
     </Card>
   );
 }
+

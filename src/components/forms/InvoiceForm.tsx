@@ -72,6 +72,7 @@ const invoiceFormSchema = z.object({
   notes: z.string().optional(),
   termsAndConditions: z.string().optional(),
   billerInfo: billerInfoFormSchema, 
+  currency: z.string().default("INR"),
 });
 
 type InvoiceFormValues = z.infer<typeof invoiceFormSchema>;
@@ -110,7 +111,8 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
         : [{ id: crypto.randomUUID(), productName: "", quantity: 1, rate: 0, discountPercentage: 0, taxRate: 18 }],
       notes: initialData?.notes || "",
       termsAndConditions: initialData?.termsAndConditions || "Thank you for your business! Payment is due within the specified date.",
-      billerInfo: initialData ? initialData.billerInfo : defaultBillerInfo
+      billerInfo: initialData ? initialData.billerInfo : defaultBillerInfo,
+      currency: initialData?.currency || "INR",
     },
   });
 
@@ -187,6 +189,7 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
         notes: initialData.notes || "",
         termsAndConditions: initialData.termsAndConditions || "Thank you for your business! Payment is due within the specified date.",
         billerInfo: initialData.billerInfo,
+        currency: initialData.currency || "INR",
       });
       setSelectedClientData(initialData.client);
       setLoadingClients(false); 
@@ -283,7 +286,8 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
       notes: values.notes,
       termsAndConditions: values.termsAndConditions,
       isInterState: values.isInterState,
-      status: values.status, // Get status from form
+      status: values.status, 
+      currency: values.currency || "INR",
       subTotal: currentTotals.subTotal,
       totalCGST: currentTotals.totalCGST,
       totalSGST: currentTotals.totalSGST,
@@ -490,7 +494,7 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
                 <FormField control={form.control} name={`lineItems.${index}.quantity`} render={({ field }) => (
                     <FormItem><FormLabel className={index > 0 ? "sr-only md:not-sr-only": ""}>Qty</FormLabel><FormControl><Input type="number" placeholder="1" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} /></FormControl><FormMessage /></FormItem>)} />
                 <FormField control={form.control} name={`lineItems.${index}.rate`} render={({ field }) => (
-                    <FormItem><FormLabel className={index > 0 ? "sr-only md:not-sr-only": ""}>Rate (₹)</FormLabel><FormControl><Input type="number" placeholder="100.00" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || 0)}/></FormControl><FormMessage /></FormItem>)} />
+                    <FormItem><FormLabel className={index > 0 ? "sr-only md:not-sr-only": ""}>Rate (Rs.)</FormLabel><FormControl><Input type="number" placeholder="100.00" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || 0)}/></FormControl><FormMessage /></FormItem>)} />
                 <FormField control={form.control} name={`lineItems.${index}.discountPercentage`} render={({ field }) => (
                     <FormItem><FormLabel className={index > 0 ? "sr-only md:not-sr-only": ""}>Disc (%)</FormLabel><FormControl><Input type="number" placeholder="0" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || 0)}/></FormControl><FormMessage /></FormItem>)} />
                 <FormField control={form.control} name={`lineItems.${index}.taxRate`} render={({ field }) => (
@@ -505,7 +509,7 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
                         <FormMessage />
                     </FormItem>)} />
                 <div className="flex flex-col items-end">
-                  <FormLabel className={index > 0 ? "sr-only md:not-sr-only": ""}>Amount (₹)</FormLabel>
+                  <FormLabel className={index > 0 ? "sr-only md:not-sr-only": ""}>Amount (Rs.)</FormLabel>
                   <p className="w-full text-right font-medium pt-2.5">
                     {calculateLineItemTotals(watchLineItems[index]).amount.toFixed(2)}
                   </p>
@@ -526,18 +530,18 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
         <Card>
           <CardHeader><CardTitle className="font-headline">Summary</CardTitle></CardHeader>
           <CardContent className="space-y-2">
-            <div className="flex justify-between"><span className="text-muted-foreground">Subtotal:</span><span>₹{totals.subTotal.toFixed(2)}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Subtotal:</span><span>Rs. {totals.subTotal.toFixed(2)}</span></div>
             {!watchIsInterState && (
               <>
-                <div className="flex justify-between"><span className="text-muted-foreground">CGST:</span><span>₹{totals.totalCGST.toFixed(2)}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">SGST:</span><span>₹{totals.totalSGST.toFixed(2)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">CGST:</span><span>Rs. {totals.totalCGST.toFixed(2)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">SGST:</span><span>Rs. {totals.totalSGST.toFixed(2)}</span></div>
               </>
             )}
             {watchIsInterState && (
-              <div className="flex justify-between"><span className="text-muted-foreground">IGST:</span><span>₹{totals.totalIGST.toFixed(2)}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">IGST:</span><span>Rs. {totals.totalIGST.toFixed(2)}</span></div>
             )}
             <Separator />
-            <div className="flex justify-between text-xl font-bold"><span className="text-foreground">Grand Total:</span><span>₹{totals.grandTotal.toFixed(2)}</span></div>
+            <div className="flex justify-between text-xl font-bold"><span className="text-foreground">Grand Total:</span><span>Rs. {totals.grandTotal.toFixed(2)}</span></div>
           </CardContent>
         </Card>
 

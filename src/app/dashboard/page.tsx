@@ -1,3 +1,4 @@
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from 'next/link';
@@ -5,10 +6,10 @@ import { IndianRupee, FileText, Users, AlertTriangle, CheckCircle2, Clock } from
 
 export default function DashboardPage() {
   const stats = [
-    { title: "Total Revenue (MTD)", value: "₹1,25,430", icon: IndianRupee, color: "text-green-500", description: "+15.2% from last month" },
+    { title: "Total Revenue (MTD)", value: "Rs. 1,25,430", icon: IndianRupee, color: "text-green-500", description: "+15.2% from last month" },
     { title: "Invoices Created (MTD)", value: "78", icon: FileText, color: "text-blue-500", description: "5 new today" },
     { title: "Active Clients", value: "32", icon: Users, color: "text-purple-500", description: "2 new this week" },
-    { title: "Overdue Invoices", value: "5 (₹22,800)", icon: AlertTriangle, color: "text-red-500", description: "Action required" },
+    { title: "Overdue Invoices", value: "5 (Rs. 22,800)", icon: AlertTriangle, color: "text-red-500", description: "Action required" },
   ];
 
   const recentActivities = [
@@ -80,3 +81,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+

@@ -141,6 +141,7 @@ export function InvoicePreview({ invoice: initialInvoice, onStatusChange }: Invo
 
   const invoiceDate = invoice.invoiceDate instanceof Timestamp ? invoice.invoiceDate.toDate() : new Date(invoice.invoiceDate);
   const dueDate = invoice.dueDate instanceof Timestamp ? invoice.dueDate.toDate() : new Date(invoice.dueDate);
+  const currencySymbol = invoice.currency === "INR" ? "Rs." : (invoice.currency || "Rs.");
 
 
   return (
@@ -204,9 +205,9 @@ export function InvoicePreview({ invoice: initialInvoice, onStatusChange }: Invo
                   <th className="p-2 text-left font-semibold text-foreground">#</th>
                   <th className="p-2 text-left font-semibold text-foreground">Item/Service</th>
                   <th className="p-2 text-right font-semibold text-foreground">Qty</th>
-                  <th className="p-2 text-right font-semibold text-foreground">Rate (₹)</th>
+                  <th className="p-2 text-right font-semibold text-foreground">Rate ({currencySymbol})</th>
                   <th className="p-2 text-right font-semibold text-foreground">Discount (%)</th>
-                  <th className="p-2 text-right font-semibold text-foreground">Amount (₹)</th>
+                  <th className="p-2 text-right font-semibold text-foreground">Amount ({currencySymbol})</th>
                 </tr>
               </thead>
               <tbody>
@@ -240,18 +241,18 @@ export function InvoicePreview({ invoice: initialInvoice, onStatusChange }: Invo
               )}
             </div>
             <div className="space-y-2 mt-4 md:mt-0">
-              <div className="flex justify-between text-sm"><span className="text-muted-foreground">Subtotal:</span> <span className="font-medium">₹{invoice.subTotal.toFixed(2)}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-muted-foreground">Subtotal:</span> <span className="font-medium">{currencySymbol}{invoice.subTotal.toFixed(2)}</span></div>
               {!invoice.isInterState && (
                 <>
-                <div className="flex justify-between text-sm"><span className="text-muted-foreground">CGST:</span> <span className="font-medium">₹{invoice.totalCGST.toFixed(2)}</span></div>
-                <div className="flex justify-between text-sm"><span className="text-muted-foreground">SGST:</span> <span className="font-medium">₹{invoice.totalSGST.toFixed(2)}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-muted-foreground">CGST:</span> <span className="font-medium">{currencySymbol}{invoice.totalCGST.toFixed(2)}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-muted-foreground">SGST:</span> <span className="font-medium">{currencySymbol}{invoice.totalSGST.toFixed(2)}</span></div>
                 </>
               )}
               {invoice.isInterState && (
-                <div className="flex justify-between text-sm"><span className="text-muted-foreground">IGST:</span> <span className="font-medium">₹{invoice.totalIGST.toFixed(2)}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-muted-foreground">IGST:</span> <span className="font-medium">{currencySymbol}{invoice.totalIGST.toFixed(2)}</span></div>
               )}
               <Separator/>
-              <div className="flex justify-between text-xl font-bold text-primary"><span className="text-foreground">Grand Total:</span> <span>₹{invoice.grandTotal.toFixed(2)}</span></div>
+              <div className="flex justify-between text-xl font-bold text-primary"><span className="text-foreground">Grand Total:</span> <span>{currencySymbol}{invoice.grandTotal.toFixed(2)}</span></div>
             </div>
           </div>
 
