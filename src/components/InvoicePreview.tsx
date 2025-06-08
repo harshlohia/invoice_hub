@@ -137,7 +137,7 @@ export function InvoicePreview({ invoice }: InvoicePreviewProps) {
         </Button>
         <Button variant="outline" disabled><Send className="mr-2 h-4 w-4" /> Send to Client</Button>
         <Button variant="outline" disabled><Printer className="mr-2 h-4 w-4" /> Print</Button>
-        <Button className="bg-accent hover:bg-accent/90 text-accent-foreground" disabled>
+        <Button className="bg-accent hover:bg-accent/90 text-accent-foreground">
           <Download className="mr-2 h-4 w-4" /> Download PDF
         </Button>
       </CardFooter>
