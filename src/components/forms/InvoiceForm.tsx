@@ -1,3 +1,4 @@
+
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -23,13 +24,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import type { Invoice, Client, LineItem, BillerInfo } from "@/lib/types";
-import { mockClients, mockBiller } from "@/lib/types"; // Mock data for now
+import { mockBiller } from "@/lib/types"; // mockBiller is still used for default biller info
 import { GSTIN_REGEX, INDIAN_STATES, GST_RATES } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { format, addDays } from "date-fns";
-import { CalendarIcon, PlusCircle, Trash2, IndianRupee, Upload, Edit2 } from "lucide-react";
+import { CalendarIcon, PlusCircle, Trash2, IndianRupee, Upload, Edit2, Loader2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 const lineItemSchema = z.object({
   id: z.string().optional(), // For existing items
@@ -71,7 +74,8 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
-  const [clients, setClients] = useState<Client[]>(mockClients); // Mock client list
+  const [clients, setClients] = useState<Client[]>([]);
+  const [loadingClients, setLoadingClients] = useState(true);
 
   const form = useForm<InvoiceFormValues>({
     resolver: zodResolver(invoiceFormSchema),
@@ -111,6 +115,29 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
         },
   });
 
+  useEffect(() => {
+    const fetchClients = async () => {
+      setLoadingClients(true);
+      try {
+        const querySnapshot = await getDocs(collection(db, "clients"));
+        const clientsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client));
+        setClients(clientsData);
+      } catch (error) {
+        console.error("Error fetching clients for invoice form:", error);
+        toast({
+          title: "Error Loading Clients",
+          description: "Could not load clients for the dropdown. Please ensure clients exist or try refreshing.",
+          variant: "destructive",
+        });
+        setClients([]); // Set to empty array on error
+      } finally {
+        setLoadingClients(false);
+      }
+    };
+
+    fetchClients();
+  }, [toast]);
+
   const { fields, append, remove } = useFieldArray({
     control: form.control,
     name: "lineItems",
@@ -143,17 +170,17 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
   const totals = calculateTotals();
 
   async function onSubmit(values: InvoiceFormValues) {
+    // TODO: Replace with actual Firestore save logic
     await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
-    console.log("Invoice data:", values, totals);
+    console.log("Invoice data (to be saved):", values, totals);
     toast({
-      title: initialData ? "Invoice Updated" : "Invoice Created",
-      description: `Invoice ${values.invoiceNumber} has been successfully ${initialData ? 'updated' : 'created'}.`,
+      title: initialData ? "Invoice Updated (Mock)" : "Invoice Created (Mock)",
+      description: `Invoice ${values.invoiceNumber} has been successfully ${initialData ? 'updated' : 'created'}. (Not saved to DB yet)`,
     });
+    // For now, mock save. Later, implement actual Firestore save for invoices.
     router.push("/dashboard/invoices");
   }
 
-  // TODO: Biller Info should be editable in a modal or separate settings page
-  // TODO: Client selection should ideally allow adding new client inline or via modal
 
   return (
     <Form {...form}>
@@ -216,10 +243,21 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
               <FormField control={form.control} name="clientId" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Client*</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl><SelectTrigger><SelectValue placeholder="Select a client" /></SelectTrigger></FormControl>
+                    <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value || undefined} disabled={loadingClients}>
+                      <FormControl><SelectTrigger><SelectValue placeholder={loadingClients ? "Loading clients..." : "Select a client"} /></SelectTrigger></FormControl>
                       <SelectContent>
-                        {clients.map(client => <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>)}
+                        {loadingClients ? (
+                            <SelectItem value="loading" disabled>
+                                <div className="flex items-center">
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Loading clients...
+                                </div>
+                            </SelectItem>
+                        ) : clients.length === 0 ? (
+                            <SelectItem value="no-clients" disabled>No clients found. Please add one.</SelectItem>
+                        ) : (
+                            clients.map(client => <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>)
+                        )}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -245,7 +283,7 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
         <Card>
             <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="font-headline">Your Information (Biller)</CardTitle>
-                <Button type="button" variant="ghost" size="sm" onClick={() => alert("Biller info editing coming soon in Settings.")}>
+                <Button type="button" variant="ghost" size="sm" onClick={() => router.push("/dashboard/settings")}>
                     <Edit2 className="mr-2 h-4 w-4"/> Edit Biller Info
                 </Button>
             </CardHeader>
@@ -360,7 +398,8 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
           <Button type="button" variant="outline" onClick={() => router.back()} disabled={form.formState.isSubmitting}>
             Cancel
           </Button>
-          <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={form.formState.isSubmitting}>
+          <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={form.formState.isSubmitting || loadingClients}>
+            {(form.formState.isSubmitting || loadingClients) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {form.formState.isSubmitting ? (initialData ? "Saving..." : "Creating Invoice...") : (initialData ? "Save Changes" : "Create Invoice")}
           </Button>
         </div>
@@ -368,3 +407,6 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
     </Form>
   );
 }
+
+
+    

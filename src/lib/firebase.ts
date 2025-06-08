@@ -4,15 +4,13 @@ import { getFirestore } from "firebase/firestore";
 // import { getAuth } from "firebase/auth"; // Prepare for Firebase Auth
 
 // Your web app's Firebase configuration
-// IMPORTANT: Replace with your actual Firebase project configuration
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID",
-  measurementId: "YOUR_MEASUREMENT_ID" // Optional
+  apiKey: "AIzaSyA7X0lfZbW6LoPZixfRHsxx1AdmtImM4MA",
+  authDomain: "invoice-hub-80f7e.firebaseapp.com",
+  projectId: "invoice-hub-80f7e",
+  storageBucket: "invoice-hub-80f7e.appspot.com",
+  messagingSenderId: "1047418322494",
+  appId: "1:1047418322494:web:245928258e77c5ddf15b6f"
 };
 
 // Initialize Firebase
