@@ -45,19 +45,19 @@ const lineItemSchema = z.object({
 
 const billerInfoFormSchema = z.object({
   businessName: z.string().min(1, "Business name required"),
-  gstin: z.string().refine(val => GSTIN_REGEX.test(val), "Invalid GSTIN"),
+  gstin: z.string().optional().refine(val => !val || GSTIN_REGEX.test(val), "Invalid GSTIN"),
   addressLine1: z.string().min(1, "Address required"),
-  addressLine2: z.string().optional(),
+  addressLine2: z.string().optional().or(z.literal('')),
   city: z.string().min(1, "City required"),
   state: z.string().min(1, "State required"),
   postalCode: z.string().min(1, "Postal code required"),
   country: z.string().min(1, "Country required").default("India"),
-  phone: z.string().optional(),
+  phone: z.string().optional().or(z.literal('')),
   email: z.string().email("Invalid business email").optional().or(z.literal('')),
-  bankName: z.string().optional(),
-  accountNumber: z.string().optional(),
-  ifscCode: z.string().optional(),
-  upiId: z.string().optional(),
+  bankName: z.string().optional().or(z.literal('')),
+  accountNumber: z.string().optional().or(z.literal('')),
+  ifscCode: z.string().optional().or(z.literal('')),
+  upiId: z.string().optional().or(z.literal('')),
   logoUrl: z.string().url("Invalid URL").optional().or(z.literal('')),
 });
 
@@ -79,7 +79,10 @@ interface InvoiceFormProps {
   initialData?: Invoice | null;
 }
 
-const BUSINESS_SETTINGS_DOC_ID = "mainBusinessInfo";
+const defaultBillerInfo: BillerInfo = {
+  businessName: "", gstin: "", addressLine1: "", addressLine2: "", city: "", state: "", postalCode: "", country: "India",
+  phone: "", email: "", bankName: "", accountNumber: "", ifscCode: "", upiId: "", logoUrl: ""
+};
 
 export function InvoiceForm({ initialData }: InvoiceFormProps) {
   const router = useRouter();
@@ -103,13 +106,9 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
       lineItems: initialData 
         ? initialData.lineItems.map(item => ({ ...item, id: item.id || crypto.randomUUID() }))
         : [{ id: crypto.randomUUID(), productName: "", quantity: 1, rate: 0, discountPercentage: 0, taxRate: 18 }],
-      notes: initialData ? initialData.notes || "" : "",
-      termsAndConditions: initialData 
-        ? initialData.termsAndConditions || "Thank you for your business! Payment is due within the specified date."
-        : "Thank you for your business! Payment is due within the specified date.",
-      billerInfo: initialData 
-        ? initialData.billerInfo 
-        : { businessName: "", gstin: "", addressLine1: "", city: "", state: "", postalCode: "", country: "India" }
+      notes: initialData?.notes || "",
+      termsAndConditions: initialData?.termsAndConditions || "Thank you for your business! Payment is due within the specified date.",
+      billerInfo: initialData ? initialData.billerInfo : defaultBillerInfo
     },
   });
 
@@ -126,6 +125,7 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
     setLoadingClients(true);
     setLoadingBillerInfo(true);
     try {
+      // Fetch Clients
       const clientsRef = collection(db, "clients");
       const q = query(clientsRef, where("userId", "==", userId));
       const clientsQuerySnapshot = await getDocs(q);
@@ -141,18 +141,24 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
           }
       }
 
-      const billerDocRef = doc(db, "settings", BUSINESS_SETTINGS_DOC_ID);
-      const billerDocSnap = await getDoc(billerDocRef);
-      if (billerDocSnap.exists()) {
-        form.setValue("billerInfo", billerDocSnap.data() as BillerInfo);
+      // Fetch BillerInfo from User's document
+      const userDocRef = doc(db, "users", userId);
+      const userDocSnap = await getDoc(userDocRef);
+      if (userDocSnap.exists() && userDocSnap.data()?.billerInfo) {
+        form.setValue("billerInfo", userDocSnap.data()?.billerInfo as BillerInfo);
       } else {
-        toast({ title: "Biller Info Not Found", description: "Please set up your business information in Settings.", variant: "destructive" });
+        toast({ 
+            title: "Biller Info Not Found", 
+            description: "Your business information is not set up. Default values will be used. Please update in Settings.", 
+            variant: "default" // Changed to default so it's less alarming than destructive
+        });
+        form.setValue("billerInfo", defaultBillerInfo); // Fallback to empty/default
       }
     } catch (error) {
       console.error("Error fetching data for new invoice form:", error);
       toast({
         title: "Error Loading Data",
-        description: "Could not load clients or biller info. Please try refreshing.",
+        description: "Could not load clients or your business info. Please try refreshing.",
         variant: "destructive",
       });
     } finally {
@@ -183,7 +189,7 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
       setSelectedClientData(initialData.client);
       setLoadingClients(false); 
       setLoadingBillerInfo(false); 
-    } else if (currentUser) { // Only fetch if creating new AND user is loaded
+    } else if (currentUser) { 
       fetchClientsAndBillerInfoForNewInvoice(currentUser.uid);
     }
   }, [initialData, form, currentUser, fetchClientsAndBillerInfoForNewInvoice]);
@@ -250,9 +256,11 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
       return;
     }
     
-    const billerInfoForInvoice = initialData ? initialData.billerInfo : values.billerInfo;
+    // BillerInfo for the invoice should be what's currently in the form's state, 
+    // which for new invoices is loaded from the user's doc, or for existing invoices, from initialData.
+    const billerInfoForInvoice = values.billerInfo; 
     if (!billerInfoForInvoice?.businessName) {
-         toast({ title: "Biller Info Missing", description: "Biller information is required. Please check settings.", variant: "destructive" });
+         toast({ title: "Biller Info Missing", description: "Your business information is required. Please check settings.", variant: "destructive" });
         return;
     }
 
@@ -445,16 +453,16 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
             </CardHeader>
             <CardContent className="space-y-2 text-sm text-muted-foreground">
                 {(loadingAuth || (loadingBillerInfo && !initialData)) ? (
-                  <div className="space-y-2"> <Loader2 className="h-5 w-5 animate-spin" /> <p>Loading biller information...</p></div>
+                  <div className="space-y-2"> <Loader2 className="h-5 w-5 animate-spin" /> <p>Loading your business information...</p></div>
                 ) : form.getValues("billerInfo.businessName") ? (
                   <>
                     <p><strong>{form.getValues("billerInfo.businessName")}</strong></p>
-                    <p>GSTIN: {form.getValues("billerInfo.gstin")}</p>
+                    <p>GSTIN: {form.getValues("billerInfo.gstin") || "Not set"}</p>
                     <p>{form.getValues("billerInfo.addressLine1")}</p>
                     <p>State: {form.getValues("billerInfo.state")}</p>
                   </>
                 ) : (
-                  <p className="text-destructive">Biller information not found or not loaded. Please update in Settings.</p>
+                  <p className="text-destructive">Your business information is not set up. Please update in Settings to ensure correct invoices.</p>
                 )}
             </CardContent>
         </Card>
@@ -576,3 +584,4 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
     </Form>
   );
 }
+
