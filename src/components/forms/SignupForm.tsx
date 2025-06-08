@@ -56,34 +56,43 @@ export function SignupForm() {
       console.log("Firebase user created successfully:", user);
 
       // Store additional user information in Firestore
-      if (user) {
+      if (user && user.email) { // Ensure user and user.email are populated
+        console.log(`Attempting to store user data in Firestore for UID: ${user.uid}, Email: ${user.email}`);
         try {
           await setDoc(doc(db, "users", user.uid), {
             uid: user.uid,
             email: user.email,
             businessName: values.businessName,
             createdAt: serverTimestamp(),
-            // Initialize other fields if necessary
             firstName: "", 
             lastName: "",
           });
           console.log("User data stored in Firestore for UID:", user.uid);
-        } catch (firestoreError) {
-          console.error("Error storing user data in Firestore:", firestoreError);
-          // Potentially inform the user, but primary signup succeeded
           toast({
-            title: "Account Created",
-            description: "User account created, but there was an issue saving profile details. Please update in settings.",
-            variant: "default" 
+            title: "Account Created Successfully",
+            description: "User profile created. Please log in to continue.",
           });
+          router.push("/login"); // Redirect after both auth and firestore success
+        } catch (firestoreError: any) {
+          console.error("Firestore Error Code:", firestoreError.code);
+          console.error("Firestore Error Message:", firestoreError.message);
+          console.error("Full Firestore Error:", firestoreError);
+          toast({
+            title: "Account Created, Profile Save Failed",
+            description: `User account created, but failed to save profile details to Firestore: ${firestoreError.message}. Please update in settings or check console.`,
+            variant: "destructive",
+          });
+          router.push("/login"); // Still redirect, as auth account was made
         }
+      } else {
+        console.error("User object from Firebase Auth was not fully populated. Cannot save to Firestore.");
+        toast({
+          title: "Account Creation Issue",
+          description: "User account was created, but profile details could not be saved due to an unexpected issue. Please contact support or try updating in settings.",
+          variant: "destructive",
+        });
+        router.push("/login"); // Redirect to login
       }
-
-      toast({
-        title: "Account Created Successfully",
-        description: "Please log in to continue.",
-      });
-      router.push("/login");
     } catch (error: any) {
       console.error("Firebase Signup Error Details:", error);
       console.error("Error Code:", error.code);
