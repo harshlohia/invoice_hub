@@ -18,8 +18,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { User, Mail, Lock, Loader2 } from "lucide-react";
-import { getFirebaseAuthInstance } from "@/lib/firebase"; 
+import { getFirebaseAuthInstance, db } from "@/lib/firebase"; 
 import { createUserWithEmailAndPassword, type Auth } from "firebase/auth"; 
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 
 const signupFormSchema = z.object({
   businessName: z.string().min(1, { message: "Business name is required." }),
@@ -51,9 +52,32 @@ export function SignupForm() {
     try {
       const authInstance: Auth = getFirebaseAuthInstance(); 
       const userCredential = await createUserWithEmailAndPassword(authInstance, values.email, values.password);
-      console.log("Firebase user created successfully:", userCredential.user);
-      // In a real app, you might want to save businessName to Firestore user profile here
-      // associated with userCredential.user.uid
+      const user = userCredential.user;
+      console.log("Firebase user created successfully:", user);
+
+      // Store additional user information in Firestore
+      if (user) {
+        try {
+          await setDoc(doc(db, "users", user.uid), {
+            uid: user.uid,
+            email: user.email,
+            businessName: values.businessName,
+            createdAt: serverTimestamp(),
+            // Initialize other fields if necessary
+            firstName: "", 
+            lastName: "",
+          });
+          console.log("User data stored in Firestore for UID:", user.uid);
+        } catch (firestoreError) {
+          console.error("Error storing user data in Firestore:", firestoreError);
+          // Potentially inform the user, but primary signup succeeded
+          toast({
+            title: "Account Created",
+            description: "User account created, but there was an issue saving profile details. Please update in settings.",
+            variant: "default" 
+          });
+        }
+      }
 
       toast({
         title: "Account Created Successfully",

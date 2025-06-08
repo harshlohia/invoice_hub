@@ -10,24 +10,24 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { User, Building2, Palette, Bell, ShieldCheck, Loader2 } from "lucide-react";
+import { User as UserIconLucide, Building2, Palette, Bell, ShieldCheck, Loader2 } from "lucide-react"; // Renamed User to UserIconLucide
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { db } from "@/lib/firebase";
-import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
+import { db, getFirebaseAuthInstance } from "@/lib/firebase";
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
-import type { BillerInfo } from '@/lib/types'; // Using BillerInfo for business details
+import type { BillerInfo } from '@/lib/types'; 
 import { GSTIN_REGEX } from '@/lib/constants';
 import { Skeleton } from '@/components/ui/skeleton';
+import type { User as FirebaseAuthUser } from "firebase/auth"; // For Firebase Auth user type
+import { onAuthStateChanged, type Auth } from "firebase/auth";
 
-// Assuming a single user for now, so settings are stored under a fixed ID
 const BUSINESS_SETTINGS_DOC_ID = "mainBusinessInfo"; 
-const USER_PROFILE_DOC_ID = "mainUserProfile";
-
 
 const profileFormSchema = z.object({
-  firstName: z.string().min(1, "First name is required."),
-  lastName: z.string().min(1, "Last name is required."),
-  email: z.string().email("Invalid email address."),
+  firstName: z.string().min(1, "First name is required.").optional().or(z.literal('')),
+  lastName: z.string().min(1, "Last name is required.").optional().or(z.literal('')),
+  email: z.string().email("Invalid email address."), // Email from Auth, can be saved to user doc
+  businessName: z.string().optional(), // Display from user doc, maybe read-only here
 });
 type ProfileFormValues = z.infer<typeof profileFormSchema>;
 
@@ -37,8 +37,6 @@ const businessFormSchema = z.object({
     message: "Invalid GSTIN format.",
   }),
   addressLine1: z.string().min(1, "Address is required."),
-  // Other BillerInfo fields can be added here: city, state, postalCode, phone, email for business etc.
-  // For simplicity, only including a few for now. These match BillerInfo type.
   city: z.string().optional(),
   state: z.string().optional(),
   postalCode: z.string().optional(),
@@ -50,16 +48,17 @@ const businessFormSchema = z.object({
   upiId: z.string().optional(),
   logoUrl: z.string().url("Invalid URL").optional().or(z.literal('')),
 });
-type BusinessFormValues = Partial<BillerInfo>; // Allow partial updates, use BillerInfo for structure
+type BusinessFormValues = Partial<BillerInfo>;
 
 export default function SettingsPage() {
   const { toast } = useToast();
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [loadingBusiness, setLoadingBusiness] = useState(true);
+  const [currentUser, setCurrentUser] = useState<FirebaseAuthUser | null>(null);
 
   const profileForm = useForm<ProfileFormValues>({
     resolver: zodResolver(profileFormSchema),
-    defaultValues: { firstName: "", lastName: "", email: "" },
+    defaultValues: { firstName: "", lastName: "", email: "", businessName: "" },
   });
 
   const businessForm = useForm<BusinessFormValues>({
@@ -72,7 +71,7 @@ export default function SettingsPage() {
       state: "",
       postalCode: "",
       phone: "",
-      email: "", // This is business email, distinct from user profile email
+      email: "", 
       bankName: "",
       accountNumber: "",
       ifscCode: "",
@@ -82,22 +81,52 @@ export default function SettingsPage() {
   });
 
   useEffect(() => {
-    const fetchProfile = async () => {
-      setLoadingProfile(true);
-      try {
-        const docRef = doc(db, "settings", USER_PROFILE_DOC_ID);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          profileForm.reset(docSnap.data() as ProfileFormValues);
-        }
-      } catch (error) {
-        console.error("Error fetching profile settings:", error);
-        toast({ title: "Error", description: "Could not load profile settings.", variant: "destructive" });
-      } finally {
+    const authInstance: Auth = getFirebaseAuthInstance();
+    const unsubscribe = onAuthStateChanged(authInstance, (user) => {
+      setCurrentUser(user);
+      if (user) {
+        fetchProfile(user);
+      } else {
         setLoadingProfile(false);
+        profileForm.reset({ email: "", firstName: "", lastName: "", businessName: "" });
       }
-    };
+    });
+    return () => unsubscribe();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // profileForm should not be in deps if reset is inside
 
+  const fetchProfile = async (user: FirebaseAuthUser) => {
+    setLoadingProfile(true);
+    try {
+      const userDocRef = doc(db, "users", user.uid);
+      const userDocSnap = await getDoc(userDocRef);
+      if (userDocSnap.exists()) {
+        const userData = userDocSnap.data();
+        profileForm.reset({
+          email: userData.email || user.email || "", // Prioritize doc email, then auth email
+          firstName: userData.firstName || "",
+          lastName: userData.lastName || "",
+          businessName: userData.businessName || "",
+        });
+      } else {
+        // User doc doesn't exist, prefill email from Auth
+        profileForm.reset({
+          email: user.email || "",
+          firstName: "",
+          lastName: "",
+          businessName: "", // Might be set during signup, or user is new
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching profile settings:", error);
+      toast({ title: "Error", description: "Could not load profile settings.", variant: "destructive" });
+      profileForm.reset({ email: user.email || "", firstName: "", lastName: "", businessName:"" }); // Fallback
+    } finally {
+      setLoadingProfile(false);
+    }
+  };
+  
+  useEffect(() => {
     const fetchBusinessInfo = async () => {
       setLoadingBusiness(true);
       try {
@@ -113,13 +142,25 @@ export default function SettingsPage() {
         setLoadingBusiness(false);
       }
     };
-    fetchProfile();
+    // Fetch business info independently of user auth, as it's currently global
     fetchBusinessInfo();
-  }, [profileForm, businessForm, toast]);
+  }, [businessForm, toast]);
 
   const onProfileSubmit = async (values: ProfileFormValues) => {
+    if (!currentUser) {
+      toast({ title: "Error", description: "You must be logged in to save profile settings.", variant: "destructive" });
+      return;
+    }
     try {
-      await setDoc(doc(db, "settings", USER_PROFILE_DOC_ID), values, { merge: true });
+      // We use setDoc with merge:true to create or update the user's document.
+      // This ensures fields not in `values` (like `createdAt` or `uid` from signup) are preserved.
+      await setDoc(doc(db, "users", currentUser.uid), {
+        firstName: values.firstName,
+        lastName: values.lastName,
+        email: values.email, // Saving email to user doc as well
+        // businessName is not part of this form's submission values directly, loaded for display
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
       toast({ title: "Profile Saved", description: "Your profile information has been updated." });
     } catch (error) {
       console.error("Error saving profile:", error);
@@ -128,6 +169,8 @@ export default function SettingsPage() {
   };
 
   const onBusinessSubmit = async (values: BusinessFormValues) => {
+    // This still saves to the global/fixed business info document.
+    // For a multi-tenant app, this would need to be user-specific.
     try {
       await setDoc(doc(db, "settings", BUSINESS_SETTINGS_DOC_ID), values, { merge: true });
       toast({ title: "Business Info Saved", description: "Your business information has been updated." });
@@ -140,17 +183,19 @@ export default function SettingsPage() {
   const renderProfileForm = () => (
     <Card>
       <CardHeader>
-        <CardTitle className="font-headline flex items-center"><User className="mr-2 h-5 w-5 text-primary" /> Profile Information</CardTitle>
-        <CardDescription>Update your personal and contact details.</CardDescription>
+        <CardTitle className="font-headline flex items-center"><UserIconLucide className="mr-2 h-5 w-5 text-primary" /> Profile Information</CardTitle>
+        <CardDescription>Update your personal and contact details. Your business name is set during signup.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {loadingProfile ? (
           <div className="space-y-4">
+            <Skeleton className="h-6 w-1/3 mb-2" />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div><Label>First Name</Label><Skeleton className="h-10 w-full" /></div>
               <div><Label>Last Name</Label><Skeleton className="h-10 w-full" /></div>
             </div>
             <div><Label>Email Address</Label><Skeleton className="h-10 w-full" /></div>
+            <div><Label>Business Name</Label><Skeleton className="h-10 w-full" /></div>
             <Skeleton className="h-10 w-24" />
           </div>
         ) : (
@@ -163,8 +208,20 @@ export default function SettingsPage() {
                   <FormItem><FormLabel>Last Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
             </div>
             <FormField control={profileForm.control} name="email" render={({ field }) => (
-                <FormItem><FormLabel>Email Address</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>)} />
-            <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={profileForm.formState.isSubmitting}>
+                <FormItem>
+                  <FormLabel>Email Address</FormLabel>
+                  {/* Email can be made readOnly if not allowing changes here, or needs specific logic to update auth email */}
+                  <FormControl><Input type="email" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>)} />
+             <FormField control={profileForm.control} name="businessName" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Business Name (from signup)</FormLabel>
+                  <FormControl><Input {...field} readOnly className="bg-muted/50 cursor-not-allowed" /></FormControl>
+                  <FormDescription>Business name is set during signup and cannot be changed here.</FormDescription>
+                  <FormMessage />
+                </FormItem>)} />
+            <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={profileForm.formState.isSubmitting || !currentUser}>
               {profileForm.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
               Save Profile
             </Button>
@@ -178,8 +235,8 @@ export default function SettingsPage() {
   const renderBusinessForm = () => (
     <Card>
       <CardHeader>
-        <CardTitle className="font-headline flex items-center"><Building2 className="mr-2 h-5 w-5 text-primary" /> Business Information</CardTitle>
-        <CardDescription>Manage your business details, GSTIN, and address for invoices.</CardDescription>
+        <CardTitle className="font-headline flex items-center"><Building2 className="mr-2 h-5 w-5 text-primary" /> Business Information (Global)</CardTitle>
+        <CardDescription>Manage your global business details, GSTIN, and address for invoices. This is shared across the application.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
          {loadingBusiness ? (
@@ -198,7 +255,6 @@ export default function SettingsPage() {
                 <FormItem><FormLabel>GSTIN</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
             <FormField control={businessForm.control} name="addressLine1" render={({ field }) => (
                 <FormItem><FormLabel>Business Address Line 1</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-            {/* Add more fields for city, state, postalCode, phone, email as needed */}
              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <FormField control={businessForm.control} name="city" render={({ field }) => (
                     <FormItem><FormLabel>City</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
@@ -210,7 +266,7 @@ export default function SettingsPage() {
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField control={businessForm.control} name="phone" render={({ field }) => (
                     <FormItem><FormLabel>Business Phone</FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                <FormField control={businessForm.control} name="email" render={({ field }) => ( // Renamed to avoid conflict with profileForm.email
+                <FormField control={businessForm.control} name="email" render={({ field }) => ( 
                     <FormItem><FormLabel>Business Email</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>)} />
              </div>
             <h3 className="text-md font-medium pt-2">Bank Details (for Invoices)</h3>
@@ -226,8 +282,6 @@ export default function SettingsPage() {
              </div>
              <FormField control={businessForm.control} name="logoUrl" render={({ field }) => (
                 <FormItem><FormLabel>Logo URL (Optional)</FormLabel><FormControl><Input type="url" placeholder="https://example.com/logo.png" {...field} /></FormControl><FormMessage /></FormItem>)} />
-
-
             <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={businessForm.formState.isSubmitting}>
               {businessForm.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
               Save Business Info
@@ -238,7 +292,6 @@ export default function SettingsPage() {
       </CardContent>
     </Card>
   );
-
 
   return (
     <div className="space-y-8 max-w-3xl mx-auto">
