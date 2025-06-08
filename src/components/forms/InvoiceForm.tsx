@@ -70,7 +70,7 @@ const invoiceFormSchema = z.object({
   lineItems: z.array(lineItemSchema).min(1, "At least one line item is required."),
   notes: z.string().optional(),
   termsAndConditions: z.string().optional(),
-  billerInfo: billerInfoFormSchema,
+  billerInfo: billerInfoFormSchema, // This will hold the biller info fetched from user's doc for new invoices
 });
 
 type InvoiceFormValues = z.infer<typeof invoiceFormSchema>;
@@ -150,9 +150,9 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
         toast({ 
             title: "Biller Info Not Found", 
             description: "Your business information is not set up. Default values will be used. Please update in Settings.", 
-            variant: "default" // Changed to default so it's less alarming than destructive
+            variant: "default" 
         });
-        form.setValue("billerInfo", defaultBillerInfo); // Fallback to empty/default
+        form.setValue("billerInfo", defaultBillerInfo); 
       }
     } catch (error) {
       console.error("Error fetching data for new invoice form:", error);
@@ -201,7 +201,9 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
     if (clientToUse && billerStateFromForm) {
       form.setValue("isInterState", clientToUse.state !== billerStateFromForm);
     }
-  }, [selectedClientData, initialData, form.watch("billerInfo.state"), form]);
+  // form.watch is used here, so including the specific watched field as a dependency.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedClientData, initialData, form.watch("billerInfo.state"), form.setValue, form.getValues]);
 
 
   const { fields, append, remove } = useFieldArray({
@@ -256,8 +258,6 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
       return;
     }
     
-    // BillerInfo for the invoice should be what's currently in the form's state, 
-    // which for new invoices is loaded from the user's doc, or for existing invoices, from initialData.
     const billerInfoForInvoice = values.billerInfo; 
     if (!billerInfoForInvoice?.businessName) {
          toast({ title: "Biller Info Missing", description: "Your business information is required. Please check settings.", variant: "destructive" });
@@ -291,7 +291,7 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
       updatedAt: serverTimestamp() as Timestamp, 
     };
     
-    form.formState.isSubmitting = true;
+    // form.formState.isSubmitting = true; // This is handled by react-hook-form automatically
     try {
       if (initialData?.id) {
         const invoiceRef = doc(db, "invoices", initialData.id);
@@ -324,9 +324,8 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
         description: "Failed to save invoice. Please try again.",
         variant: "destructive",
       });
-    } finally {
-       form.formState.isSubmitting = false;
-    }
+    } 
+    // finally { form.formState.isSubmitting = false; } // This is handled by react-hook-form automatically
   }
 
 
@@ -584,4 +583,3 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
     </Form>
   );
 }
-
