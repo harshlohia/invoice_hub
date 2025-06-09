@@ -11,19 +11,22 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import type { Client } from "@/lib/types";
 import { GSTIN_REGEX, INDIAN_STATES, GST_RATES } from "@/lib/constants";
+import { getStateTaxConfig, isInterStateTax } from "@/lib/types";
 import { useRouter } from "next/navigation";
 import { db, getFirebaseAuthInstance } from "@/lib/firebase";
 import { collection, addDoc, updateDoc, doc, serverTimestamp } from "firebase/firestore";
-import { Loader2 } from "lucide-react";
+import { Loader2, Info } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { User, Auth } from "firebase/auth";
 import { onAuthStateChanged } from "firebase/auth";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const clientFormSchema = z.object({
   name: z.string().min(1, "Client name is required."),
@@ -70,6 +73,8 @@ export function ClientForm({ initialData, onSave }: ClientFormProps) {
       defaultTaxRate: 18,
     },
   });
+
+  const watchedState = form.watch("state");
 
   useEffect(() => {
     const authInstance: Auth = getFirebaseAuthInstance();
@@ -163,6 +168,9 @@ export function ClientForm({ initialData, onSave }: ClientFormProps) {
   }
 
   const isSubmitDisabled = form.formState.isSubmitting || loadingAuth || (!currentUser && !initialData);
+
+  // Get tax configuration for selected state
+  const stateTaxConfig = watchedState ? getStateTaxConfig(watchedState) : null;
 
   return (
     <Form {...form}>
@@ -284,34 +292,77 @@ export function ClientForm({ initialData, onSave }: ClientFormProps) {
           />
         </div>
 
+        {/* State Tax Information */}
+        {stateTaxConfig && (
+          <Alert className="bg-blue-50 border-blue-200">
+            <Info className="h-4 w-4 text-blue-600" />
+            <AlertDescription className="text-blue-800">
+              <strong>Tax Configuration for {stateTaxConfig.state}:</strong><br />
+              {stateTaxConfig.description}
+              <br />
+              <span className="text-sm text-blue-600 mt-1 block">
+                State Code: {stateTaxConfig.stateCode} | 
+                Tax Type: {stateTaxConfig.taxType === 'CGST_SGST' ? 'CGST + SGST (Intra-state) / IGST (Inter-state)' : 'IGST Only'}
+              </span>
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Tax Configuration Section */}
         <div className="border-t pt-6">
           <h3 className="text-lg font-medium font-headline mb-4">Tax Configuration</h3>
-          <FormField
-            control={form.control}
-            name="defaultTaxRate"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Default GST Rate (%)*</FormLabel>
-                <Select onValueChange={(value) => field.onChange(parseFloat(value))} defaultValue={String(field.value)}>
-                  <FormControl>
-                    <SelectTrigger className="w-full md:w-[200px]">
-                      <SelectValue placeholder="Select GST Rate" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {GST_RATES.map(rate => (
-                      <SelectItem key={rate} value={String(rate)}>{rate}% GST</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <p className="text-sm text-muted-foreground mt-2">
-            This will be the default tax rate applied to all line items for this client when creating invoices.
-          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <FormField
+              control={form.control}
+              name="defaultTaxRate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Default GST Rate (%)*</FormLabel>
+                  <Select onValueChange={(value) => field.onChange(parseFloat(value))} defaultValue={String(field.value)}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select GST Rate" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {GST_RATES.map(rate => (
+                        <SelectItem key={rate} value={String(rate)}>{rate}% GST</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    This will be the default tax rate applied to all line items for this client when creating invoices.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            {/* Tax Breakdown Preview */}
+            <div className="space-y-3">
+              <FormLabel>Tax Breakdown Preview</FormLabel>
+              <div className="bg-gray-50 p-4 rounded-lg border">
+                <h4 className="font-medium text-sm mb-2">For {form.watch("defaultTaxRate")}% GST:</h4>
+                {stateTaxConfig && (
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Intra-state ({stateTaxConfig.state}):</span>
+                      <span className="font-medium">
+                        CGST {form.watch("defaultTaxRate") / 2}% + SGST {form.watch("defaultTaxRate") / 2}%
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Inter-state (Other states):</span>
+                      <span className="font-medium">IGST {form.watch("defaultTaxRate")}%</span>
+                    </div>
+                  </div>
+                )}
+                <div className="mt-2 pt-2 border-t text-xs text-gray-500">
+                  Tax type automatically determined based on biller and client states
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <FormField

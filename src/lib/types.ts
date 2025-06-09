@@ -3,16 +3,18 @@ import type { Timestamp } from "firebase/firestore";
 export interface LineItem {
   id: string; // Can be a locally generated UUID for new items
   productName: string;
-  quantity: number;
-  rate: number;
-  discountPercentage: number; // 0-100
-  taxRate: number; // GST Rate e.g. 5, 12, 18, 28
-  amount: number; // (quantity * rate) * (1 - discountPercentage/100)
+  amount: number; // Direct amount instead of rate calculation
+  date?: Date; // New field for date column
+  // Calculated fields for tax breakdown
   cgst: number;
   sgst: number;
   igst: number;
   totalAmount: number; // amount + cgst + sgst + igst
-  date?: Date; // New field for date column
+  // Hidden fields for compatibility
+  quantity: number; // Always 1
+  rate: number; // Same as amount
+  discountPercentage: number; // Always 0
+  taxRate: number; // From client configuration
 }
 
 export interface Client {
@@ -76,6 +78,66 @@ export interface Invoice {
   updatedAt?: Timestamp;
 }
 
+// State-based tax configuration
+export interface StateTaxConfig {
+  state: string;
+  stateCode: string;
+  taxType: 'CGST_SGST' | 'IGST';
+  description: string;
+}
+
+export const STATE_TAX_CONFIG: StateTaxConfig[] = [
+  // States with CGST + SGST (Intra-state)
+  { state: "Andhra Pradesh", stateCode: "AP", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+  { state: "Arunachal Pradesh", stateCode: "AR", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+  { state: "Assam", stateCode: "AS", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+  { state: "Bihar", stateCode: "BR", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+  { state: "Chhattisgarh", stateCode: "CG", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+  { state: "Goa", stateCode: "GA", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+  { state: "Gujarat", stateCode: "GJ", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+  { state: "Haryana", stateCode: "HR", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+  { state: "Himachal Pradesh", stateCode: "HP", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+  { state: "Jharkhand", stateCode: "JH", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+  { state: "Karnataka", stateCode: "KA", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+  { state: "Kerala", stateCode: "KL", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+  { state: "Madhya Pradesh", stateCode: "MP", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+  { state: "Maharashtra", stateCode: "MH", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+  { state: "Manipur", stateCode: "MN", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+  { state: "Meghalaya", stateCode: "ML", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+  { state: "Mizoram", stateCode: "MZ", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+  { state: "Nagaland", stateCode: "NL", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+  { state: "Odisha", stateCode: "OR", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+  { state: "Punjab", stateCode: "PB", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+  { state: "Rajasthan", stateCode: "RJ", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+  { state: "Sikkim", stateCode: "SK", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+  { state: "Tamil Nadu", stateCode: "TN", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+  { state: "Telangana", stateCode: "TS", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+  { state: "Tripura", stateCode: "TR", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+  { state: "Uttar Pradesh", stateCode: "UP", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+  { state: "Uttarakhand", stateCode: "UK", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+  { state: "West Bengal", stateCode: "WB", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+  { state: "Delhi", stateCode: "DL", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+  
+  // Union Territories
+  { state: "Andaman and Nicobar Islands", stateCode: "AN", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+  { state: "Chandigarh", stateCode: "CH", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+  { state: "Dadra and Nagar Haveli and Daman and Diu", stateCode: "DN", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+  { state: "Jammu and Kashmir", stateCode: "JK", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+  { state: "Ladakh", stateCode: "LA", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+  { state: "Lakshadweep", stateCode: "LD", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+  { state: "Puducherry", stateCode: "PY", taxType: "CGST_SGST", description: "CGST + SGST for intra-state, IGST for inter-state" },
+];
+
+// Helper function to get tax configuration for a state
+export function getStateTaxConfig(state: string): StateTaxConfig | null {
+  return STATE_TAX_CONFIG.find(config => config.state === state) || null;
+}
+
+// Helper function to determine if transaction is inter-state
+export function isInterStateTax(billerState: string, clientState: string): boolean {
+  return billerState !== clientState;
+}
+
 // Template System Types
 export interface TemplateColumn {
   id: string;
@@ -135,9 +197,8 @@ export interface InvoiceTemplate {
 export const DEFAULT_TEMPLATE_COLUMNS: TemplateColumn[] = [
   { id: 'sno', label: '#', field: 'index', width: 8, align: 'left', visible: true, format: 'text' },
   { id: 'date', label: 'Date', field: 'date', width: 15, align: 'left', visible: true, format: 'date' },
-  { id: 'item', label: 'Item/Service', field: 'productName', width: 50, align: 'left', visible: true, format: 'text' },
-  { id: 'rate', label: 'Rate (Rs.)', field: 'rate', width: 15, align: 'right', visible: true, format: 'currency' },
-  { id: 'amount', label: 'Amount (Rs.)', field: 'amount', width: 12, align: 'right', visible: true, format: 'currency' },
+  { id: 'item', label: 'Item/Service', field: 'productName', width: 62, align: 'left', visible: true, format: 'text' },
+  { id: 'amount', label: 'Amount (Rs.)', field: 'amount', width: 15, align: 'right', visible: true, format: 'currency' },
 ];
 
 export const DEFAULT_TEMPLATE_SECTIONS: TemplateSection[] = [

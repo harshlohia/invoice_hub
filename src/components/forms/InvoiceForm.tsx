@@ -24,6 +24,7 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import type { Invoice, Client, LineItem, BillerInfo } from "@/lib/types";
 import { GSTIN_REGEX } from "@/lib/constants";
+import { isInterStateTax } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { format, addDays } from "date-fns";
 import { CalendarIcon, PlusCircle, Trash2, Edit2, Loader2 } from "lucide-react";
@@ -36,7 +37,7 @@ import { onAuthStateChanged, type User, type Auth } from "firebase/auth";
 const lineItemSchema = z.object({
   id: z.string().default(() => crypto.randomUUID()),
   productName: z.string().min(1, "Product/Service name is required."),
-  rate: z.number().min(0, "Rate must be non-negative."),
+  amount: z.number().min(0, "Amount must be non-negative."),
   date: z.date().optional(),
 });
 
@@ -107,10 +108,10 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
         ? initialData.lineItems.map(item => ({ 
             id: item.id || crypto.randomUUID(), 
             productName: item.productName, 
-            rate: item.rate,
+            amount: item.amount,
             date: item.date ? new Date(item.date) : new Date()
           }))
-        : [{ id: crypto.randomUUID(), productName: "", rate: 0, date: new Date() }],
+        : [{ id: crypto.randomUUID(), productName: "", amount: 0, date: new Date() }],
       notes: initialData?.notes || "",
       termsAndConditions: initialData?.termsAndConditions || "Thank you for your business! Payment is due within the specified date.",
       billerInfo: initialData ? initialData.billerInfo : defaultBillerInfo,
@@ -187,7 +188,7 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
         lineItems: initialData.lineItems.map(item => ({
           id: item.id || crypto.randomUUID(),
           productName: item.productName,
-          rate: item.rate,
+          amount: item.amount,
           date: item.date ? new Date(item.date) : new Date(),
         })),
         notes: initialData.notes || "",
@@ -208,7 +209,8 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
     const billerStateFromForm = form.getValues("billerInfo.state");
 
     if (clientToUse && billerStateFromForm) {
-      form.setValue("isInterState", clientToUse.state !== billerStateFromForm);
+      const isInterState = isInterStateTax(billerStateFromForm, clientToUse.state);
+      form.setValue("isInterState", isInterState);
     }
   }, [selectedClientData, initialData, form.watch("billerInfo.state"), form.setValue, form.getValues]);
 
@@ -222,7 +224,7 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
 
   const calculateLineItemTotals = (item: z.infer<typeof lineItemSchema>) => {
     const clientTaxRate = selectedClientData?.defaultTaxRate || 18;
-    const itemAmount = item.rate || 0;
+    const itemAmount = item.amount || 0;
     const tax = itemAmount * (clientTaxRate / 100);
     let cgst = 0, sgst = 0, igst = 0;
     if (watchIsInterState) {
@@ -238,6 +240,7 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
       igst, 
       totalAmount: itemAmount + tax,
       quantity: 1, // Default quantity
+      rate: itemAmount, // Rate same as amount
       discountPercentage: 0, // Default discount
       taxRate: clientTaxRate
     };
@@ -425,7 +428,7 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
                       </SelectTrigger></FormControl>
                       <SelectContent>
                         {(loadingAuth || loadingClients) && !initialData ? (
-                            <SelectItem value="loading\" disabled>
+                            <SelectItem value="loading" disabled>
                                 <div className="flex items-center">
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading...
                                 </div>
@@ -476,10 +479,27 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
             {selectedClientData && (
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <h4 className="font-medium text-blue-900 mb-2">Client Tax Configuration</h4>
-                <p className="text-sm text-blue-700">
-                  Default GST Rate for {selectedClientData.name}: <span className="font-semibold">{selectedClientData.defaultTaxRate}%</span>
-                </p>
-                <p className="text-xs text-blue-600 mt-1">
+                <div className="grid md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-blue-700">
+                      <span className="font-semibold">{selectedClientData.name}</span> ({selectedClientData.state})
+                    </p>
+                    <p className="text-blue-600">
+                      Default GST Rate: <span className="font-semibold">{selectedClientData.defaultTaxRate}%</span>
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-blue-700">Tax Breakdown:</p>
+                    {watchIsInterState ? (
+                      <p className="text-blue-600">IGST: {selectedClientData.defaultTaxRate}% (Inter-state)</p>
+                    ) : (
+                      <p className="text-blue-600">
+                        CGST: {selectedClientData.defaultTaxRate / 2}% + SGST: {selectedClientData.defaultTaxRate / 2}% (Intra-state)
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <p className="text-xs text-blue-600 mt-2">
                   This rate will be automatically applied to all line items. You can change this in the client settings.
                 </p>
               </div>
@@ -514,7 +534,7 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
           <CardHeader><CardTitle className="font-headline">Items / Services</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             {fields.map((fieldItem, index) => (
-              <div key={fieldItem.id} className="grid grid-cols-1 md:grid-cols-[50px_150px_1fr_200px_150px_auto] gap-2 p-3 border rounded-md items-start relative">
+              <div key={fieldItem.id} className="grid grid-cols-1 md:grid-cols-[50px_150px_1fr_200px_auto] gap-2 p-3 border rounded-md items-start relative">
                 <div className="text-center font-medium text-sm pt-2">
                   {index + 1}
                 </div>
@@ -539,14 +559,8 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
                   )} />
                 <FormField control={form.control} name={`lineItems.${index}.productName`} render={({ field }) => (
                     <FormItem><FormLabel className={index > 0 ? "sr-only md:not-sr-only": ""}>Product/Service</FormLabel><FormControl><Input placeholder="Item name" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                <FormField control={form.control} name={`lineItems.${index}.rate`} render={({ field }) => (
-                    <FormItem><FormLabel className={index > 0 ? "sr-only md:not-sr-only": ""}>Rate (Rs.)</FormLabel><FormControl><Input type="number" placeholder="100.00" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || 0)}/></FormControl><FormMessage /></FormItem>)} />
-                <div className="flex flex-col items-end">
-                  <FormLabel className={index > 0 ? "sr-only md:not-sr-only": ""}>Amount (Rs.)</FormLabel>
-                  <p className="w-full text-right font-medium pt-2.5">
-                    {calculateLineItemTotals(watchLineItems[index]).amount.toFixed(2)}
-                  </p>
-                </div>
+                <FormField control={form.control} name={`lineItems.${index}.amount`} render={({ field }) => (
+                    <FormItem><FormLabel className={index > 0 ? "sr-only md:not-sr-only": ""}>Amount (Rs.)</FormLabel><FormControl><Input type="number" placeholder="100.00" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || 0)}/></FormControl><FormMessage /></FormItem>)} />
                  {fields.length > 1 && (
                   <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)} className="text-destructive hover:bg-destructive/10 self-end">
                     <Trash2 className="h-4 w-4" /> <span className="sr-only">Remove</span>
@@ -554,7 +568,7 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
                 )}
               </div>
             ))}
-            <Button type="button" variant="outline" onClick={() => append({ id: crypto.randomUUID(), productName: "", rate: 0, date: new Date() })}>
+            <Button type="button" variant="outline" onClick={() => append({ id: crypto.randomUUID(), productName: "", amount: 0, date: new Date() })}>
               <PlusCircle className="mr-2 h-4 w-4" /> Add Item
             </Button>
           </CardContent>
