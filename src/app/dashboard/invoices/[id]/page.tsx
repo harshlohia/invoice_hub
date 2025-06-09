@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState, useRef } from 'react';
@@ -46,6 +45,12 @@ export default function ViewInvoicePage() {
               createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate() : undefined,
               updatedAt: data.updatedAt ? (data.updatedAt as Timestamp).toDate() : undefined,
               currency: data.currency || "INR", // Ensure currency is available
+              // Convert any Timestamp objects in lineItems to Date objects
+              lineItems: data.lineItems ? data.lineItems.map((item: any) => ({
+                ...item,
+                // Convert date field if it exists and is a Timestamp
+                ...(item.date && item.date instanceof Timestamp ? { date: item.date.toDate() } : {})
+              })) : []
             } as Invoice;
             setInvoice(fetchedInvoice);
           } else {
