@@ -86,11 +86,77 @@ export class InvoicePDFGenerator {
     return false;
   }
 
-  public generateInvoicePDF(invoice: Invoice, options: PDFGenerationOptions = {}): void {
+  private async addLogo(logoUrl: string, x: number, y: number, width: number, height: number): Promise<boolean> {
+    try {
+      if (!logoUrl || logoUrl.trim() === '') {
+        return false;
+      }
+
+      // Create a promise to load the image
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        
+        img.onload = () => {
+          try {
+            // Create a canvas to convert the image
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            if (!ctx) {
+              resolve(false);
+              return;
+            }
+
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+            
+            // Get image data as base64
+            const dataURL = canvas.toDataURL('image/jpeg', 0.8);
+            
+            // Add image to PDF
+            this.doc.addImage(dataURL, 'JPEG', x, y, width, height);
+            resolve(true);
+          } catch (error) {
+            console.warn('Error processing logo image:', error);
+            resolve(false);
+          }
+        };
+        
+        img.onerror = () => {
+          console.warn('Failed to load logo image:', logoUrl);
+          resolve(false);
+        };
+        
+        // Set a timeout to avoid hanging
+        setTimeout(() => {
+          resolve(false);
+        }, 5000);
+        
+        img.src = logoUrl;
+      });
+    } catch (error) {
+      console.warn('Error loading logo:', error);
+      return false;
+    }
+  }
+
+  private addLogoPlaceholder(x: number, y: number, width: number, height: number) {
+    // Add a simple logo placeholder rectangle
+    this.addRect(x, y, width, height, 'S', undefined, '#dee2e6');
+    this.addText('LOGO', x + width/2, y + height/2 + 2, { 
+      align: 'center', 
+      fontSize: 8, 
+      color: '#6c757d'
+    });
+  }
+
+  public async generateInvoicePDF(invoice: Invoice, options: PDFGenerationOptions = {}): Promise<void> {
     const { filename = `invoice-${invoice.invoiceNumber}.pdf`, download = true } = options;
 
     // Header Section - Clean design matching the image
-    this.addHeader(invoice);
+    await this.addHeader(invoice);
     
     // Bill To Section
     this.addBillToSection(invoice);
@@ -109,20 +175,26 @@ export class InvoicePDFGenerator {
     }
   }
 
-  private addHeader(invoice: Invoice) {
+  private async addHeader(invoice: Invoice) {
     // Header layout matching the design exactly
     const headerY = this.margin;
     
-    // Logo placeholder - simple rectangle
-    this.addRect(this.margin, headerY, 25, 20, 'S', undefined, '#dee2e6');
-    this.addText('LOGO', this.margin + 12.5, headerY + 12, { 
-      align: 'center', 
-      fontSize: 8, 
-      color: '#6c757d'
-    });
+    // Logo section - try to load actual logo or show placeholder
+    const logoWidth = 25;
+    const logoHeight = 20;
+    
+    let logoLoaded = false;
+    if (invoice.billerInfo.logoUrl) {
+      logoLoaded = await this.addLogo(invoice.billerInfo.logoUrl, this.margin, headerY, logoWidth, logoHeight);
+    }
+    
+    if (!logoLoaded) {
+      // Show placeholder if no logo or failed to load
+      this.addLogoPlaceholder(this.margin, headerY, logoWidth, logoHeight);
+    }
 
     // Company name and details - positioned next to logo
-    const companyStartX = this.margin + 30;
+    const companyStartX = this.margin + logoWidth + 5;
     this.addText(invoice.billerInfo.businessName, companyStartX, headerY + 8, { 
       fontSize: 14, 
       fontStyle: 'bold', 
