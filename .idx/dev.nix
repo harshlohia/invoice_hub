@@ -10,7 +10,10 @@
     pkgs.chromium
   ];
   # Sets environment variables in the workspace
-  env = {};
+  env = {
+    PUPPETEER_EXECUTABLE_PATH = "${pkgs.chromium}/bin/chromium";
+    PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true";
+  };
   # This adds a file watcher to startup the firebase emulators. The emulators will only start if
   # a firebase.json file is written into the user's directory
   services.firebase.emulators = {
