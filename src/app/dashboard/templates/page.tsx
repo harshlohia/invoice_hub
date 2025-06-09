@@ -6,12 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { PlusCircle, Search, Palette, Eye, Edit, Trash2, Copy, Star, Users, Loader2, AlertTriangle } from 'lucide-react';
-import { collection, getDocs, deleteDoc, doc, query, where, orderBy, or } from 'firebase/firestore';
+import { PlusCircle, Search, Palette, Eye, Edit, Trash2, Copy, Star, Users, Loader2, AlertTriangle, Sparkles } from 'lucide-react';
+import { collection, getDocs, deleteDoc, doc, query, where, orderBy } from 'firebase/firestore';
 import { db, getFirebaseAuthInstance } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { onAuthStateChanged, type User, type Auth } from 'firebase/auth';
 import type { InvoiceTemplate } from '@/lib/types';
+import { DEFAULT_TEMPLATE_SECTIONS, DEFAULT_TEMPLATE_STYLE } from '@/lib/types';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,6 +23,18 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+
+// Default template that's not stored in DB
+const DEFAULT_TEMPLATE: InvoiceTemplate = {
+  id: 'default',
+  name: 'BillFlow Default',
+  description: 'Clean and professional default template with modern styling',
+  isPublic: true,
+  isDefault: true,
+  sections: DEFAULT_TEMPLATE_SECTIONS,
+  style: DEFAULT_TEMPLATE_STYLE,
+  usageCount: 0
+};
 
 export default function TemplatesPage() {
   const [templates, setTemplates] = useState<InvoiceTemplate[]>([]);
@@ -49,7 +62,7 @@ export default function TemplatesPage() {
         );
       }
       
-      const allTemplates: InvoiceTemplate[] = [];
+      const allTemplates: InvoiceTemplate[] = [DEFAULT_TEMPLATE]; // Start with default template
       
       for (const q of queries) {
         const querySnapshot = await getDocs(q);
@@ -85,7 +98,7 @@ export default function TemplatesPage() {
   }, [fetchTemplates]);
 
   const handleDeleteTemplate = async (templateId: string) => {
-    if (!templateId) return;
+    if (!templateId || templateId === 'default') return;
     try {
       await deleteDoc(doc(db, "templates", templateId));
       setTemplates(prevTemplates => prevTemplates.filter(template => template.id !== templateId));
@@ -109,7 +122,8 @@ export default function TemplatesPage() {
     template.description?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const publicTemplates = filteredTemplates.filter(t => t.isPublic);
+  const defaultTemplate = filteredTemplates.find(t => t.id === 'default');
+  const publicTemplates = filteredTemplates.filter(t => t.isPublic && t.id !== 'default');
   const userTemplates = filteredTemplates.filter(t => !t.isPublic && t.userId === currentUser?.uid);
 
   return (
@@ -159,6 +173,24 @@ export default function TemplatesPage() {
 
       {!loading && !error && (
         <div className="space-y-8">
+          {/* Default Template */}
+          {defaultTemplate && (
+            <div>
+              <h2 className="text-2xl font-headline font-bold mb-4 flex items-center">
+                <Sparkles className="mr-2 h-6 w-6 text-accent" />
+                Default Template
+              </h2>
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                <TemplateCard 
+                  template={defaultTemplate} 
+                  isOwner={false}
+                  isDefault={true}
+                  onDeleteRequest={() => {}} // Can't delete default template
+                />
+              </div>
+            </div>
+          )}
+
           {/* User's Templates */}
           {currentUser && userTemplates.length > 0 && (
             <div>
@@ -180,7 +212,7 @@ export default function TemplatesPage() {
           <div>
             <h2 className="text-2xl font-headline font-bold mb-4 flex items-center">
               <Users className="mr-2 h-6 w-6" />
-              Public Templates
+              Community Templates
             </h2>
             {publicTemplates.length > 0 ? (
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -196,7 +228,7 @@ export default function TemplatesPage() {
             ) : (
               <div className="text-center py-12">
                 <Palette className="mx-auto h-12 w-12 text-muted-foreground" />
-                <h3 className="mt-2 text-xl font-semibold">No Public Templates</h3>
+                <h3 className="mt-2 text-xl font-semibold">No Community Templates</h3>
                 <p className="mt-1 text-sm text-muted-foreground">Be the first to create a public template!</p>
               </div>
             )}
@@ -251,10 +283,11 @@ export default function TemplatesPage() {
 interface TemplateCardProps {
   template: InvoiceTemplate;
   isOwner: boolean;
+  isDefault?: boolean;
   onDeleteRequest: () => void;
 }
 
-function TemplateCard({ template, isOwner, onDeleteRequest }: TemplateCardProps) {
+function TemplateCard({ template, isOwner, isDefault = false, onDeleteRequest }: TemplateCardProps) {
   return (
     <Card className="hover:shadow-lg transition-shadow duration-200 flex flex-col">
       <CardHeader>
@@ -263,12 +296,14 @@ function TemplateCard({ template, isOwner, onDeleteRequest }: TemplateCardProps)
             <CardTitle className="font-headline text-xl flex items-center gap-2">
               {template.name}
               {template.isDefault && <Star className="h-4 w-4 text-yellow-500 fill-current" />}
+              {isDefault && <Sparkles className="h-4 w-4 text-accent fill-current" />}
             </CardTitle>
             <CardDescription className="mt-1">{template.description}</CardDescription>
           </div>
           <div className="flex gap-1">
             {template.isPublic && <Badge variant="secondary">Public</Badge>}
             {isOwner && <Badge variant="outline">Mine</Badge>}
+            {isDefault && <Badge className="bg-accent text-accent-foreground">Default</Badge>}
           </div>
         </div>
       </CardHeader>
@@ -303,7 +338,7 @@ function TemplateCard({ template, isOwner, onDeleteRequest }: TemplateCardProps)
           </Link>
         </Button>
         
-        {isOwner ? (
+        {isOwner && !isDefault ? (
           <>
             <Button variant="outline" size="sm" asChild>
               <Link href={`/dashboard/templates/${template.id}/edit`}>
