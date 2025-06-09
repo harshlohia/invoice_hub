@@ -97,13 +97,20 @@ export class InvoicePDFGenerator {
       date,
       dueDate,
       client,
+      businessInfo,
       items = [],
       subtotal = 0,
       tax = 0,
       total = 0,
       notes = '',
-      businessInfo = {}
+      isInterState = false,
+      totalCGST = 0,
+      totalSGST = 0,
+      totalIGST = 0
     } = invoiceData;
+
+    const invoiceDate = new Date(date);
+    const dueDateObj = new Date(dueDate);
 
     return `
       <!DOCTYPE html>
@@ -138,13 +145,13 @@ export class InvoicePDFGenerator {
             justify-content: space-between;
             align-items: flex-start;
             margin-bottom: 40px;
-            border-bottom: 2px solid #e5e7eb;
+            border-bottom: 2px solid #3F51B5;
             padding-bottom: 20px;
           }
           
           .business-info h1 {
             font-size: 28px;
-            color: #1f2937;
+            color: #3F51B5;
             margin-bottom: 10px;
           }
           
@@ -153,14 +160,27 @@ export class InvoicePDFGenerator {
             margin-bottom: 5px;
           }
           
+          .gstin-badge {
+            background-color: rgba(63, 81, 181, 0.1);
+            color: #3F51B5;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 12px;
+            display: inline-block;
+            margin-top: 8px;
+          }
+          
           .invoice-details {
             text-align: right;
           }
           
           .invoice-details h2 {
-            font-size: 24px;
+            font-size: 32px;
             color: #1f2937;
             margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
           }
           
           .invoice-details p {
@@ -168,51 +188,75 @@ export class InvoicePDFGenerator {
             color: #6b7280;
           }
           
+          .invoice-number {
+            font-size: 18px;
+            color: #3F51B5;
+            font-weight: 600;
+          }
+          
           .client-info {
             margin-bottom: 40px;
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
           }
           
           .client-info h3 {
             font-size: 18px;
             color: #1f2937;
             margin-bottom: 10px;
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 5px;
+          }
+          
+          .client-info .client-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: #3F51B5;
+            margin-bottom: 5px;
           }
           
           .client-info p {
             color: #6b7280;
-            margin-bottom: 5px;
+            margin-bottom: 3px;
           }
           
           .items-table {
             width: 100%;
             border-collapse: collapse;
             margin-bottom: 30px;
-          }
-          
-          .items-table th,
-          .items-table td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid #e5e7eb;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
           }
           
           .items-table th {
-            background-color: #f9fafb;
+            background-color: #3F51B5;
+            color: white;
+            padding: 15px 12px;
+            text-align: left;
             font-weight: 600;
-            color: #1f2937;
+            font-size: 14px;
           }
           
           .items-table td {
-            color: #6b7280;
+            padding: 12px;
+            border-bottom: 1px solid #e5e7eb;
+            color: #374151;
           }
           
           .items-table .text-right {
             text-align: right;
           }
           
+          .items-table tbody tr:hover {
+            background-color: #f9fafb;
+          }
+          
           .totals {
             margin-left: auto;
-            width: 300px;
+            width: 350px;
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
           }
           
           .totals-row {
@@ -223,10 +267,18 @@ export class InvoicePDFGenerator {
           }
           
           .totals-row.total {
-            font-weight: 600;
-            font-size: 18px;
-            color: #1f2937;
-            border-bottom: 2px solid #1f2937;
+            font-weight: 700;
+            font-size: 20px;
+            color: #3F51B5;
+            border-bottom: 2px solid #3F51B5;
+            border-top: 2px solid #3F51B5;
+            margin-top: 10px;
+            padding-top: 15px;
+          }
+          
+          .tax-row {
+            font-size: 14px;
+            color: #6b7280;
           }
           
           .notes {
@@ -238,11 +290,41 @@ export class InvoicePDFGenerator {
           .notes h4 {
             color: #1f2937;
             margin-bottom: 10px;
+            font-size: 16px;
           }
           
           .notes p {
             color: #6b7280;
             line-height: 1.6;
+            background-color: #f9fafb;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #3F51B5;
+          }
+          
+          .payment-info {
+            margin-top: 30px;
+            background-color: #f0f9ff;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #bfdbfe;
+          }
+          
+          .payment-info h4 {
+            color: #1e40af;
+            margin-bottom: 15px;
+            font-size: 16px;
+          }
+          
+          .payment-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+          }
+          
+          .payment-grid p {
+            color: #374151;
+            font-size: 14px;
           }
           
           @media print {
@@ -256,44 +338,47 @@ export class InvoicePDFGenerator {
         <div class="invoice-container">
           <div class="invoice-header">
             <div class="business-info">
-              <h1>${businessInfo.name || 'Your Business'}</h1>
-              <p>${businessInfo.address || ''}</p>
-              <p>${businessInfo.city || ''} ${businessInfo.state || ''} ${businessInfo.zip || ''}</p>
-              <p>${businessInfo.email || ''}</p>
-              <p>${businessInfo.phone || ''}</p>
+              <h1>${businessInfo?.name || 'Your Business'}</h1>
+              <p>${businessInfo?.address || ''}</p>
+              ${businessInfo?.city ? `<p>${businessInfo.city}, ${businessInfo.state || ''} ${businessInfo.zip || ''}</p>` : ''}
+              ${businessInfo?.email ? `<p>${businessInfo.email}</p>` : ''}
+              ${businessInfo?.phone ? `<p>${businessInfo.phone}</p>` : ''}
+              ${businessInfo?.gstin ? `<div class="gstin-badge">GSTIN: ${businessInfo.gstin}</div>` : ''}
             </div>
             <div class="invoice-details">
               <h2>INVOICE</h2>
-              <p><strong>Invoice #:</strong> ${invoiceNumber}</p>
-              <p><strong>Date:</strong> ${new Date(date).toLocaleDateString()}</p>
-              <p><strong>Due Date:</strong> ${new Date(dueDate).toLocaleDateString()}</p>
+              <p class="invoice-number"># ${invoiceNumber}</p>
+              <p><strong>Date:</strong> ${invoiceDate.toLocaleDateString('en-IN')}</p>
+              <p><strong>Due Date:</strong> ${dueDateObj.toLocaleDateString('en-IN')}</p>
             </div>
           </div>
           
           <div class="client-info">
             <h3>Bill To:</h3>
-            <p><strong>${client?.name || 'Client Name'}</strong></p>
-            <p>${client?.email || ''}</p>
-            <p>${client?.address || ''}</p>
-            <p>${client?.city || ''} ${client?.state || ''} ${client?.zip || ''}</p>
+            <div class="client-name">${client?.name || 'Client Name'}</div>
+            ${client?.email ? `<p>${client.email}</p>` : ''}
+            ${client?.address ? `<p>${client.address}</p>` : ''}
+            ${client?.city ? `<p>${client.city}, ${client.state || ''} ${client.zip || ''}</p>` : ''}
           </div>
           
           <table class="items-table">
             <thead>
               <tr>
+                <th>#</th>
                 <th>Description</th>
                 <th class="text-right">Quantity</th>
-                <th class="text-right">Rate</th>
-                <th class="text-right">Amount</th>
+                <th class="text-right">Rate (₹)</th>
+                <th class="text-right">Amount (₹)</th>
               </tr>
             </thead>
             <tbody>
-              ${items.map((item: any) => `
+              ${items.map((item: any, index: number) => `
                 <tr>
+                  <td>${index + 1}</td>
                   <td>${item.description || ''}</td>
                   <td class="text-right">${item.quantity || 0}</td>
-                  <td class="text-right">$${(item.rate || 0).toFixed(2)}</td>
-                  <td class="text-right">$${((item.quantity || 0) * (item.rate || 0)).toFixed(2)}</td>
+                  <td class="text-right">₹${(item.rate || 0).toFixed(2)}</td>
+                  <td class="text-right">₹${(item.amount || 0).toFixed(2)}</td>
                 </tr>
               `).join('')}
             </tbody>
@@ -302,15 +387,26 @@ export class InvoicePDFGenerator {
           <div class="totals">
             <div class="totals-row">
               <span>Subtotal:</span>
-              <span>$${subtotal.toFixed(2)}</span>
+              <span>₹${subtotal.toFixed(2)}</span>
             </div>
-            <div class="totals-row">
-              <span>Tax:</span>
-              <span>$${tax.toFixed(2)}</span>
-            </div>
+            ${!isInterState ? `
+              <div class="totals-row tax-row">
+                <span>CGST:</span>
+                <span>₹${totalCGST.toFixed(2)}</span>
+              </div>
+              <div class="totals-row tax-row">
+                <span>SGST:</span>
+                <span>₹${totalSGST.toFixed(2)}</span>
+              </div>
+            ` : `
+              <div class="totals-row tax-row">
+                <span>IGST:</span>
+                <span>₹${totalIGST.toFixed(2)}</span>
+              </div>
+            `}
             <div class="totals-row total">
-              <span>Total:</span>
-              <span>$${total.toFixed(2)}</span>
+              <span>Grand Total:</span>
+              <span>₹${total.toFixed(2)}</span>
             </div>
           </div>
           
@@ -318,6 +414,18 @@ export class InvoicePDFGenerator {
             <div class="notes">
               <h4>Notes:</h4>
               <p>${notes}</p>
+            </div>
+          ` : ''}
+
+          ${businessInfo?.bankName ? `
+            <div class="payment-info">
+              <h4>Payment Information:</h4>
+              <div class="payment-grid">
+                ${businessInfo.bankName ? `<p><strong>Bank:</strong> ${businessInfo.bankName}</p>` : ''}
+                ${businessInfo.accountNumber ? `<p><strong>A/C No:</strong> ${businessInfo.accountNumber}</p>` : ''}
+                ${businessInfo.ifscCode ? `<p><strong>IFSC:</strong> ${businessInfo.ifscCode}</p>` : ''}
+                ${businessInfo.upiId ? `<p><strong>UPI:</strong> ${businessInfo.upiId}</p>` : ''}
+              </div>
             </div>
           ` : ''}
         </div>

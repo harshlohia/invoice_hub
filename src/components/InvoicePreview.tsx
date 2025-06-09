@@ -19,7 +19,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { InvoicePDFGenerator } from '@/lib/pdf-generator';
 
 interface InvoicePreviewProps {
   invoice: Invoice;
@@ -81,11 +80,72 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
     setIsDownloading(true);
 
     try {
-      const pdfGenerator = new InvoicePDFGenerator();
-      await pdfGenerator.generateInvoicePDF(invoice, {
-        filename: `invoice-${invoice.invoiceNumber}.pdf`,
-        download: true
+      // Prepare invoice data for PDF generation
+      const pdfData = {
+        invoiceNumber: invoice.invoiceNumber,
+        date: invoice.invoiceDate,
+        dueDate: invoice.dueDate,
+        client: {
+          name: invoice.client.name,
+          email: invoice.client.email,
+          address: invoice.client.addressLine1,
+          city: invoice.client.city,
+          state: invoice.client.state,
+          zip: invoice.client.postalCode
+        },
+        businessInfo: {
+          name: invoice.billerInfo.businessName,
+          address: invoice.billerInfo.addressLine1,
+          city: invoice.billerInfo.city,
+          state: invoice.billerInfo.state,
+          zip: invoice.billerInfo.postalCode,
+          email: invoice.billerInfo.email,
+          phone: invoice.billerInfo.phone,
+          gstin: invoice.billerInfo.gstin
+        },
+        items: invoice.lineItems.map(item => ({
+          description: item.productName,
+          quantity: item.quantity,
+          rate: item.rate,
+          amount: item.amount
+        })),
+        subtotal: invoice.subTotal,
+        tax: invoice.totalCGST + invoice.totalSGST + invoice.totalIGST,
+        total: invoice.grandTotal,
+        notes: invoice.notes,
+        isInterState: invoice.isInterState,
+        totalCGST: invoice.totalCGST,
+        totalSGST: invoice.totalSGST,
+        totalIGST: invoice.totalIGST
+      };
+
+      console.log('Sending PDF generation request...');
+      
+      const response = await fetch('/api/generate-pdf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(pdfData),
       });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      // Get the PDF blob
+      const pdfBlob = await response.blob();
+      
+      // Create download link
+      const url = window.URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `invoice-${invoice.invoiceNumber}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
       
       toast({
         title: "Success",
@@ -96,7 +156,7 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
       console.error("Error generating PDF:", error);
       toast({
         title: "PDF Generation Failed",
-        description: "An error occurred while trying to generate the PDF. Please try again.",
+        description: error instanceof Error ? error.message : "An error occurred while generating the PDF. Please try again.",
         variant: "destructive",
       });
     } finally {
