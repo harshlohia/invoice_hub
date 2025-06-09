@@ -23,12 +23,12 @@ export class InvoicePDFGenerator {
     this.pageWidth = this.doc.internal.pageSize.getWidth();
     this.pageHeight = this.doc.internal.pageSize.getHeight();
     
-    // Add custom fonts for better appearance
+    // Set up fonts to match the reference image
     this.setupFonts();
   }
 
   private setupFonts() {
-    // Use built-in fonts with better styling
+    // Use Helvetica font family to match the clean, professional look from the reference
     this.doc.setFont('helvetica');
   }
 
@@ -112,7 +112,7 @@ export class InvoicePDFGenerator {
   }
 
   private addHeader(invoice: Invoice) {
-    // Company Logo placeholder with better styling
+    // Company Logo placeholder with clean styling
     this.addRect(this.margin, this.margin, 40, 20, 'S', '#f8f9fa', '#dee2e6');
     this.addText('LOGO', this.margin + 20, this.margin + 12, { 
       align: 'center', 
@@ -121,68 +121,68 @@ export class InvoicePDFGenerator {
       fontStyle: 'bold'
     });
 
-    // Company Info with better typography
+    // Company Info with clean Helvetica typography
     this.addText(invoice.billerInfo.businessName, this.margin, this.margin + 35, { 
-      fontSize: 18, 
+      fontSize: 16, 
       fontStyle: 'bold', 
-      color: '#3F51B5' 
+      color: '#2c3e50' 
     });
     
     let companyY = this.margin + 45;
-    this.addText(invoice.billerInfo.addressLine1, this.margin, companyY, { fontSize: 10, color: '#495057' });
+    this.addText(invoice.billerInfo.addressLine1, this.margin, companyY, { fontSize: 10, color: '#34495e' });
     companyY += 5;
     
     if (invoice.billerInfo.addressLine2) {
-      this.addText(invoice.billerInfo.addressLine2, this.margin, companyY, { fontSize: 10, color: '#495057' });
+      this.addText(invoice.billerInfo.addressLine2, this.margin, companyY, { fontSize: 10, color: '#34495e' });
       companyY += 5;
     }
     
-    this.addText(`${invoice.billerInfo.city}, ${invoice.billerInfo.state} - ${invoice.billerInfo.postalCode}`, this.margin, companyY, { fontSize: 10, color: '#495057' });
+    this.addText(`${invoice.billerInfo.city}, ${invoice.billerInfo.state} - ${invoice.billerInfo.postalCode}`, this.margin, companyY, { fontSize: 10, color: '#34495e' });
     companyY += 5;
     
     if (invoice.billerInfo.gstin) {
-      this.addText(`GSTIN: ${invoice.billerInfo.gstin}`, this.margin, companyY, { fontSize: 10, color: '#495057' });
+      this.addText(`GSTIN: ${invoice.billerInfo.gstin}`, this.margin, companyY, { fontSize: 10, color: '#34495e' });
     }
     
     if (invoice.billerInfo.phone) {
       companyY += 5;
-      this.addText(`Phone: ${invoice.billerInfo.phone}`, this.margin, companyY, { fontSize: 10, color: '#495057' });
+      this.addText(`Phone: ${invoice.billerInfo.phone}`, this.margin, companyY, { fontSize: 10, color: '#34495e' });
     }
     
     if (invoice.billerInfo.email) {
       companyY += 5;
-      this.addText(`Email: ${invoice.billerInfo.email}`, this.margin, companyY, { fontSize: 10, color: '#495057' });
+      this.addText(`Email: ${invoice.billerInfo.email}`, this.margin, companyY, { fontSize: 10, color: '#34495e' });
     }
 
-    // Invoice Title and Details with better styling
+    // Invoice Title and Details with clean styling
     this.addText('INVOICE', this.pageWidth - this.margin, this.margin + 15, { 
-      fontSize: 28, 
+      fontSize: 24, 
       fontStyle: 'bold', 
       align: 'right',
-      color: '#212529'
+      color: '#2c3e50'
     });
     
     this.addText(`# ${invoice.invoiceNumber}`, this.pageWidth - this.margin, this.margin + 28, { 
-      fontSize: 14, 
+      fontSize: 12, 
       align: 'right',
-      color: '#495057'
+      color: '#34495e'
     });
     
-    // Status badge with better styling
+    // Status badge with clean styling
     const statusColors = {
-      paid: '#28a745',
-      sent: '#007bff',
-      overdue: '#dc3545',
-      draft: '#6c757d',
-      cancelled: '#fd7e14'
+      paid: '#27ae60',
+      sent: '#3498db',
+      overdue: '#e74c3c',
+      draft: '#95a5a6',
+      cancelled: '#f39c12'
     };
     
     const statusBgColors = {
-      paid: '#d4edda',
-      sent: '#cce5ff',
-      overdue: '#f8d7da',
-      draft: '#e2e3e5',
-      cancelled: '#ffeaa7'
+      paid: '#d5f4e6',
+      sent: '#d6eaf8',
+      overdue: '#fadbd8',
+      draft: '#eaeded',
+      cancelled: '#fdeaa7'
     };
     
     // Status background
@@ -196,19 +196,19 @@ export class InvoicePDFGenerator {
       fontStyle: 'bold'
     });
 
-    // Dates with better formatting
+    // Dates with clean formatting
     const invoiceDate = invoice.invoiceDate instanceof Date ? invoice.invoiceDate : new Date(invoice.invoiceDate);
     const dueDate = invoice.dueDate instanceof Date ? invoice.dueDate : new Date(invoice.dueDate);
     
     this.addText(`Date: ${format(invoiceDate, 'dd MMM, yyyy')}`, this.pageWidth - this.margin, this.margin + 52, { 
-      fontSize: 11, 
+      fontSize: 10, 
       align: 'right',
-      color: '#495057'
+      color: '#34495e'
     });
     this.addText(`Due Date: ${format(dueDate, 'dd MMM, yyyy')}`, this.pageWidth - this.margin, this.margin + 62, { 
-      fontSize: 11, 
+      fontSize: 10, 
       align: 'right',
-      color: '#495057'
+      color: '#34495e'
     });
 
     this.currentY = Math.max(companyY + 15, this.margin + 75);
@@ -217,39 +217,39 @@ export class InvoicePDFGenerator {
   private addBillToSection(invoice: Invoice) {
     this.checkPageBreak(40);
     
-    this.addText('Bill To:', this.margin, this.currentY, { fontSize: 13, fontStyle: 'bold', color: '#212529' });
+    this.addText('Bill To:', this.margin, this.currentY, { fontSize: 12, fontStyle: 'bold', color: '#2c3e50' });
     this.currentY += 10;
     
     this.addText(invoice.client.name, this.margin, this.currentY, { 
-      fontSize: 12, 
+      fontSize: 11, 
       fontStyle: 'bold', 
-      color: '#3F51B5' 
+      color: '#2c3e50' 
     });
     this.currentY += 7;
     
-    this.addText(invoice.client.addressLine1, this.margin, this.currentY, { fontSize: 10, color: '#495057' });
+    this.addText(invoice.client.addressLine1, this.margin, this.currentY, { fontSize: 10, color: '#34495e' });
     this.currentY += 5;
     
     if (invoice.client.addressLine2) {
-      this.addText(invoice.client.addressLine2, this.margin, this.currentY, { fontSize: 10, color: '#495057' });
+      this.addText(invoice.client.addressLine2, this.margin, this.currentY, { fontSize: 10, color: '#34495e' });
       this.currentY += 5;
     }
     
-    this.addText(`${invoice.client.city}, ${invoice.client.state} - ${invoice.client.postalCode}`, this.margin, this.currentY, { fontSize: 10, color: '#495057' });
+    this.addText(`${invoice.client.city}, ${invoice.client.state} - ${invoice.client.postalCode}`, this.margin, this.currentY, { fontSize: 10, color: '#34495e' });
     this.currentY += 5;
     
     if (invoice.client.gstin) {
-      this.addText(`GSTIN: ${invoice.client.gstin}`, this.margin, this.currentY, { fontSize: 10, color: '#495057' });
+      this.addText(`GSTIN: ${invoice.client.gstin}`, this.margin, this.currentY, { fontSize: 10, color: '#34495e' });
       this.currentY += 5;
     }
     
     if (invoice.client.email) {
-      this.addText(`Email: ${invoice.client.email}`, this.margin, this.currentY, { fontSize: 10, color: '#495057' });
+      this.addText(`Email: ${invoice.client.email}`, this.margin, this.currentY, { fontSize: 10, color: '#34495e' });
       this.currentY += 5;
     }
     
     if (invoice.client.phone) {
-      this.addText(`Phone: ${invoice.client.phone}`, this.margin, this.currentY, { fontSize: 10, color: '#495057' });
+      this.addText(`Phone: ${invoice.client.phone}`, this.margin, this.currentY, { fontSize: 10, color: '#34495e' });
       this.currentY += 5;
     }
 
@@ -279,26 +279,22 @@ export class InvoicePDFGenerator {
       columnPositions.push(columnPositions[i] + columnWidths[i]);
     }
 
-    // Header background - ensure it covers the full table width
-    this.addRect(tableStartX, tableStartY, tableWidth, headerHeight, 'F', '#f8f9fa');
-    this.addRect(tableStartX, tableStartY, tableWidth, headerHeight, 'S', undefined, '#dee2e6');
+    // Header background - clean styling
+    this.addRect(tableStartX, tableStartY, tableWidth, headerHeight, 'F', '#ecf0f1');
+    this.addRect(tableStartX, tableStartY, tableWidth, headerHeight, 'S', undefined, '#bdc3c7');
     
-    // Header text with better typography and proper spacing
+    // Header text with clean Helvetica typography
     headers.forEach((header, index) => {
       const align = index === 0 ? 'left' : index === 1 ? 'left' : 'right';
       let x: number;
       
       if (align === 'right') {
-        // For right-aligned columns, position text at the right edge minus padding
         if (index === headers.length - 1) {
-          // Last column (Amount) - align to table end with proper padding
           x = tableEndX - 2;
         } else {
-          // Other right-aligned columns - align to column end with padding
           x = columnPositions[index] + columnWidths[index] - 2;
         }
       } else {
-        // Left-aligned columns - start with padding
         x = columnPositions[index] + 2;
       }
       
@@ -306,19 +302,19 @@ export class InvoicePDFGenerator {
         fontSize: 9, 
         fontStyle: 'bold', 
         align,
-        color: '#495057'
+        color: '#2c3e50'
       });
     });
 
     this.currentY = tableStartY + headerHeight;
 
-    // Table rows with better formatting
+    // Table rows with clean formatting
     invoice.lineItems.forEach((item, index) => {
       this.checkPageBreak(rowHeight + 5);
       
       const rowY = this.currentY;
       
-      // Alternate row background - ensure it covers the full table width
+      // Alternate row background
       if (index % 2 === 1) {
         this.addRect(tableStartX, rowY, tableWidth, rowHeight, 'F', '#f8f9fa');
       }
@@ -338,16 +334,12 @@ export class InvoicePDFGenerator {
         let x: number;
         
         if (align === 'right') {
-          // For right-aligned columns, position text at the right edge minus padding
           if (colIndex === rowData.length - 1) {
-            // Last column (Amount) - align to table end with proper padding
             x = tableEndX - 2;
           } else {
-            // Other right-aligned columns - align to column end with padding
             x = columnPositions[colIndex] + columnWidths[colIndex] - 2;
           }
         } else {
-          // Left-aligned columns - start with padding
           x = columnPositions[colIndex] + 2;
         }
         
@@ -360,19 +352,19 @@ export class InvoicePDFGenerator {
         this.addText(displayText, x, rowY + 7, { 
           fontSize: 9, 
           align,
-          color: '#212529'
+          color: '#2c3e50'
         });
       });
 
       this.currentY += rowHeight;
     });
 
-    // Table border with better styling - ensure full coverage
-    this.addRect(tableStartX, tableStartY, tableWidth, this.currentY - tableStartY, 'S', undefined, '#dee2e6');
+    // Table border with clean styling
+    this.addRect(tableStartX, tableStartY, tableWidth, this.currentY - tableStartY, 'S', undefined, '#bdc3c7');
     
-    // Vertical lines with proper positioning to separate columns clearly
+    // Vertical lines with proper positioning
     for (let i = 1; i < columnPositions.length; i++) {
-      this.addLine(columnPositions[i], tableStartY, columnPositions[i], this.currentY, '#dee2e6');
+      this.addLine(columnPositions[i], tableStartY, columnPositions[i], this.currentY, '#bdc3c7');
     }
 
     this.currentY += 15;
@@ -387,9 +379,9 @@ export class InvoicePDFGenerator {
     const boxX = this.pageWidth - this.margin - boxWidth;
     const boxY = this.currentY;
     
-    // Draw the totals container box
-    this.addRect(boxX, boxY, boxWidth, boxHeight, 'F', '#f8f9fa');
-    this.addRect(boxX, boxY, boxWidth, boxHeight, 'S', undefined, '#dee2e6');
+    // Draw the totals container box with clean styling
+    this.addRect(boxX, boxY, boxWidth, boxHeight, 'F', '#ecf0f1');
+    this.addRect(boxX, boxY, boxWidth, boxHeight, 'S', undefined, '#bdc3c7');
     
     // Text positioning within the box
     const labelStartX = boxX + 5;
@@ -400,12 +392,12 @@ export class InvoicePDFGenerator {
     // Subtotal
     this.addText('Subtotal:', labelStartX, textY, { 
       fontSize: 10, 
-      color: '#495057' 
+      color: '#34495e' 
     });
     this.addText(`Rs. ${invoice.subTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, valueEndX, textY, { 
       fontSize: 10, 
       align: 'right',
-      color: '#212529'
+      color: '#2c3e50'
     });
     textY += lineSpacing;
 
@@ -414,54 +406,54 @@ export class InvoicePDFGenerator {
       // CGST
       this.addText('CGST:', labelStartX, textY, { 
         fontSize: 10, 
-        color: '#495057' 
+        color: '#34495e' 
       });
       this.addText(`Rs. ${invoice.totalCGST.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, valueEndX, textY, { 
         fontSize: 10, 
         align: 'right',
-        color: '#212529'
+        color: '#2c3e50'
       });
       textY += lineSpacing;
 
       // SGST
       this.addText('SGST:', labelStartX, textY, { 
         fontSize: 10, 
-        color: '#495057' 
+        color: '#34495e' 
       });
       this.addText(`Rs. ${invoice.totalSGST.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, valueEndX, textY, { 
         fontSize: 10, 
         align: 'right',
-        color: '#212529'
+        color: '#2c3e50'
       });
       textY += lineSpacing;
     } else {
       // IGST
       this.addText('IGST:', labelStartX, textY, { 
         fontSize: 10, 
-        color: '#495057' 
+        color: '#34495e' 
       });
       this.addText(`Rs. ${invoice.totalIGST.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, valueEndX, textY, { 
         fontSize: 10, 
         align: 'right',
-        color: '#212529'
+        color: '#2c3e50'
       });
       textY += lineSpacing;
     }
 
     // Separator line
-    this.addLine(labelStartX, textY - 3, valueEndX, textY - 3, '#495057', 0.5);
+    this.addLine(labelStartX, textY - 3, valueEndX, textY - 3, '#34495e', 0.5);
     textY += 2;
 
     // Grand Total
     this.addText('Grand Total:', labelStartX, textY, { 
       fontSize: 12, 
       fontStyle: 'bold', 
-      color: '#212529' 
+      color: '#2c3e50' 
     });
     this.addText(`Rs. ${invoice.grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, valueEndX, textY, { 
       fontSize: 12, 
       fontStyle: 'bold', 
-      color: '#3F51B5', 
+      color: '#2c3e50', 
       align: 'right'
     });
     
@@ -473,12 +465,12 @@ export class InvoicePDFGenerator {
     if (invoice.notes) {
       this.checkPageBreak(30);
       
-      this.addText('Notes:', this.margin, this.currentY, { fontSize: 12, fontStyle: 'bold', color: '#212529' });
+      this.addText('Notes:', this.margin, this.currentY, { fontSize: 12, fontStyle: 'bold', color: '#2c3e50' });
       this.currentY += 8;
       
       const notesHeight = this.addText(invoice.notes, this.margin, this.currentY, { 
         fontSize: 10, 
-        color: '#495057',
+        color: '#34495e',
         maxWidth: this.pageWidth - 2 * this.margin - 20
       });
       this.currentY += notesHeight + 10;
@@ -486,72 +478,94 @@ export class InvoicePDFGenerator {
   }
 
   private addFooterSections(invoice: Invoice) {
-    // Terms & Conditions
+    // Terms & Conditions with clean Helvetica styling
     if (invoice.termsAndConditions) {
       this.checkPageBreak(30);
       
-      this.addText('Terms & Conditions:', this.margin, this.currentY, { fontSize: 12, fontStyle: 'bold', color: '#212529' });
+      this.addText('Terms & Conditions:', this.margin, this.currentY, { 
+        fontSize: 12, 
+        fontStyle: 'bold', 
+        color: '#2c3e50' 
+      });
       this.currentY += 8;
       
       const termsHeight = this.addText(invoice.termsAndConditions, this.margin, this.currentY, { 
         fontSize: 10, 
-        color: '#495057',
+        color: '#7f8c8d', // Lighter gray to match the reference image
         maxWidth: this.pageWidth - 2 * this.margin - 20
       });
       this.currentY += termsHeight + 15;
     }
 
-    // Payment Information - Optimized with reduced spacing
+    // Payment Information - Optimized with reduced spacing and clean styling
     if (invoice.billerInfo.bankName || invoice.billerInfo.upiId) {
       this.checkPageBreak(25);
       
-      this.addText('Payment Information:', this.margin, this.currentY, { fontSize: 12, fontStyle: 'bold', color: '#212529' });
-      this.currentY += 6; // Reduced from 10 to 6
+      this.addText('Payment Information:', this.margin, this.currentY, { 
+        fontSize: 12, 
+        fontStyle: 'bold', 
+        color: '#2c3e50' 
+      });
+      this.currentY += 6;
 
       // Calculate required height based on content
       let contentLines = 0;
       if (invoice.billerInfo.bankName) contentLines++;
       if (invoice.billerInfo.ifscCode || invoice.billerInfo.upiId) contentLines++;
       
-      const paymentBoxHeight = Math.max(18, contentLines * 6 + 8); // Dynamic height with minimum
+      const paymentBoxHeight = Math.max(18, contentLines * 6 + 8);
       
-      // Payment info background with reduced height
-      this.addRect(this.margin, this.currentY - 2, this.pageWidth - 2 * this.margin, paymentBoxHeight, 'F', '#f8f9fa');
-      this.addRect(this.margin, this.currentY - 2, this.pageWidth - 2 * this.margin, paymentBoxHeight, 'S', undefined, '#dee2e6');
+      // Payment info background with clean styling
+      this.addRect(this.margin, this.currentY - 2, this.pageWidth - 2 * this.margin, paymentBoxHeight, 'F', '#ecf0f1');
+      this.addRect(this.margin, this.currentY - 2, this.pageWidth - 2 * this.margin, paymentBoxHeight, 'S', undefined, '#bdc3c7');
 
-      const leftCol = this.margin + 3; // Reduced padding
+      const leftCol = this.margin + 3;
       const rightCol = this.pageWidth / 2;
 
-      // Compact layout with reduced line spacing
+      // Compact layout with clean typography
       if (invoice.billerInfo.bankName) {
-        this.addText(`Bank: ${invoice.billerInfo.bankName}`, leftCol, this.currentY + 2, { fontSize: 9, color: '#495057' });
+        this.addText(`Bank: ${invoice.billerInfo.bankName}`, leftCol, this.currentY + 2, { 
+          fontSize: 9, 
+          color: '#34495e' 
+        });
         if (invoice.billerInfo.accountNumber) {
-          this.addText(`A/C No: ${invoice.billerInfo.accountNumber}`, rightCol, this.currentY + 2, { fontSize: 9, color: '#495057' });
+          this.addText(`A/C No: ${invoice.billerInfo.accountNumber}`, rightCol, this.currentY + 2, { 
+            fontSize: 9, 
+            color: '#34495e' 
+          });
         }
-        this.currentY += 5; // Reduced from 6 to 5
+        this.currentY += 5;
       }
 
       if (invoice.billerInfo.ifscCode) {
-        this.addText(`IFSC: ${invoice.billerInfo.ifscCode}`, leftCol, this.currentY + 2, { fontSize: 9, color: '#495057' });
+        this.addText(`IFSC: ${invoice.billerInfo.ifscCode}`, leftCol, this.currentY + 2, { 
+          fontSize: 9, 
+          color: '#34495e' 
+        });
         if (invoice.billerInfo.upiId) {
-          this.addText(`UPI: ${invoice.billerInfo.upiId}`, rightCol, this.currentY + 2, { fontSize: 9, color: '#495057' });
+          this.addText(`UPI: ${invoice.billerInfo.upiId}`, rightCol, this.currentY + 2, { 
+            fontSize: 9, 
+            color: '#34495e' 
+          });
         }
-        this.currentY += 5; // Reduced from 6 to 5
+        this.currentY += 5;
       } else if (invoice.billerInfo.upiId && !invoice.billerInfo.ifscCode) {
-        // If only UPI exists without IFSC
-        this.addText(`UPI: ${invoice.billerInfo.upiId}`, leftCol, this.currentY + 2, { fontSize: 9, color: '#495057' });
+        this.addText(`UPI: ${invoice.billerInfo.upiId}`, leftCol, this.currentY + 2, { 
+          fontSize: 9, 
+          color: '#34495e' 
+        });
         this.currentY += 5;
       }
       
-      this.currentY += 8; // Reduced from 15 to 8
+      this.currentY += 8;
     }
 
-    // Footer with reduced spacing
-    this.addLine(this.margin, this.pageHeight - 25, this.pageWidth - this.margin, this.pageHeight - 25, '#dee2e6'); // Moved up
-    this.addText('Thank you for your business!', this.pageWidth / 2, this.pageHeight - 15, { // Moved up
-      fontSize: 10, // Reduced font size
+    // Footer with clean styling
+    this.addLine(this.margin, this.pageHeight - 25, this.pageWidth - this.margin, this.pageHeight - 25, '#bdc3c7');
+    this.addText('Thank you for your business!', this.pageWidth / 2, this.pageHeight - 15, {
+      fontSize: 10,
       align: 'center', 
-      color: '#6c757d',
+      color: '#7f8c8d',
       fontStyle: 'italic'
     });
   }
