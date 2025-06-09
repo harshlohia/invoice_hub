@@ -129,14 +129,14 @@ export interface InvoiceTemplate {
   updatedAt?: Timestamp;
 }
 
-// Default template configurations
+// Default template configurations - Updated to match the design
 export const DEFAULT_TEMPLATE_COLUMNS: TemplateColumn[] = [
   { id: 'sno', label: '#', field: 'index', width: 8, align: 'left', visible: true, format: 'text' },
   { id: 'item', label: 'Item/Service', field: 'productName', width: 40, align: 'left', visible: true, format: 'text' },
-  { id: 'qty', label: 'Qty', field: 'quantity', width: 10, align: 'right', visible: true, format: 'number' },
-  { id: 'rate', label: 'Rate', field: 'rate', width: 15, align: 'right', visible: true, format: 'currency' },
-  { id: 'discount', label: 'Discount', field: 'discountPercentage', width: 12, align: 'right', visible: true, format: 'percentage' },
-  { id: 'amount', label: 'Amount', field: 'amount', width: 15, align: 'right', visible: true, format: 'currency' },
+  { id: 'qty', label: 'Qty', field: 'quantity', width: 10, align: 'center', visible: true, format: 'number' },
+  { id: 'rate', label: 'Rate (Rs.)', field: 'rate', width: 15, align: 'right', visible: true, format: 'currency' },
+  { id: 'discount', label: 'Discount (%)', field: 'discountPercentage', width: 12, align: 'right', visible: true, format: 'percentage' },
+  { id: 'amount', label: 'Amount (Rs.)', field: 'amount', width: 15, align: 'right', visible: true, format: 'currency' },
 ];
 
 export const DEFAULT_TEMPLATE_SECTIONS: TemplateSection[] = [
@@ -146,11 +146,11 @@ export const DEFAULT_TEMPLATE_SECTIONS: TemplateSection[] = [
     title: 'Invoice Header',
     visible: true,
     position: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'transparent',
     textColor: '#212529',
     fontSize: 16,
     fontWeight: 'bold',
-    padding: 20,
+    padding: 0,
     margin: 0,
     fields: ['invoiceNumber', 'invoiceDate', 'dueDate', 'status']
   },
@@ -160,11 +160,12 @@ export const DEFAULT_TEMPLATE_SECTIONS: TemplateSection[] = [
     title: 'Biller Information',
     visible: true,
     position: 2,
-    textColor: '#212529',
-    fontSize: 12,
-    fontWeight: 'normal',
-    padding: 10,
-    margin: 10,
+    backgroundColor: 'transparent',
+    textColor: '#3F51B5',
+    fontSize: 14,
+    fontWeight: 'bold',
+    padding: 0,
+    margin: 20,
     fields: ['businessName', 'addressLine1', 'addressLine2', 'city', 'state', 'postalCode', 'gstin']
   },
   {
@@ -173,12 +174,12 @@ export const DEFAULT_TEMPLATE_SECTIONS: TemplateSection[] = [
     title: 'Bill To',
     visible: true,
     position: 3,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'transparent',
     textColor: '#3F51B5',
     fontSize: 12,
     fontWeight: 'bold',
-    padding: 10,
-    margin: 10,
+    padding: 0,
+    margin: 20,
     fields: ['name', 'addressLine1', 'addressLine2', 'city', 'state', 'postalCode', 'gstin']
   },
   {
@@ -187,12 +188,12 @@ export const DEFAULT_TEMPLATE_SECTIONS: TemplateSection[] = [
     title: 'Items',
     visible: true,
     position: 4,
-    backgroundColor: '#3F51B5',
-    textColor: '#ffffff',
+    backgroundColor: 'transparent',
+    textColor: '#212529',
     fontSize: 10,
-    fontWeight: 'bold',
-    padding: 8,
-    margin: 10,
+    fontWeight: 'normal',
+    padding: 0,
+    margin: 20,
     columns: DEFAULT_TEMPLATE_COLUMNS
   },
   {
@@ -201,39 +202,26 @@ export const DEFAULT_TEMPLATE_SECTIONS: TemplateSection[] = [
     title: 'Totals',
     visible: true,
     position: 5,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'transparent',
     textColor: '#212529',
     fontSize: 11,
     fontWeight: 'normal',
-    padding: 10,
-    margin: 10,
+    padding: 0,
+    margin: 20,
     fields: ['subTotal', 'totalCGST', 'totalSGST', 'totalIGST', 'grandTotal']
-  },
-  {
-    id: 'notes',
-    type: 'notes',
-    title: 'Notes',
-    visible: true,
-    position: 6,
-    textColor: '#495057',
-    fontSize: 10,
-    fontWeight: 'normal',
-    padding: 10,
-    margin: 10,
-    fields: ['notes']
   },
   {
     id: 'terms',
     type: 'terms',
     title: 'Terms & Conditions',
     visible: true,
-    position: 7,
-    backgroundColor: '#f8f9fa',
-    textColor: '#3F51B5',
+    position: 6,
+    backgroundColor: 'transparent',
+    textColor: '#212529',
     fontSize: 10,
-    fontWeight: 'bold',
-    padding: 10,
-    margin: 10,
+    fontWeight: 'normal',
+    padding: 0,
+    margin: 20,
     fields: ['termsAndConditions']
   },
   {
@@ -241,27 +229,14 @@ export const DEFAULT_TEMPLATE_SECTIONS: TemplateSection[] = [
     type: 'payment',
     title: 'Payment Information',
     visible: true,
-    position: 8,
-    backgroundColor: '#f8f9fa',
-    textColor: '#3F51B5',
+    position: 7,
+    backgroundColor: 'transparent',
+    textColor: '#212529',
     fontSize: 10,
-    fontWeight: 'bold',
-    padding: 10,
-    margin: 10,
+    fontWeight: 'normal',
+    padding: 0,
+    margin: 20,
     fields: ['bankName', 'accountNumber', 'ifscCode', 'upiId']
-  },
-  {
-    id: 'footer',
-    type: 'footer',
-    title: 'Footer',
-    visible: true,
-    position: 9,
-    textColor: '#3F51B5',
-    fontSize: 11,
-    fontWeight: 'bold',
-    padding: 10,
-    margin: 10,
-    fields: ['thankYouMessage']
   }
 ];
 
@@ -274,7 +249,7 @@ export const DEFAULT_TEMPLATE_STYLE: TemplateStyle = {
   fontSize: 10,
   logoPosition: 'left',
   logoSize: 'medium',
-  borderStyle: 'minimal',
+  borderStyle: 'none',
   spacing: 'normal'
 };
 
