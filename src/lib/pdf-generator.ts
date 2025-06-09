@@ -14,6 +14,7 @@ export class InvoicePDFGenerator {
   private margin: number = 20;
   private currentY: number = 20;
   private themeColor: string = '#3F51B5'; // Deep blue theme color
+  private headerBgColor: string = '#f8f9fa'; // Light gray background for header
 
   constructor() {
     this.doc = new jsPDF({
@@ -155,7 +156,7 @@ export class InvoicePDFGenerator {
   public async generateInvoicePDF(invoice: Invoice, options: PDFGenerationOptions = {}): Promise<void> {
     const { filename = `invoice-${invoice.invoiceNumber}.pdf`, download = true } = options;
 
-    // Header Section - Clean design matching the image
+    // Header Section with background - Clean design matching the image
     await this.addHeader(invoice);
     
     // Bill To Section
@@ -167,7 +168,7 @@ export class InvoicePDFGenerator {
     // Totals Section - Right aligned
     this.addTotalsSection(invoice);
     
-    // Terms and Payment Info
+    // Terms and Payment Info with divider
     this.addFooterSections(invoice);
 
     if (download) {
@@ -176,6 +177,10 @@ export class InvoicePDFGenerator {
   }
 
   private async addHeader(invoice: Invoice) {
+    // Header background - light gray background like in the preview
+    const headerHeight = 55;
+    this.addRect(0, 0, this.pageWidth, headerHeight, 'F', this.headerBgColor);
+    
     // Header layout matching the design exactly
     const headerY = this.margin;
     
@@ -264,7 +269,7 @@ export class InvoicePDFGenerator {
       color: '#212529'
     });
 
-    this.currentY = headerY + 60;
+    this.currentY = headerHeight + 10;
   }
 
   private addBillToSection(invoice: Invoice) {
@@ -320,8 +325,11 @@ export class InvoicePDFGenerator {
       columnPositions.push(columnPositions[i] + columnWidths[i]);
     }
 
-    // Table headers - clean design with bottom border only
+    // Table headers with background - matching the preview design
     const headers = ['#', 'Item/Service', 'Qty', 'Rate (Rs.)', 'Discount (%)', 'Amount (Rs.)'];
+    
+    // Header background
+    this.addRect(tableStartX, tableStartY, tableWidth, headerHeight, 'F', '#f8f9fa');
     
     headers.forEach((header, index) => {
       const align = index === 0 ? 'left' : index === 1 ? 'left' : index === 2 ? 'center' : 'right';
@@ -505,9 +513,13 @@ export class InvoicePDFGenerator {
       this.currentY += Math.max(textHeight, 10) + 15;
     }
 
-    // Payment Information
+    // Payment Information with divider
     if (invoice.billerInfo.bankName || invoice.billerInfo.upiId) {
-      this.checkPageBreak(25);
+      this.checkPageBreak(30);
+      
+      // Add divider line before payment information
+      this.addLine(this.margin, this.currentY, this.pageWidth - this.margin, this.currentY, '#dee2e6', 0.5);
+      this.currentY += 8;
       
       this.addText('Payment Information:', this.margin, this.currentY, { 
         fontSize: 11, 
