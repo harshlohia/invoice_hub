@@ -263,23 +263,45 @@ export class InvoicePDFGenerator {
     const rowHeight = 10;
     const headerHeight = 12;
 
+    // Calculate table width and column positions
+    const tableWidth = this.pageWidth - 2 * this.margin;
+    const tableStartX = this.margin;
+    const tableEndX = this.pageWidth - this.margin;
+
     // Table headers
     const headers = ['#', 'Item/Service', 'Qty', 'Rate (Rs.)', 'Discount (%)', 'Amount (Rs.)'];
-    const columnWidths = [12, 65, 18, 28, 28, 28];
-    const columnPositions = [this.margin];
+    
+    // Adjusted column widths to ensure full coverage
+    const columnWidths = [12, 60, 18, 30, 30, 30]; // Total: 180mm (matches table width)
+    const columnPositions = [tableStartX];
     
     for (let i = 0; i < columnWidths.length - 1; i++) {
       columnPositions.push(columnPositions[i] + columnWidths[i]);
     }
 
-    // Header background with better styling
-    this.addRect(this.margin, tableStartY, this.pageWidth - 2 * this.margin, headerHeight, 'F', '#f8f9fa');
-    this.addRect(this.margin, tableStartY, this.pageWidth - 2 * this.margin, headerHeight, 'S', undefined, '#dee2e6');
+    // Header background - ensure it covers the full table width
+    this.addRect(tableStartX, tableStartY, tableWidth, headerHeight, 'F', '#f8f9fa');
+    this.addRect(tableStartX, tableStartY, tableWidth, headerHeight, 'S', undefined, '#dee2e6');
     
     // Header text with better typography
     headers.forEach((header, index) => {
       const align = index === 0 ? 'left' : index === 1 ? 'left' : 'right';
-      const x = align === 'right' ? columnPositions[index] + columnWidths[index] - 3 : columnPositions[index] + 3;
+      let x: number;
+      
+      if (align === 'right') {
+        // For right-aligned columns, position text at the right edge minus padding
+        if (index === headers.length - 1) {
+          // Last column - align to table end
+          x = tableEndX - 3;
+        } else {
+          // Other right-aligned columns
+          x = columnPositions[index] + columnWidths[index] - 3;
+        }
+      } else {
+        // Left-aligned columns
+        x = columnPositions[index] + 3;
+      }
+      
       this.addText(header, x, tableStartY + 8, { 
         fontSize: 10, 
         fontStyle: 'bold', 
@@ -296,9 +318,9 @@ export class InvoicePDFGenerator {
       
       const rowY = this.currentY;
       
-      // Alternate row background
+      // Alternate row background - ensure it covers the full table width
       if (index % 2 === 1) {
-        this.addRect(this.margin, rowY, this.pageWidth - 2 * this.margin, rowHeight, 'F', '#f8f9fa');
+        this.addRect(tableStartX, rowY, tableWidth, rowHeight, 'F', '#f8f9fa');
       }
 
       // Row data with proper formatting
@@ -313,12 +335,26 @@ export class InvoicePDFGenerator {
 
       rowData.forEach((data, colIndex) => {
         const align = colIndex === 0 ? 'left' : colIndex === 1 ? 'left' : 'right';
-        const x = align === 'right' ? columnPositions[colIndex] + columnWidths[colIndex] - 3 : columnPositions[colIndex] + 3;
+        let x: number;
+        
+        if (align === 'right') {
+          // For right-aligned columns, position text at the right edge minus padding
+          if (colIndex === rowData.length - 1) {
+            // Last column (Amount) - align to table end
+            x = tableEndX - 3;
+          } else {
+            // Other right-aligned columns
+            x = columnPositions[colIndex] + columnWidths[colIndex] - 3;
+          }
+        } else {
+          // Left-aligned columns
+          x = columnPositions[colIndex] + 3;
+        }
         
         // Truncate long text for item name
         let displayText = data;
-        if (colIndex === 1 && data.length > 30) {
-          displayText = data.substring(0, 27) + '...';
+        if (colIndex === 1 && data.length > 25) {
+          displayText = data.substring(0, 22) + '...';
         }
         
         this.addText(displayText, x, rowY + 7, { 
@@ -331,10 +367,10 @@ export class InvoicePDFGenerator {
       this.currentY += rowHeight;
     });
 
-    // Table border with better styling
-    this.addRect(this.margin, tableStartY, this.pageWidth - 2 * this.margin, this.currentY - tableStartY, 'S', undefined, '#dee2e6');
+    // Table border with better styling - ensure full coverage
+    this.addRect(tableStartX, tableStartY, tableWidth, this.currentY - tableStartY, 'S', undefined, '#dee2e6');
     
-    // Vertical lines
+    // Vertical lines - ensure they extend to the full table width
     for (let i = 1; i < columnPositions.length; i++) {
       this.addLine(columnPositions[i], tableStartY, columnPositions[i], this.currentY, '#dee2e6');
     }
