@@ -1,4 +1,3 @@
-
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -17,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import type { Client } from "@/lib/types";
-import { GSTIN_REGEX, INDIAN_STATES } from "@/lib/constants";
+import { GSTIN_REGEX, INDIAN_STATES, GST_RATES } from "@/lib/constants";
 import { useRouter } from "next/navigation";
 import { db, getFirebaseAuthInstance } from "@/lib/firebase";
 import { collection, addDoc, updateDoc, doc, serverTimestamp } from "firebase/firestore";
@@ -39,6 +38,7 @@ const clientFormSchema = z.object({
   state: z.string().min(1, "State is required."),
   postalCode: z.string().min(1, "Postal code is required."),
   country: z.string().default("India"),
+  defaultTaxRate: z.number().min(0).max(100).default(18),
 });
 
 type ClientFormValues = z.infer<typeof clientFormSchema>;
@@ -67,6 +67,7 @@ export function ClientForm({ initialData, onSave }: ClientFormProps) {
       state: "",
       postalCode: "",
       country: "India",
+      defaultTaxRate: 18,
     },
   });
 
@@ -76,12 +77,11 @@ export function ClientForm({ initialData, onSave }: ClientFormProps) {
       setCurrentUser(user);
       setLoadingAuth(false);
       if (!user && !initialData) {
-        // If not logged in and it's a new client form, consider redirecting or disabling form
         console.warn("ClientForm: User not logged in for new client.");
       }
     });
     return () => unsubscribe();
-  }, [initialData]); // Added initialData to re-evaluate if user is needed
+  }, [initialData]);
 
   async function onSubmit(values: ClientFormValues) {
     console.log("ClientForm onSubmit: Values submitted:", values);
@@ -94,7 +94,6 @@ export function ClientForm({ initialData, onSave }: ClientFormProps) {
       return;
     }
     
-    // REMOVED: form.formState.isSubmitting = true; (This was the error)
     try {
       if (initialData?.id) {
         // Update existing client
@@ -108,7 +107,7 @@ export function ClientForm({ initialData, onSave }: ClientFormProps) {
         if (!updateValues.userId) {
             toast({ title: "Error", description: "User ID missing for update.", variant: "destructive" });
             console.error("ClientForm onSubmit: User ID missing for update. Values:", updateValues);
-            return; // Removed form.formState.isSubmitting = false;
+            return;
         }
         console.log("ClientForm onSubmit: Data for update:", updateValues);
         await updateDoc(clientRef, updateValues);
@@ -117,7 +116,7 @@ export function ClientForm({ initialData, onSave }: ClientFormProps) {
           description: `${values.name} has been successfully updated.`,
         });
         if (onSave) {
-          onSave({ ...updateValues, id: initialData.id, updatedAt: new Date() } as unknown as Client); // Simulate timestamp for local state
+          onSave({ ...updateValues, id: initialData.id, updatedAt: new Date() } as unknown as Client);
         } else {
           router.push("/dashboard/clients");
           router.refresh(); 
@@ -127,7 +126,7 @@ export function ClientForm({ initialData, onSave }: ClientFormProps) {
         if (!currentUser) { 
              toast({ title: "Error", description: "Authentication error, please re-login.", variant: "destructive" });
              console.error("ClientForm onSubmit: CurrentUser is null when trying to add new client.");
-             return; // Removed form.formState.isSubmitting = false;
+             return;
         }
         console.log("ClientForm onSubmit: Adding new client for user ID:", currentUser.uid);
         const clientDataWithUser = {
@@ -144,7 +143,7 @@ export function ClientForm({ initialData, onSave }: ClientFormProps) {
           description: `${values.name} has been successfully added.`,
         });
         if (onSave) {
-          onSave({ ...clientDataWithUser, id: docRef.id, createdAt: new Date(), updatedAt: new Date() } as unknown as Client); // Simulate timestamp
+          onSave({ ...clientDataWithUser, id: docRef.id, createdAt: new Date(), updatedAt: new Date() } as unknown as Client);
         } else {
           router.push("/dashboard/clients");
           router.refresh(); 
@@ -154,13 +153,13 @@ export function ClientForm({ initialData, onSave }: ClientFormProps) {
       console.error("ClientForm onSubmit: Error saving client: ", error);
       console.error("ClientForm onSubmit: Firestore Error Code:", error.code);
       console.error("ClientForm onSubmit: Firestore Error Message:", error.message);
+      console.error("ClientForm onSubmit: Full Firestore Error:", error);
       toast({
         title: "Error Saving Client",
         description: `Failed to save client. ${error.message || "Please try again."}`,
         variant: "destructive",
       });
     } 
-    // REMOVED: finally { form.formState.isSubmitting = false; }
   }
 
   const isSubmitDisabled = form.formState.isSubmitting || loadingAuth || (!currentUser && !initialData);
@@ -284,6 +283,37 @@ export function ClientForm({ initialData, onSave }: ClientFormProps) {
             )}
           />
         </div>
+
+        {/* Tax Configuration Section */}
+        <div className="border-t pt-6">
+          <h3 className="text-lg font-medium font-headline mb-4">Tax Configuration</h3>
+          <FormField
+            control={form.control}
+            name="defaultTaxRate"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Default GST Rate (%)*</FormLabel>
+                <Select onValueChange={(value) => field.onChange(parseFloat(value))} defaultValue={String(field.value)}>
+                  <FormControl>
+                    <SelectTrigger className="w-full md:w-[200px]">
+                      <SelectValue placeholder="Select GST Rate" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {GST_RATES.map(rate => (
+                      <SelectItem key={rate} value={String(rate)}>{rate}% GST</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <p className="text-sm text-muted-foreground mt-2">
+            This will be the default tax rate applied to all line items for this client when creating invoices.
+          </p>
+        </div>
+
         <FormField
             control={form.control}
             name="country"

@@ -23,7 +23,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import type { Invoice, Client, LineItem, BillerInfo } from "@/lib/types";
-import { GSTIN_REGEX, GST_RATES } from "@/lib/constants";
+import { GSTIN_REGEX } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { format, addDays } from "date-fns";
 import { CalendarIcon, PlusCircle, Trash2, Edit2, Loader2 } from "lucide-react";
@@ -36,10 +36,8 @@ import { onAuthStateChanged, type User, type Auth } from "firebase/auth";
 const lineItemSchema = z.object({
   id: z.string().default(() => crypto.randomUUID()),
   productName: z.string().min(1, "Product/Service name is required."),
-  quantity: z.number().min(0.01, "Quantity must be greater than 0."),
   rate: z.number().min(0, "Rate must be non-negative."),
-  discountPercentage: z.number().min(0).max(100).default(0),
-  taxRate: z.number().min(0).max(100).default(18), 
+  date: z.date().optional(),
 });
 
 const billerInfoFormSchema = z.object({
@@ -69,6 +67,7 @@ const invoiceFormSchema = z.object({
   isInterState: z.boolean().default(false),
   lineItems: z.array(lineItemSchema).min(1, "At least one line item is required."),
   notes: z.string().optional(),
+  termsAndConditions: z.string().optional(),
   billerInfo: billerInfoFormSchema, 
   currency: z.string().default("INR"),
 });
@@ -105,9 +104,15 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
       status: initialData ? initialData.status : 'draft',
       isInterState: initialData ? initialData.isInterState : false,
       lineItems: initialData 
-        ? initialData.lineItems.map(item => ({ ...item, id: item.id || crypto.randomUUID() }))
-        : [{ id: crypto.randomUUID(), productName: "", quantity: 1, rate: 0, discountPercentage: 0, taxRate: 18 }],
+        ? initialData.lineItems.map(item => ({ 
+            id: item.id || crypto.randomUUID(), 
+            productName: item.productName, 
+            rate: item.rate,
+            date: item.date ? new Date(item.date) : new Date()
+          }))
+        : [{ id: crypto.randomUUID(), productName: "", rate: 0, date: new Date() }],
       notes: initialData?.notes || "",
+      termsAndConditions: initialData?.termsAndConditions || "Thank you for your business! Payment is due within the specified date.",
       billerInfo: initialData ? initialData.billerInfo : defaultBillerInfo,
       currency: initialData?.currency || "INR",
     },
@@ -180,10 +185,13 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
         status: initialData.status,
         isInterState: initialData.isInterState,
         lineItems: initialData.lineItems.map(item => ({
-          ...item,
-          id: item.id || crypto.randomUUID(), 
+          id: item.id || crypto.randomUUID(),
+          productName: item.productName,
+          rate: item.rate,
+          date: item.date ? new Date(item.date) : new Date(),
         })),
         notes: initialData.notes || "",
+        termsAndConditions: initialData.termsAndConditions || "Thank you for your business! Payment is due within the specified date.",
         billerInfo: initialData.billerInfo,
         currency: initialData.currency || "INR",
       });
@@ -202,9 +210,7 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
     if (clientToUse && billerStateFromForm) {
       form.setValue("isInterState", clientToUse.state !== billerStateFromForm);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientData, initialData, form.watch("billerInfo.state"), form.setValue, form.getValues]);
-
 
   const { fields, append, remove } = useFieldArray({
     control: form.control,
@@ -215,8 +221,9 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
   const watchIsInterState = form.watch("isInterState");
 
   const calculateLineItemTotals = (item: z.infer<typeof lineItemSchema>) => {
-    const itemAmount = (item.quantity || 0) * (item.rate || 0) * (1 - (item.discountPercentage || 0) / 100);
-    const tax = itemAmount * ((item.taxRate || 0) / 100);
+    const clientTaxRate = selectedClientData?.defaultTaxRate || 18;
+    const itemAmount = item.rate || 0;
+    const tax = itemAmount * (clientTaxRate / 100);
     let cgst = 0, sgst = 0, igst = 0;
     if (watchIsInterState) {
       igst = tax;
@@ -224,7 +231,16 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
       cgst = tax / 2;
       sgst = tax / 2;
     }
-    return { amount: itemAmount, cgst, sgst, igst, totalAmount: itemAmount + tax };
+    return { 
+      amount: itemAmount, 
+      cgst, 
+      sgst, 
+      igst, 
+      totalAmount: itemAmount + tax,
+      quantity: 1, // Default quantity
+      discountPercentage: 0, // Default discount
+      taxRate: clientTaxRate
+    };
   };
   
   const calculateOverallTotals = () => {
@@ -266,7 +282,11 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
 
     const processedLineItems = values.lineItems.map(item => {
       const itemTotals = calculateLineItemTotals(item);
-      return { ...item, ...itemTotals }; 
+      return { 
+        ...item, 
+        ...itemTotals,
+        date: item.date || new Date()
+      }; 
     });
 
     const currentTotals = calculateOverallTotals(); 
@@ -280,6 +300,7 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
       client: clientForInvoice, 
       lineItems: processedLineItems,
       notes: values.notes,
+      termsAndConditions: values.termsAndConditions,
       isInterState: values.isInterState,
       status: values.status, 
       currency: values.currency || "INR",
@@ -325,7 +346,6 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
       });
     } 
   }
-
 
   return (
     <Form {...form}>
@@ -389,7 +409,7 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
                     <FormLabel>Client*</FormLabel>
                     <Select 
                       onValueChange={(value) => {
-                        field.onChange(value); // Always update form value
+                        field.onChange(value);
                         const client = clients.find(c => c.id === value);
                         setSelectedClientData(client || null);
                       }} 
@@ -405,7 +425,7 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
                       </SelectTrigger></FormControl>
                       <SelectContent>
                         {(loadingAuth || loadingClients) && !initialData ? (
-                            <SelectItem value="loading\" disabled>
+                            <SelectItem value="loading" disabled>
                                 <div className="flex items-center">
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading...
                                 </div>
@@ -453,6 +473,17 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
                     </FormItem>
                 )} />
             </div>
+            {selectedClientData && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="font-medium text-blue-900 mb-2">Client Tax Configuration</h4>
+                <p className="text-sm text-blue-700">
+                  Default GST Rate for {selectedClientData.name}: <span className="font-semibold">{selectedClientData.defaultTaxRate}%</span>
+                </p>
+                <p className="text-xs text-blue-600 mt-1">
+                  This rate will be automatically applied to all line items. You can change this in the client settings.
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -483,26 +514,33 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
           <CardHeader><CardTitle className="font-headline">Items / Services</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             {fields.map((fieldItem, index) => (
-              <div key={fieldItem.id} className="grid grid-cols-1 md:grid-cols-[4fr_1fr_2fr_1fr_2fr_minmax(80px,auto)_auto] gap-2 p-3 border rounded-md items-start relative">
+              <div key={fieldItem.id} className="grid grid-cols-1 md:grid-cols-[50px_150px_1fr_200px_150px_auto] gap-2 p-3 border rounded-md items-start relative">
+                <div className="text-center font-medium text-sm pt-2">
+                  {index + 1}
+                </div>
+                <FormField control={form.control} name={`lineItems.${index}.date`} render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className={index > 0 ? "sr-only md:not-sr-only": ""}>Date</FormLabel>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                              {field.value ? format(field.value, "dd/MM") : <span>Date</span>}
+                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
+                        </PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
                 <FormField control={form.control} name={`lineItems.${index}.productName`} render={({ field }) => (
                     <FormItem><FormLabel className={index > 0 ? "sr-only md:not-sr-only": ""}>Product/Service</FormLabel><FormControl><Input placeholder="Item name" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                <FormField control={form.control} name={`lineItems.${index}.quantity`} render={({ field }) => (
-                    <FormItem><FormLabel className={index > 0 ? "sr-only md:not-sr-only": ""}>Qty</FormLabel><FormControl><Input type="number" placeholder="1" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} /></FormControl><FormMessage /></FormItem>)} />
                 <FormField control={form.control} name={`lineItems.${index}.rate`} render={({ field }) => (
                     <FormItem><FormLabel className={index > 0 ? "sr-only md:not-sr-only": ""}>Rate (Rs.)</FormLabel><FormControl><Input type="number" placeholder="100.00" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || 0)}/></FormControl><FormMessage /></FormItem>)} />
-                <FormField control={form.control} name={`lineItems.${index}.discountPercentage`} render={({ field }) => (
-                    <FormItem><FormLabel className={index > 0 ? "sr-only md:not-sr-only": ""}>Disc (%)</FormLabel><FormControl><Input type="number" placeholder="0" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || 0)}/></FormControl><FormMessage /></FormItem>)} />
-                <FormField control={form.control} name={`lineItems.${index}.taxRate`} render={({ field }) => (
-                    <FormItem>
-                        <FormLabel className={index > 0 ? "sr-only md:not-sr-only": ""}>Tax Rate</FormLabel>
-                        <Select onValueChange={(value) => field.onChange(parseFloat(value))} defaultValue={String(field.value)}>
-                            <FormControl><SelectTrigger><SelectValue placeholder="GST" /></SelectTrigger></FormControl>
-                            <SelectContent>
-                                {GST_RATES.map(rate => <SelectItem key={rate} value={String(rate)}>{rate}%</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-                        <FormMessage />
-                    </FormItem>)} />
                 <div className="flex flex-col items-end">
                   <FormLabel className={index > 0 ? "sr-only md:not-sr-only": ""}>Amount (Rs.)</FormLabel>
                   <p className="w-full text-right font-medium pt-2.5">
@@ -516,7 +554,7 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
                 )}
               </div>
             ))}
-            <Button type="button" variant="outline" onClick={() => append({ id: crypto.randomUUID(), productName: "", quantity: 1, rate: 0, discountPercentage: 0, taxRate: 18 })}>
+            <Button type="button" variant="outline" onClick={() => append({ id: crypto.randomUUID(), productName: "", rate: 0, date: new Date() })}>
               <PlusCircle className="mr-2 h-4 w-4" /> Add Item
             </Button>
           </CardContent>
@@ -528,12 +566,12 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
             <div className="flex justify-between"><span className="text-muted-foreground">Subtotal:</span><span>Rs. {totals.subTotal.toFixed(2)}</span></div>
             {!watchIsInterState && (
               <>
-                <div className="flex justify-between"><span className="text-muted-foreground">CGST:</span><span>Rs. {totals.totalCGST.toFixed(2)}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">SGST:</span><span>Rs. {totals.totalSGST.toFixed(2)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">CGST ({((selectedClientData?.defaultTaxRate || 18) / 2)}%):</span><span>Rs. {totals.totalCGST.toFixed(2)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">SGST ({((selectedClientData?.defaultTaxRate || 18) / 2)}%):</span><span>Rs. {totals.totalSGST.toFixed(2)}</span></div>
               </>
             )}
             {watchIsInterState && (
-              <div className="flex justify-between"><span className="text-muted-foreground">IGST:</span><span>Rs. {totals.totalIGST.toFixed(2)}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">IGST ({selectedClientData?.defaultTaxRate || 18}%):</span><span>Rs. {totals.totalIGST.toFixed(2)}</span></div>
             )}
             <Separator />
             <div className="flex justify-between text-xl font-bold"><span className="text-foreground">Grand Total:</span><span>Rs. {totals.grandTotal.toFixed(2)}</span></div>
@@ -545,6 +583,8 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
             <CardContent className="space-y-6">
                 <FormField control={form.control} name="notes" render={({ field }) => (
                     <FormItem><FormLabel>Notes (Optional)</FormLabel><FormControl><Textarea placeholder="Any additional notes for the client..." {...field} /></FormControl><FormMessage /></FormItem>)} />
+                <FormField control={form.control} name="termsAndConditions" render={({ field }) => (
+                    <FormItem><FormLabel>Terms & Conditions (Optional)</FormLabel><FormControl><Textarea placeholder="Payment terms, warranty info, etc." {...field} /></FormControl><FormMessage /></FormItem>)} />
                 
                 <Separator />
                 <h3 className="text-lg font-medium font-headline">Payment Details (from Biller Info)</h3>

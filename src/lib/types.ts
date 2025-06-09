@@ -12,6 +12,7 @@ export interface LineItem {
   sgst: number;
   igst: number;
   totalAmount: number; // amount + cgst + sgst + igst
+  date?: Date; // New field for date column
 }
 
 export interface Client {
@@ -27,6 +28,7 @@ export interface Client {
   state: string;
   postalCode: string;
   country: string; // Default to India
+  defaultTaxRate: number; // Default GST rate for this client (5, 12, 18, 28)
   // createdAt?: Timestamp; 
   // updatedAt?: Timestamp; 
 }
@@ -82,7 +84,7 @@ export interface TemplateColumn {
   width: number; // Percentage or fixed width
   align: 'left' | 'center' | 'right';
   visible: boolean;
-  format?: 'text' | 'number' | 'currency' | 'percentage';
+  format?: 'text' | 'number' | 'currency' | 'percentage' | 'date';
 }
 
 export interface TemplateSection {
@@ -129,14 +131,13 @@ export interface InvoiceTemplate {
   updatedAt?: Timestamp;
 }
 
-// Default template configurations - Updated to match the design
+// Default template configurations - Updated to match the simplified design
 export const DEFAULT_TEMPLATE_COLUMNS: TemplateColumn[] = [
   { id: 'sno', label: '#', field: 'index', width: 8, align: 'left', visible: true, format: 'text' },
-  { id: 'item', label: 'Item/Service', field: 'productName', width: 40, align: 'left', visible: true, format: 'text' },
-  { id: 'qty', label: 'Qty', field: 'quantity', width: 10, align: 'center', visible: true, format: 'number' },
+  { id: 'date', label: 'Date', field: 'date', width: 15, align: 'left', visible: true, format: 'date' },
+  { id: 'item', label: 'Item/Service', field: 'productName', width: 50, align: 'left', visible: true, format: 'text' },
   { id: 'rate', label: 'Rate (Rs.)', field: 'rate', width: 15, align: 'right', visible: true, format: 'currency' },
-  { id: 'discount', label: 'Discount (%)', field: 'discountPercentage', width: 12, align: 'right', visible: true, format: 'percentage' },
-  { id: 'amount', label: 'Amount (Rs.)', field: 'amount', width: 15, align: 'right', visible: true, format: 'currency' },
+  { id: 'amount', label: 'Amount (Rs.)', field: 'amount', width: 12, align: 'right', visible: true, format: 'currency' },
 ];
 
 export const DEFAULT_TEMPLATE_SECTIONS: TemplateSection[] = [

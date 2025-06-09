@@ -474,7 +474,7 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
             )}
           </div>
 
-          {/* Line Items Table */}
+          {/* Line Items Table - Updated for simplified structure */}
           <div style={{ marginBottom: '24px', width: '100%' }}>
             <table style={{
               width: '100%',
@@ -503,39 +503,29 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
                     color: '#374151',
                     borderRight: '1px solid #d1d5db',
                     borderBottom: '2px solid #d1d5db',
-                    width: '280px',
+                    width: '120px',
+                    fontSize: '12px'
+                  }}>Date</th>
+                  <th style={{
+                    padding: '12px 8px',
+                    textAlign: 'left',
+                    fontWeight: 'bold',
+                    color: '#374151',
+                    borderRight: '1px solid #d1d5db',
+                    borderBottom: '2px solid #d1d5db',
+                    width: '350px',
                     fontSize: '12px'
                   }}>Item/Service</th>
                   <th style={{
                     padding: '12px 8px',
-                    textAlign: 'center',
-                    fontWeight: 'bold',
-                    color: '#374151',
-                    borderRight: '1px solid #d1d5db',
-                    borderBottom: '2px solid #d1d5db',
-                    width: '60px',
-                    fontSize: '12px'
-                  }}>Qty</th>
-                  <th style={{
-                    padding: '12px 8px',
                     textAlign: 'right',
                     fontWeight: 'bold',
                     color: '#374151',
                     borderRight: '1px solid #d1d5db',
                     borderBottom: '2px solid #d1d5db',
-                    width: '100px',
+                    width: '120px',
                     fontSize: '12px'
                   }}>Rate ({currencySymbol})</th>
-                  <th style={{
-                    padding: '12px 8px',
-                    textAlign: 'right',
-                    fontWeight: 'bold',
-                    color: '#374151',
-                    borderRight: '1px solid #d1d5db',
-                    borderBottom: '2px solid #d1d5db',
-                    width: '80px',
-                    fontSize: '12px'
-                  }}>Disc (%)</th>
                   <th style={{
                     padding: '12px 8px',
                     textAlign: 'right',
@@ -561,6 +551,12 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
                     }}>{index + 1}</td>
                     <td style={{
                       padding: '10px 8px',
+                      borderRight: '1px solid #e5e7eb',
+                      textAlign: 'left',
+                      fontSize: '11px'
+                    }}>{item.date ? format(new Date(item.date), "dd/MM/yyyy") : format(invoiceDate, "dd/MM/yyyy")}</td>
+                    <td style={{
+                      padding: '10px 8px',
                       fontWeight: '500',
                       borderRight: '1px solid #e5e7eb',
                       textAlign: 'left',
@@ -569,22 +565,10 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
                     }}>{item.productName}</td>
                     <td style={{
                       padding: '10px 8px',
-                      textAlign: 'center',
-                      borderRight: '1px solid #e5e7eb',
-                      fontSize: '11px'
-                    }}>{item.quantity}</td>
-                    <td style={{
-                      padding: '10px 8px',
                       textAlign: 'right',
                       borderRight: '1px solid #e5e7eb',
                       fontSize: '11px'
                     }}>{item.rate.toFixed(2)}</td>
-                    <td style={{
-                      padding: '10px 8px',
-                      textAlign: 'right',
-                      borderRight: '1px solid #e5e7eb',
-                      fontSize: '11px'
-                    }}>{item.discountPercentage.toFixed(1)}%</td>
                     <td style={{
                       padding: '10px 8px',
                       textAlign: 'right',
@@ -806,7 +790,7 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
 
 InvoicePreview.displayName = 'InvoicePreview';
 
-// Helper functions for generating page content
+// Helper functions for generating page content - Updated for simplified structure
 function generateHeaderHTML(invoice: Invoice): string {
   const invoiceDate = invoice.invoiceDate instanceof Timestamp ? invoice.invoiceDate.toDate() : new Date(invoice.invoiceDate);
   const dueDate = invoice.dueDate instanceof Timestamp ? invoice.dueDate.toDate() : new Date(invoice.dueDate);
@@ -888,10 +872,9 @@ function generateLineItemsTableHTML(lineItems: any[], startIndex: number, curren
         <thead style="background-color: #f8fafc;">
           <tr>
             <th style="padding: 12px 8px; text-align: left; font-weight: bold; color: #374151; border-right: 1px solid #d1d5db; border-bottom: 2px solid #d1d5db; width: 40px; font-size: 12px;">#</th>
-            <th style="padding: 12px 8px; text-align: left; font-weight: bold; color: #374151; border-right: 1px solid #d1d5db; border-bottom: 2px solid #d1d5db; width: 280px; font-size: 12px;">Item/Service</th>
-            <th style="padding: 12px 8px; text-align: center; font-weight: bold; color: #374151; border-right: 1px solid #d1d5db; border-bottom: 2px solid #d1d5db; width: 60px; font-size: 12px;">Qty</th>
-            <th style="padding: 12px 8px; text-align: right; font-weight: bold; color: #374151; border-right: 1px solid #d1d5db; border-bottom: 2px solid #d1d5db; width: 100px; font-size: 12px;">Rate (${currencySymbol})</th>
-            <th style="padding: 12px 8px; text-align: right; font-weight: bold; color: #374151; border-right: 1px solid #d1d5db; border-bottom: 2px solid #d1d5db; width: 80px; font-size: 12px;">Disc (%)</th>
+            <th style="padding: 12px 8px; text-align: left; font-weight: bold; color: #374151; border-right: 1px solid #d1d5db; border-bottom: 2px solid #d1d5db; width: 120px; font-size: 12px;">Date</th>
+            <th style="padding: 12px 8px; text-align: left; font-weight: bold; color: #374151; border-right: 1px solid #d1d5db; border-bottom: 2px solid #d1d5db; width: 350px; font-size: 12px;">Item/Service</th>
+            <th style="padding: 12px 8px; text-align: right; font-weight: bold; color: #374151; border-right: 1px solid #d1d5db; border-bottom: 2px solid #d1d5db; width: 120px; font-size: 12px;">Rate (${currencySymbol})</th>
             <th style="padding: 12px 8px; text-align: right; font-weight: bold; color: #374151; border-bottom: 2px solid #d1d5db; width: 120px; font-size: 12px;">Amount (${currencySymbol})</th>
           </tr>
         </thead>
@@ -899,10 +882,9 @@ function generateLineItemsTableHTML(lineItems: any[], startIndex: number, curren
           ${lineItems.map((item, index) => `
             <tr style="border-bottom: ${index === lineItems.length - 1 ? 'none' : '1px solid #e5e7eb'}; background-color: ${index % 2 === 0 ? '#ffffff' : '#fafbfc'};">
               <td style="padding: 10px 8px; border-right: 1px solid #e5e7eb; text-align: left; font-size: 11px;">${startIndex + index + 1}</td>
+              <td style="padding: 10px 8px; border-right: 1px solid #e5e7eb; text-align: left; font-size: 11px;">${item.date ? format(new Date(item.date), "dd/MM/yyyy") : format(new Date(), "dd/MM/yyyy")}</td>
               <td style="padding: 10px 8px; font-weight: 500; border-right: 1px solid #e5e7eb; text-align: left; word-wrap: break-word; font-size: 11px;">${item.productName}</td>
-              <td style="padding: 10px 8px; text-align: center; border-right: 1px solid #e5e7eb; font-size: 11px;">${item.quantity}</td>
               <td style="padding: 10px 8px; text-align: right; border-right: 1px solid #e5e7eb; font-size: 11px;">${item.rate.toFixed(2)}</td>
-              <td style="padding: 10px 8px; text-align: right; border-right: 1px solid #e5e7eb; font-size: 11px;">${item.discountPercentage.toFixed(1)}%</td>
               <td style="padding: 10px 8px; text-align: right; font-weight: 600; font-size: 11px;">${item.amount.toFixed(2)}</td>
             </tr>
           `).join('')}
