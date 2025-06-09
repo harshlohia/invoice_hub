@@ -1,4 +1,3 @@
-
 "use client";
 import type { Invoice } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card";
@@ -8,12 +7,11 @@ import { Download, Printer, Send, Edit, Loader2, CheckCircle, AlertCircle, Clock
 import { format } from 'date-fns';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRef, useState, useEffect, forwardRef, useImperativeHandle } from 'react'; // Added forwardRef, useImperativeHandle
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+import { useRef, useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
 import { doc, updateDoc, serverTimestamp, Timestamp } from "firebase/firestore";
+import { InvoicePDFGenerator } from '@/lib/pdf-generator';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,7 +26,7 @@ interface InvoicePreviewProps {
   onStatusChange?: (updatedInvoice: Invoice) => void; 
 }
 
-export interface InvoicePreviewHandle { // Exposed handle type
+export interface InvoicePreviewHandle {
   downloadPdf: () => Promise<void>;
 }
 
@@ -79,51 +77,12 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
     }
   };
 
-
   const handleDownloadPdf = async () => {
-    if (!invoiceCardRef.current) {
-      toast({
-        title: "Error",
-        description: "Invoice content not found for PDF generation.",
-        variant: "destructive",
-      });
-      return;
-    }
     setIsDownloading(true);
 
     try {
-      const elementToCapture = invoiceCardRef.current;
-      
-      const canvas = await html2canvas(elementToCapture, {
-        scale: 2, 
-        useCORS: true, 
-        logging: false,
-        ignoreElements: (element) => element.classList.contains('do-not-print-in-pdf'),
-      });
-
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'p',
-        unit: 'mm',
-        format: 'a4',
-      });
-
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      
-      const canvasWidth = canvas.width;
-      const canvasHeight = canvas.height;
-
-      const ratio = Math.min(pdfWidth / canvasWidth, pdfHeight / canvasHeight);
-      
-      const imgWidthInPdf = canvasWidth * ratio;
-      const imgHeightInPdf = canvasHeight * ratio;
-
-      const x = (pdfWidth - imgWidthInPdf) / 2;
-      const y = (pdfHeight - imgHeightInPdf) / 2; 
-
-      pdf.addImage(imgData, 'PNG', x, y, imgWidthInPdf, imgHeightInPdf);
-      pdf.save(`invoice-${invoice.invoiceNumber || 'details'}.pdf`);
+      const pdfGenerator = new InvoicePDFGenerator();
+      pdfGenerator.downloadPDF(invoice);
       
       toast({
         title: "Success",
@@ -142,15 +101,13 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
     }
   };
 
-  useImperativeHandle(ref, () => ({ // Expose downloadPdf function
+  useImperativeHandle(ref, () => ({
     downloadPdf: handleDownloadPdf,
   }));
-
 
   const invoiceDate = invoice.invoiceDate instanceof Timestamp ? invoice.invoiceDate.toDate() : new Date(invoice.invoiceDate);
   const dueDate = invoice.dueDate instanceof Timestamp ? invoice.dueDate.toDate() : new Date(invoice.dueDate);
   const currencySymbol = invoice.currency === "INR" ? "Rs." : (invoice.currency || "Rs.");
-
 
   return (
     <Card className="max-w-4xl mx-auto shadow-lg">
@@ -309,7 +266,7 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
           </DropdownMenuContent>
         </DropdownMenu>
         
-        <Button variant="outline" onClick={() => window.print()} disabled={isDownloading}><Printer className="mr-2 h-4 w-4" /> Print</Button> {/* Simple print */}
+        <Button variant="outline" onClick={() => window.print()} disabled={isDownloading}><Printer className="mr-2 h-4 w-4" /> Print</Button>
         <Button 
           className="bg-accent hover:bg-accent/90 text-accent-foreground"
           onClick={handleDownloadPdf}
