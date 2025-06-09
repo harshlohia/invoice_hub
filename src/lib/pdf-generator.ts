@@ -345,24 +345,14 @@ export class InvoicePDFGenerator {
   private addTotalsSection(invoice: Invoice) {
     this.checkPageBreak(60);
     
-    // Calculate the exact position to align with the Amount column
-    const columnWidths = [12, 65, 18, 28, 28, 28];
-    const columnPositions = [this.margin];
-    
-    for (let i = 0; i < columnWidths.length - 1; i++) {
-      columnPositions.push(columnPositions[i] + columnWidths[i]);
-    }
-    
-    // Position totals to align with the last column (Amount column)
-    const amountColumnStart = columnPositions[5]; // Amount column position
-    const amountColumnWidth = columnWidths[5]; // Amount column width
-    const totalsBoxWidth = amountColumnWidth + 15; // Slightly wider for better appearance
-    const totalsBoxX = amountColumnStart - 7; // Start a bit before the column
-    const labelX = totalsBoxX + 3; // Label position inside the box
-    const valueX = totalsBoxX + totalsBoxWidth - 3; // Value position (right-aligned)
+    // Calculate totals box dimensions and position
+    const totalsBoxWidth = 60; // Fixed width for totals box
+    const totalsBoxX = this.pageWidth - this.margin - totalsBoxWidth; // Right-aligned
+    const labelX = totalsBoxX + 5; // Label position inside the box
+    const valueX = totalsBoxX + totalsBoxWidth - 5; // Value position (right-aligned)
     
     const boxStartY = this.currentY;
-    const lineHeight = 7;
+    const lineHeight = 8;
     let totalLines = 3; // Subtotal + tax + grand total
     
     // Count tax lines
@@ -370,11 +360,14 @@ export class InvoicePDFGenerator {
       totalLines = 4; // Subtotal + CGST + SGST + grand total
     }
     
-    const boxHeight = totalLines * lineHeight + 8;
+    const boxHeight = totalLines * lineHeight + 10;
 
-    // Totals background box
-    this.addRect(totalsBoxX, boxStartY - 3, totalsBoxWidth, boxHeight, 'F', '#f8f9fa');
-    this.addRect(totalsBoxX, boxStartY - 3, totalsBoxWidth, boxHeight, 'S', undefined, '#dee2e6');
+    // Totals background box with proper styling
+    this.addRect(totalsBoxX, boxStartY, totalsBoxWidth, boxHeight, 'F', '#f8f9fa');
+    this.addRect(totalsBoxX, boxStartY, totalsBoxWidth, boxHeight, 'S', undefined, '#dee2e6');
+
+    // Move currentY to start inside the box
+    this.currentY = boxStartY + 8;
 
     // Subtotal
     this.addText('Subtotal:', labelX, this.currentY, { fontSize: 10, color: '#495057' });
@@ -413,8 +406,7 @@ export class InvoicePDFGenerator {
     }
 
     // Line above grand total
-    this.addLine(labelX, this.currentY + 1, valueX, this.currentY + 1, '#495057', 0.5);
-    this.currentY += 4;
+    this.addLine(labelX, this.currentY - 2, valueX, this.currentY - 2, '#495057', 0.5);
 
     // Grand Total with emphasis
     this.addText('Grand Total:', labelX, this.currentY, { fontSize: 11, fontStyle: 'bold', color: '#212529' });
@@ -424,7 +416,9 @@ export class InvoicePDFGenerator {
       color: '#3F51B5', 
       align: 'right'
     });
-    this.currentY += 20;
+    
+    // Move currentY to after the totals box
+    this.currentY = boxStartY + boxHeight + 15;
   }
 
   private addNotesSection(invoice: Invoice) {
