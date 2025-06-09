@@ -1,4 +1,3 @@
-
 import type { Timestamp } from "firebase/firestore";
 
 export interface LineItem {
@@ -70,9 +69,214 @@ export interface Invoice {
   status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
   isInterState: boolean; 
   currency?: string; // Added currency field
+  templateId?: string; // Reference to template used
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }
+
+// Template System Types
+export interface TemplateColumn {
+  id: string;
+  label: string;
+  field: string; // Maps to invoice data field
+  width: number; // Percentage or fixed width
+  align: 'left' | 'center' | 'right';
+  visible: boolean;
+  format?: 'text' | 'number' | 'currency' | 'percentage';
+}
+
+export interface TemplateSection {
+  id: string;
+  type: 'header' | 'billerInfo' | 'clientInfo' | 'lineItems' | 'totals' | 'notes' | 'terms' | 'payment' | 'footer';
+  title?: string;
+  visible: boolean;
+  position: number; // Order of sections
+  backgroundColor?: string;
+  textColor?: string;
+  fontSize?: number;
+  fontWeight?: 'normal' | 'bold';
+  padding?: number;
+  margin?: number;
+  columns?: TemplateColumn[]; // For line items table
+  fields?: string[]; // Which fields to show in this section
+}
+
+export interface TemplateStyle {
+  primaryColor: string;
+  secondaryColor: string;
+  backgroundColor: string;
+  textColor: string;
+  fontFamily: string;
+  fontSize: number;
+  logoPosition: 'left' | 'center' | 'right';
+  logoSize: 'small' | 'medium' | 'large';
+  borderStyle: 'none' | 'minimal' | 'full';
+  spacing: 'compact' | 'normal' | 'spacious';
+}
+
+export interface InvoiceTemplate {
+  id?: string; // Firestore document ID
+  userId?: string; // null for public templates
+  name: string;
+  description?: string;
+  isPublic: boolean; // Public templates can be used by anyone
+  isDefault?: boolean; // User's default template
+  sections: TemplateSection[];
+  style: TemplateStyle;
+  previewImageUrl?: string;
+  usageCount?: number; // Track how many times it's been used
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+// Default template configurations
+export const DEFAULT_TEMPLATE_COLUMNS: TemplateColumn[] = [
+  { id: 'sno', label: '#', field: 'index', width: 8, align: 'left', visible: true, format: 'text' },
+  { id: 'item', label: 'Item/Service', field: 'productName', width: 40, align: 'left', visible: true, format: 'text' },
+  { id: 'qty', label: 'Qty', field: 'quantity', width: 10, align: 'right', visible: true, format: 'number' },
+  { id: 'rate', label: 'Rate', field: 'rate', width: 15, align: 'right', visible: true, format: 'currency' },
+  { id: 'discount', label: 'Discount', field: 'discountPercentage', width: 12, align: 'right', visible: true, format: 'percentage' },
+  { id: 'amount', label: 'Amount', field: 'amount', width: 15, align: 'right', visible: true, format: 'currency' },
+];
+
+export const DEFAULT_TEMPLATE_SECTIONS: TemplateSection[] = [
+  {
+    id: 'header',
+    type: 'header',
+    title: 'Invoice Header',
+    visible: true,
+    position: 1,
+    backgroundColor: '#f8f9fa',
+    textColor: '#212529',
+    fontSize: 16,
+    fontWeight: 'bold',
+    padding: 20,
+    margin: 0,
+    fields: ['invoiceNumber', 'invoiceDate', 'dueDate', 'status']
+  },
+  {
+    id: 'billerInfo',
+    type: 'billerInfo',
+    title: 'Biller Information',
+    visible: true,
+    position: 2,
+    textColor: '#212529',
+    fontSize: 12,
+    fontWeight: 'normal',
+    padding: 10,
+    margin: 10,
+    fields: ['businessName', 'addressLine1', 'addressLine2', 'city', 'state', 'postalCode', 'gstin']
+  },
+  {
+    id: 'clientInfo',
+    type: 'clientInfo',
+    title: 'Bill To',
+    visible: true,
+    position: 3,
+    backgroundColor: '#f8f9fa',
+    textColor: '#3F51B5',
+    fontSize: 12,
+    fontWeight: 'bold',
+    padding: 10,
+    margin: 10,
+    fields: ['name', 'addressLine1', 'addressLine2', 'city', 'state', 'postalCode', 'gstin']
+  },
+  {
+    id: 'lineItems',
+    type: 'lineItems',
+    title: 'Items',
+    visible: true,
+    position: 4,
+    backgroundColor: '#3F51B5',
+    textColor: '#ffffff',
+    fontSize: 10,
+    fontWeight: 'bold',
+    padding: 8,
+    margin: 10,
+    columns: DEFAULT_TEMPLATE_COLUMNS
+  },
+  {
+    id: 'totals',
+    type: 'totals',
+    title: 'Totals',
+    visible: true,
+    position: 5,
+    backgroundColor: '#f8f9fa',
+    textColor: '#212529',
+    fontSize: 11,
+    fontWeight: 'normal',
+    padding: 10,
+    margin: 10,
+    fields: ['subTotal', 'totalCGST', 'totalSGST', 'totalIGST', 'grandTotal']
+  },
+  {
+    id: 'notes',
+    type: 'notes',
+    title: 'Notes',
+    visible: true,
+    position: 6,
+    textColor: '#495057',
+    fontSize: 10,
+    fontWeight: 'normal',
+    padding: 10,
+    margin: 10,
+    fields: ['notes']
+  },
+  {
+    id: 'terms',
+    type: 'terms',
+    title: 'Terms & Conditions',
+    visible: true,
+    position: 7,
+    backgroundColor: '#f8f9fa',
+    textColor: '#3F51B5',
+    fontSize: 10,
+    fontWeight: 'bold',
+    padding: 10,
+    margin: 10,
+    fields: ['termsAndConditions']
+  },
+  {
+    id: 'payment',
+    type: 'payment',
+    title: 'Payment Information',
+    visible: true,
+    position: 8,
+    backgroundColor: '#f8f9fa',
+    textColor: '#3F51B5',
+    fontSize: 10,
+    fontWeight: 'bold',
+    padding: 10,
+    margin: 10,
+    fields: ['bankName', 'accountNumber', 'ifscCode', 'upiId']
+  },
+  {
+    id: 'footer',
+    type: 'footer',
+    title: 'Footer',
+    visible: true,
+    position: 9,
+    textColor: '#3F51B5',
+    fontSize: 11,
+    fontWeight: 'bold',
+    padding: 10,
+    margin: 10,
+    fields: ['thankYouMessage']
+  }
+];
+
+export const DEFAULT_TEMPLATE_STYLE: TemplateStyle = {
+  primaryColor: '#3F51B5',
+  secondaryColor: '#f8f9fa',
+  backgroundColor: '#ffffff',
+  textColor: '#212529',
+  fontFamily: 'Helvetica',
+  fontSize: 10,
+  logoPosition: 'left',
+  logoSize: 'medium',
+  borderStyle: 'minimal',
+  spacing: 'normal'
+};
 
 // Mock data for Biller (used as a fallback if settings not found, or for structure reference)
 // Ideally, InvoiceForm should always fetch this from user settings.
@@ -94,5 +298,3 @@ export const mockBiller: BillerInfo = {
 
 // tempMockClients removed as clients are fetched from Firestore.
 // mockInvoices removed as invoices will be fetched from Firestore.
-
-
