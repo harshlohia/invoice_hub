@@ -102,26 +102,6 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
         });
       }));
 
-      // Create canvas from the invoice element with enhanced options
-      const canvas = await html2canvas(elementToCapture, {
-        scale: 2, // Good balance between quality and performance
-        useCORS: true,
-        allowTaint: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-        width: elementToCapture.scrollWidth,
-        height: elementToCapture.scrollHeight,
-        ignoreElements: (element) => {
-          // Hide elements that shouldn't appear in PDF
-          return element.classList.contains('do-not-print-in-pdf') ||
-                 element.tagName === 'BUTTON' ||
-                 element.getAttribute('role') === 'button';
-        }
-      });
-
-      // Convert canvas to image data
-      const imgData = canvas.toDataURL('image/png', 1.0);
-      
       // Create PDF with proper A4 dimensions
       const pdf = new jsPDF({
         orientation: 'portrait',
@@ -130,44 +110,101 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
         compress: true
       });
 
-      // Calculate dimensions to fit the content properly
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
-      
-      const canvasWidth = canvas.width;
-      const canvasHeight = canvas.height;
-
-      // Calculate scaling to fit content within PDF page with margins
       const margin = 10; // 10mm margin
       const availableWidth = pdfWidth - (margin * 2);
       const availableHeight = pdfHeight - (margin * 2);
-      
-      // Convert pixels to mm (assuming 96 DPI)
-      const pxToMm = 25.4 / 96;
-      const imgWidthMm = canvasWidth * pxToMm / 2; // Divide by scale factor
-      const imgHeightMm = canvasHeight * pxToMm / 2;
-      
-      // Scale to fit if necessary
-      const scaleX = availableWidth / imgWidthMm;
-      const scaleY = availableHeight / imgHeightMm;
-      const scale = Math.min(scaleX, scaleY, 1); // Don't scale up
-      
-      const finalWidth = imgWidthMm * scale;
-      const finalHeight = imgHeightMm * scale;
-      
-      // Center the image on the page
-      const x = (pdfWidth - finalWidth) / 2;
-      const y = margin;
 
-      // Add image to PDF
-      pdf.addImage(imgData, 'PNG', x, y, finalWidth, finalHeight, undefined, 'FAST');
+      // Calculate how many line items can fit per page
+      const headerHeight = 80; // Approximate height for header section in mm
+      const footerHeight = 60; // Approximate height for totals and footer in mm
+      const lineItemHeight = 8; // Height per line item row in mm
+      const maxLineItemsPerPage = Math.floor((availableHeight - headerHeight - footerHeight) / lineItemHeight);
+      
+      const totalLineItems = invoice.lineItems.length;
+      const totalPages = Math.ceil(totalLineItems / maxLineItemsPerPage);
+
+      // Generate each page
+      for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
+        if (pageIndex > 0) {
+          pdf.addPage();
+        }
+
+        // Calculate line items for this page
+        const startIndex = pageIndex * maxLineItemsPerPage;
+        const endIndex = Math.min(startIndex + maxLineItemsPerPage, totalLineItems);
+        const pageLineItems = invoice.lineItems.slice(startIndex, endIndex);
+        
+        // Create a temporary container for this page's content
+        const pageContainer = document.createElement('div');
+        pageContainer.style.backgroundColor = '#ffffff';
+        pageContainer.style.fontFamily = 'Arial, sans-serif';
+        pageContainer.style.fontSize = '14px';
+        pageContainer.style.lineHeight = '1.5';
+        pageContainer.style.color = '#000000';
+        pageContainer.style.width = '900px';
+        pageContainer.style.padding = '0';
+        pageContainer.style.margin = '0';
+
+        // Add content to page container
+        pageContainer.innerHTML = `
+          ${pageIndex === 0 ? generateHeaderHTML(invoice) : generateContinuationHeaderHTML(invoice, pageIndex + 1)}
+          ${generateLineItemsTableHTML(pageLineItems, startIndex, invoice.currency)}
+          ${pageIndex === totalPages - 1 ? generateFooterHTML(invoice) : generateContinuationFooterHTML(pageIndex + 1, totalPages)}
+        `;
+
+        // Temporarily add to DOM for rendering
+        document.body.appendChild(pageContainer);
+
+        try {
+          // Create canvas for this page
+          const canvas = await html2canvas(pageContainer, {
+            scale: 2,
+            useCORS: true,
+            allowTaint: true,
+            logging: false,
+            backgroundColor: '#ffffff',
+            width: 900,
+            height: Math.min(pageContainer.scrollHeight, 1200) // Limit height per page
+          });
+
+          // Convert to image and add to PDF
+          const imgData = canvas.toDataURL('image/png', 1.0);
+          
+          const canvasWidth = canvas.width;
+          const canvasHeight = canvas.height;
+          
+          // Convert pixels to mm
+          const pxToMm = 25.4 / 96;
+          const imgWidthMm = canvasWidth * pxToMm / 2;
+          const imgHeightMm = canvasHeight * pxToMm / 2;
+          
+          // Scale to fit
+          const scaleX = availableWidth / imgWidthMm;
+          const scaleY = availableHeight / imgHeightMm;
+          const scale = Math.min(scaleX, scaleY, 1);
+          
+          const finalWidth = imgWidthMm * scale;
+          const finalHeight = imgHeightMm * scale;
+          
+          const x = (pdfWidth - finalWidth) / 2;
+          const y = margin;
+
+          pdf.addImage(imgData, 'PNG', x, y, finalWidth, finalHeight, undefined, 'FAST');
+          
+        } finally {
+          // Clean up temporary element
+          document.body.removeChild(pageContainer);
+        }
+      }
       
       // Save the PDF
       pdf.save(`invoice-${invoice.invoiceNumber || 'document'}.pdf`);
       
       toast({
         title: "Success",
-        description: `Invoice ${invoice.invoiceNumber}.pdf downloaded successfully.`,
+        description: `Multi-page invoice ${invoice.invoiceNumber}.pdf downloaded successfully.`,
       });
 
     } catch (error) {
@@ -198,8 +235,8 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
         fontSize: '14px',
         lineHeight: '1.5',
         color: '#000000',
-        width: '900px', // Fixed width to ensure consistent layout
-        maxWidth: 'none' // Override any max-width constraints
+        width: '900px',
+        maxWidth: 'none'
       }}> 
         <CardHeader style={{
           backgroundColor: '#f8f9fa',
@@ -722,3 +759,174 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
 });
 
 InvoicePreview.displayName = 'InvoicePreview';
+
+// Helper functions for generating page content
+function generateHeaderHTML(invoice: Invoice): string {
+  const invoiceDate = invoice.invoiceDate instanceof Timestamp ? invoice.invoiceDate.toDate() : new Date(invoice.invoiceDate);
+  const dueDate = invoice.dueDate instanceof Timestamp ? invoice.dueDate.toDate() : new Date(invoice.dueDate);
+  
+  return `
+    <div style="background-color: #f8f9fa; padding: 24px; border-bottom: 1px solid #e5e7eb; margin-bottom: 24px;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 24px;">
+        <div style="flex: 1; max-width: 400px;">
+          ${invoice.billerInfo.logoUrl ? 
+            `<img src="${invoice.billerInfo.logoUrl}" alt="Logo" style="width: 120px; height: 60px; object-fit: contain; margin-bottom: 12px;" />` :
+            `<div style="height: 60px; width: 120px; background-color: #e5e7eb; display: flex; align-items: center; justify-content: center; color: #6b7280; margin-bottom: 12px; border-radius: 4px; font-size: 12px; border: 1px solid #d1d5db;">Logo</div>`
+          }
+          <h2 style="font-size: 20px; font-weight: bold; color: #3f51b5; margin: 0 0 8px 0;">${invoice.billerInfo.businessName}</h2>
+          <div style="font-size: 12px; color: #6b7280; line-height: 1.4;">
+            <p style="margin: 2px 0;">${invoice.billerInfo.addressLine1}</p>
+            ${invoice.billerInfo.addressLine2 ? `<p style="margin: 2px 0;">${invoice.billerInfo.addressLine2}</p>` : ''}
+            <p style="margin: 2px 0;">${invoice.billerInfo.city}, ${invoice.billerInfo.state} - ${invoice.billerInfo.postalCode}</p>
+            ${invoice.billerInfo.gstin ? `<p style="font-weight: 600; color: #3f51b5; background-color: #eff6ff; padding: 4px 8px; border-radius: 4px; margin: 6px 0 0 0; display: inline-block; border: 1px solid #bfdbfe;">GSTIN: ${invoice.billerInfo.gstin}</p>` : ''}
+          </div>
+        </div>
+        <div style="text-align: right; min-width: 300px;">
+          <h1 style="font-size: 32px; font-weight: bold; text-transform: uppercase; color: #4b5563; margin: 0 0 8px 0;">Invoice</h1>
+          <p style="font-size: 18px; color: #6b7280; margin: 0 0 12px 0;"># ${invoice.invoiceNumber}</p>
+          <div style="border-top: 1px solid #e5e7eb; padding-top: 12px; font-size: 12px; line-height: 1.6;">
+            <p style="margin: 3px 0;"><span style="font-weight: 600; color: #374151;">Date:</span> ${format(invoiceDate, "dd MMM, yyyy")}</p>
+            <p style="margin: 3px 0;"><span style="font-weight: 600; color: #374151;">Due Date:</span> ${format(dueDate, "dd MMM, yyyy")}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="padding: 0 24px; margin-bottom: 24px;">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+        <div>
+          <h3 style="font-weight: bold; color: #374151; margin: 0 0 8px 0; font-size: 16px; border-bottom: 2px solid #e5e7eb; padding-bottom: 4px;">Bill To:</h3>
+          <div style="line-height: 1.5;">
+            <p style="font-weight: 600; color: #3f51b5; font-size: 16px; margin: 3px 0;">${invoice.client.name}</p>
+            <p style="font-size: 12px; color: #6b7280; margin: 2px 0;">${invoice.client.addressLine1}</p>
+            ${invoice.client.addressLine2 ? `<p style="font-size: 12px; color: #6b7280; margin: 2px 0;">${invoice.client.addressLine2}</p>` : ''}
+            <p style="font-size: 12px; color: #6b7280; margin: 2px 0;">${invoice.client.city}, ${invoice.client.state} - ${invoice.client.postalCode}</p>
+            ${invoice.client.gstin ? `<p style="font-size: 12px; font-weight: 600; color: #374151; margin: 2px 0;">GSTIN: ${invoice.client.gstin}</p>` : ''}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function generateContinuationHeaderHTML(invoice: Invoice, pageNumber: number): string {
+  return `
+    <div style="background-color: #f8f9fa; padding: 16px 24px; border-bottom: 1px solid #e5e7eb; margin-bottom: 24px;">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <h2 style="font-size: 18px; font-weight: bold; color: #3f51b5; margin: 0;">${invoice.billerInfo.businessName}</h2>
+          <p style="font-size: 14px; color: #6b7280; margin: 0;">Invoice #${invoice.invoiceNumber}</p>
+        </div>
+        <div style="text-align: right;">
+          <p style="font-size: 14px; color: #6b7280; margin: 0;">Page ${pageNumber}</p>
+          <p style="font-size: 12px; color: #9ca3af; margin: 0;">Continued...</p>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function generateLineItemsTableHTML(lineItems: any[], startIndex: number, currency?: string): string {
+  const currencySymbol = currency === "INR" ? "Rs." : (currency || "Rs.");
+  
+  return `
+    <div style="padding: 0 24px; margin-bottom: 24px;">
+      <table style="width: 100%; font-size: 11px; border-collapse: collapse; border: 1px solid #d1d5db;">
+        <thead style="background-color: #f3f4f6;">
+          <tr>
+            <th style="padding: 8px 6px; text-align: left; font-weight: bold; color: #374151; border: 1px solid #d1d5db; width: 40px;">#</th>
+            <th style="padding: 8px 6px; text-align: left; font-weight: bold; color: #374151; border: 1px solid #d1d5db; width: 280px;">Item/Service</th>
+            <th style="padding: 8px 6px; text-align: center; font-weight: bold; color: #374151; border: 1px solid #d1d5db; width: 60px;">Qty</th>
+            <th style="padding: 8px 6px; text-align: right; font-weight: bold; color: #374151; border: 1px solid #d1d5db; width: 100px;">Rate (${currencySymbol})</th>
+            <th style="padding: 8px 6px; text-align: right; font-weight: bold; color: #374151; border: 1px solid #d1d5db; width: 80px;">Disc (%)</th>
+            <th style="padding: 8px 6px; text-align: right; font-weight: bold; color: #374151; border: 1px solid #d1d5db; width: 120px;">Amount (${currencySymbol})</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${lineItems.map((item, index) => `
+            <tr style="border-bottom: 1px solid #d1d5db;">
+              <td style="padding: 8px 6px; border: 1px solid #d1d5db; text-align: left;">${startIndex + index + 1}</td>
+              <td style="padding: 8px 6px; font-weight: 500; border: 1px solid #d1d5db; text-align: left; word-wrap: break-word;">${item.productName}</td>
+              <td style="padding: 8px 6px; text-align: center; border: 1px solid #d1d5db;">${item.quantity}</td>
+              <td style="padding: 8px 6px; text-align: right; border: 1px solid #d1d5db;">${item.rate.toFixed(2)}</td>
+              <td style="padding: 8px 6px; text-align: right; border: 1px solid #d1d5db;">${item.discountPercentage.toFixed(1)}%</td>
+              <td style="padding: 8px 6px; text-align: right; font-weight: 600; border: 1px solid #d1d5db;">${item.amount.toFixed(2)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function generateFooterHTML(invoice: Invoice): string {
+  const currencySymbol = invoice.currency === "INR" ? "Rs." : (invoice.currency || "Rs.");
+  
+  return `
+    <div style="padding: 0 24px;">
+      <div style="display: grid; grid-template-columns: 1fr 300px; gap: 24px; align-items: start;">
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          ${invoice.notes ? `
+            <div>
+              <h4 style="font-weight: bold; color: #374151; margin: 0 0 6px 0;">Notes:</h4>
+              <p style="font-size: 12px; color: #6b7280; background-color: #f9fafb; padding: 8px; border-radius: 4px; border: 1px solid #e5e7eb; margin: 0;">${invoice.notes}</p>
+            </div>
+          ` : ''}
+          <div>
+            <h4 style="font-weight: bold; color: #374151; margin: 0 0 6px 0;">Terms & Conditions:</h4>
+            <p style="font-size: 12px; color: #6b7280; background-color: #f9fafb; padding: 8px; border-radius: 4px; border: 1px solid #e5e7eb; margin: 0;">
+              ${invoice.termsAndConditions || "Thank you for your business! Payment is due within the specified date."}
+            </p>
+          </div>
+        </div>
+        <div>
+          <div style="background-color: #f9fafb; padding: 12px; border-radius: 4px; border: 1px solid #e5e7eb;">
+            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px;">
+              <span style="color: #6b7280;">Subtotal:</span> 
+              <span style="font-weight: 600;">${currencySymbol}${invoice.subTotal.toFixed(2)}</span>
+            </div>
+            ${!invoice.isInterState ? `
+              <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px;">
+                <span style="color: #6b7280;">CGST (${(invoice.lineItems[0]?.taxRate || 18) / 2}%):</span> 
+                <span style="font-weight: 600;">${currencySymbol}${invoice.totalCGST.toFixed(2)}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px;">
+                <span style="color: #6b7280;">SGST (${(invoice.lineItems[0]?.taxRate || 18) / 2}%):</span> 
+                <span style="font-weight: 600;">${currencySymbol}${invoice.totalSGST.toFixed(2)}</span>
+              </div>
+            ` : `
+              <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px;">
+                <span style="color: #6b7280;">IGST (${invoice.lineItems[0]?.taxRate || 18}%):</span> 
+                <span style="font-weight: 600;">${currencySymbol}${invoice.totalIGST.toFixed(2)}</span>
+              </div>
+            `}
+            <div style="border-top: 1px solid #d1d5db; padding-top: 8px; margin-top: 8px;">
+              <div style="display: flex; justify-content: space-between; font-size: 16px; font-weight: bold; color: #3f51b5;">
+                <span>Grand Total:</span> 
+                <span>${currencySymbol}${invoice.grandTotal.toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      ${invoice.billerInfo.bankName ? `
+        <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e5e7eb;">
+          <h4 style="font-weight: bold; color: #374151; margin: 0 0 12px 0; font-size: 16px;">Payment Information:</h4>
+          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 16px; font-size: 12px; background-color: #f9fafb; padding: 12px; border-radius: 4px; border: 1px solid #e5e7eb;">
+            ${invoice.billerInfo.bankName ? `<p style="margin: 2px 0;"><strong>Bank:</strong> ${invoice.billerInfo.bankName}</p>` : ''}
+            ${invoice.billerInfo.accountNumber ? `<p style="margin: 2px 0;"><strong>A/C No:</strong> ${invoice.billerInfo.accountNumber}</p>` : ''}
+            ${invoice.billerInfo.ifscCode ? `<p style="margin: 2px 0;"><strong>IFSC:</strong> ${invoice.billerInfo.ifscCode}</p>` : ''}
+            ${invoice.billerInfo.upiId ? `<p style="margin: 2px 0;"><strong>UPI:</strong> ${invoice.billerInfo.upiId}</p>` : ''}
+          </div>
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+function generateContinuationFooterHTML(pageNumber: number, totalPages: number): string {
+  return `
+    <div style="padding: 16px 24px; border-top: 1px solid #e5e7eb; margin-top: 24px; text-align: center;">
+      <p style="font-size: 12px; color: #6b7280; margin: 0;">Page ${pageNumber} of ${totalPages} - Continued on next page...</p>
+    </div>
+  `;
+}
