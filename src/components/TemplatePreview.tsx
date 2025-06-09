@@ -43,7 +43,7 @@ export function TemplatePreview({ template }: TemplatePreviewProps) {
           }}
         >
           {section.title && (
-            <div className="font-bold mb-1" style={{ color: template.style.primaryColor }}>
+            <div className="font-bold mb-1\" style={{ color: template.style.primaryColor }}>
               {section.title}
             </div>
           )}
