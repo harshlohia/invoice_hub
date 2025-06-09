@@ -197,7 +197,8 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
         fontFamily: 'Arial, sans-serif',
         fontSize: '14px',
         lineHeight: '1.5',
-        color: '#000000'
+        color: '#000000',
+        minWidth: '800px' // Ensure minimum width for proper table display
       }}> 
         <CardHeader style={{
           backgroundColor: '#f8f9fa',
@@ -209,8 +210,7 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
             flexDirection: 'row',
             justifyContent: 'space-between',
             alignItems: 'flex-start',
-            gap: '24px',
-            flexWrap: 'wrap'
+            gap: '24px'
           }}>
             <div style={{ flex: '1', minWidth: '300px' }}>
               {invoice.billerInfo.logoUrl ? (
@@ -408,12 +408,13 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
             )}
           </div>
 
-          <div style={{ marginBottom: '32px', overflowX: 'auto' }}>
+          <div style={{ marginBottom: '32px', overflowX: 'visible' }}>
             <table style={{
               width: '100%',
-              fontSize: '14px',
+              fontSize: '12px',
               borderCollapse: 'collapse',
-              border: '1px solid #d1d5db'
+              border: '1px solid #d1d5db',
+              tableLayout: 'fixed'
             }}>
               <thead style={{ backgroundColor: '#f3f4f6' }}>
                 <tr>
@@ -422,42 +423,48 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
                     textAlign: 'left',
                     fontWeight: 'bold',
                     color: '#374151',
-                    border: '1px solid #d1d5db'
+                    border: '1px solid #d1d5db',
+                    width: '8%'
                   }}>#</th>
                   <th style={{
                     padding: '12px 8px',
                     textAlign: 'left',
                     fontWeight: 'bold',
                     color: '#374151',
-                    border: '1px solid #d1d5db'
+                    border: '1px solid #d1d5db',
+                    width: '35%'
                   }}>Item/Service</th>
                   <th style={{
                     padding: '12px 8px',
                     textAlign: 'center',
                     fontWeight: 'bold',
                     color: '#374151',
-                    border: '1px solid #d1d5db'
+                    border: '1px solid #d1d5db',
+                    width: '10%'
                   }}>Qty</th>
                   <th style={{
                     padding: '12px 8px',
                     textAlign: 'right',
                     fontWeight: 'bold',
                     color: '#374151',
-                    border: '1px solid #d1d5db'
+                    border: '1px solid #d1d5db',
+                    width: '15%'
                   }}>Rate ({currencySymbol})</th>
                   <th style={{
                     padding: '12px 8px',
                     textAlign: 'right',
                     fontWeight: 'bold',
                     color: '#374151',
-                    border: '1px solid #d1d5db'
-                  }}>Discount (%)</th>
+                    border: '1px solid #d1d5db',
+                    width: '12%'
+                  }}>Disc (%)</th>
                   <th style={{
                     padding: '12px 8px',
                     textAlign: 'right',
                     fontWeight: 'bold',
                     color: '#374151',
-                    border: '1px solid #d1d5db'
+                    border: '1px solid #d1d5db',
+                    width: '20%'
                   }}>Amount ({currencySymbol})</th>
                 </tr>
               </thead>
@@ -466,12 +473,15 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
                   <tr key={item.id} style={{ borderBottom: '1px solid #d1d5db' }}>
                     <td style={{
                       padding: '12px 8px',
-                      border: '1px solid #d1d5db'
+                      border: '1px solid #d1d5db',
+                      textAlign: 'left'
                     }}>{index + 1}</td>
                     <td style={{
                       padding: '12px 8px',
                       fontWeight: '500',
-                      border: '1px solid #d1d5db'
+                      border: '1px solid #d1d5db',
+                      textAlign: 'left',
+                      wordWrap: 'break-word'
                     }}>{item.productName}</td>
                     <td style={{
                       padding: '12px 8px',
@@ -487,7 +497,7 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
                       padding: '12px 8px',
                       textAlign: 'right',
                       border: '1px solid #d1d5db'
-                    }}>{item.discountPercentage.toFixed(2)}%</td>
+                    }}>{item.discountPercentage.toFixed(1)}%</td>
                     <td style={{
                       padding: '12px 8px',
                       textAlign: 'right',
@@ -502,8 +512,9 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
 
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-            gap: '32px'
+            gridTemplateColumns: '1fr 350px',
+            gap: '32px',
+            alignItems: 'start'
           }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {invoice.notes && (
@@ -542,6 +553,25 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
                     border: '1px solid #e5e7eb',
                     margin: '0'
                   }}>{invoice.termsAndConditions}</p>
+                </div>
+              )}
+              {!invoice.termsAndConditions && (
+                <div>
+                  <h4 style={{
+                    fontWeight: 'bold',
+                    color: '#374151',
+                    marginBottom: '8px',
+                    margin: '0 0 8px 0'
+                  }}>Terms & Conditions:</h4>
+                  <p style={{
+                    fontSize: '14px',
+                    color: '#6b7280',
+                    backgroundColor: '#f9fafb',
+                    padding: '12px',
+                    borderRadius: '4px',
+                    border: '1px solid #e5e7eb',
+                    margin: '0'
+                  }}>Thank you for your business! Payment is due within the specified date.</p>
                 </div>
               )}
             </div>
@@ -608,7 +638,7 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
                   <div style={{
                     display: 'flex',
                     justifyContent: 'space-between',
-                    fontSize: '20px',
+                    fontSize: '18px',
                     fontWeight: 'bold',
                     color: '#3f51b5'
                   }}>
