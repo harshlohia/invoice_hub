@@ -8,10 +8,11 @@ import { format } from 'date-fns';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRef, useState, useEffect, forwardRef, useImperativeHandle } from 'react';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
 import { doc, updateDoc, serverTimestamp, Timestamp } from "firebase/firestore";
-import { InvoicePDFGenerator } from '@/lib/pdf-generator';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -78,11 +79,49 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
   };
 
   const handleDownloadPdf = async () => {
+    if (!invoiceCardRef.current) {
+      toast({
+        title: "Error",
+        description: "Invoice content not found for PDF generation.",
+        variant: "destructive",
+      });
+      return;
+    }
     setIsDownloading(true);
 
     try {
-      const pdfGenerator = new InvoicePDFGenerator('classic');
-      pdfGenerator.downloadPDF(invoice);
+      const elementToCapture = invoiceCardRef.current;
+      
+      const canvas = await html2canvas(elementToCapture, {
+        scale: 2, 
+        useCORS: true, 
+        logging: false,
+        ignoreElements: (element) => element.classList.contains('do-not-print-in-pdf'),
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'p',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      
+      const canvasWidth = canvas.width;
+      const canvasHeight = canvas.height;
+
+      const ratio = Math.min(pdfWidth / canvasWidth, pdfHeight / canvasHeight);
+      
+      const imgWidthInPdf = canvasWidth * ratio;
+      const imgHeightInPdf = canvasHeight * ratio;
+
+      const x = (pdfWidth - imgWidthInPdf) / 2;
+      const y = (pdfHeight - imgHeightInPdf) / 2; 
+
+      pdf.addImage(imgData, 'PNG', x, y, imgWidthInPdf, imgHeightInPdf);
+      pdf.save(`invoice-${invoice.invoiceNumber || 'details'}.pdf`);
       
       toast({
         title: "Success",
