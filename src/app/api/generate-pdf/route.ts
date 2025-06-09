@@ -13,7 +13,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Launch Puppeteer browser
+    console.log('Starting PDF generation for invoice:', invoice.invoiceNumber);
+
+    // Launch Puppeteer browser with more robust configuration
     const browser = await puppeteer.launch({
       headless: true,
       args: [
@@ -24,9 +26,17 @@ export async function POST(request: NextRequest) {
         '--no-first-run',
         '--no-zygote',
         '--single-process',
-        '--disable-gpu'
-      ]
+        '--disable-gpu',
+        '--disable-web-security',
+        '--disable-features=VizDisplayCompositor',
+        '--disable-extensions',
+        '--disable-plugins',
+        '--disable-images'
+      ],
+      timeout: 60000
     });
+
+    console.log('Browser launched successfully');
 
     const page = await browser.newPage();
 
@@ -34,26 +44,28 @@ export async function POST(request: NextRequest) {
     await page.setViewport({
       width: 1200,
       height: 1600,
-      deviceScaleFactor: 2
+      deviceScaleFactor: 1
     });
+
+    console.log('Page created and viewport set');
 
     // Generate the HTML content for the invoice
     const htmlContent = generateInvoiceHTML(invoice);
 
-    // Set the HTML content
+    console.log('HTML content generated');
+
+    // Set the HTML content with a longer timeout
     await page.setContent(htmlContent, {
-      waitUntil: 'networkidle0',
+      waitUntil: 'domcontentloaded',
       timeout: 30000
     });
 
-    // Wait for any images to load
-    await page.waitForFunction(() => {
-      const images = Array.from(document.images);
-      return images.every(img => img.complete);
-    }, { timeout: 10000 }).catch(() => {
-      // Continue if images don't load within timeout
-      console.warn('Some images may not have loaded completely');
-    });
+    console.log('HTML content set on page');
+
+    // Wait a bit for any CSS to apply
+    await page.waitForTimeout(1000);
+
+    console.log('Starting PDF generation');
 
     // Generate PDF
     const pdfBuffer = await page.pdf({
@@ -65,10 +77,15 @@ export async function POST(request: NextRequest) {
         bottom: '0.5in',
         left: '0.5in'
       },
-      preferCSSPageSize: true
+      preferCSSPageSize: false,
+      timeout: 30000
     });
 
+    console.log('PDF generated successfully');
+
     await browser.close();
+
+    console.log('Browser closed');
 
     // Return PDF as response
     return new NextResponse(pdfBuffer, {
@@ -80,8 +97,19 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('PDF generation error:', error);
+    
+    // More detailed error logging
+    if (error instanceof Error) {
+      console.error('Error name:', error.name);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+    }
+    
     return NextResponse.json(
-      { error: 'Failed to generate PDF' },
+      { 
+        error: 'Failed to generate PDF',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
       { status: 500 }
     );
   }
@@ -110,7 +138,6 @@ function generateInvoiceHTML(invoice: Invoice): string {
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>Invoice ${invoice.invoiceNumber}</title>
-      <link href="https://fonts.googleapis.com/css2?family=PT+Sans:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
       <style>
         * {
           margin: 0;
@@ -119,28 +146,29 @@ function generateInvoiceHTML(invoice: Invoice): string {
         }
         
         body {
-          font-family: 'PT Sans', sans-serif;
+          font-family: Arial, sans-serif;
           line-height: 1.5;
           color: #212529;
           background: white;
+          font-size: 14px;
         }
         
         .invoice-container {
           max-width: 800px;
           margin: 0 auto;
           background: white;
-          border-radius: 8px;
-          overflow: hidden;
-          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+          padding: 20px;
         }
         
         .invoice-header {
           background: #f8f9fa;
-          padding: 2rem;
+          padding: 30px;
           display: flex;
           justify-content: space-between;
           align-items: flex-start;
-          gap: 2rem;
+          gap: 30px;
+          margin-bottom: 30px;
+          border-radius: 8px;
         }
         
         .biller-info {
@@ -158,39 +186,31 @@ function generateInvoiceHTML(invoice: Invoice): string {
           justify-content: center;
           color: #6c757d;
           font-size: 12px;
-          margin-bottom: 1rem;
-        }
-        
-        .logo-image {
-          width: 120px;
-          height: 60px;
-          object-fit: contain;
-          margin-bottom: 1rem;
-          border-radius: 4px;
+          margin-bottom: 15px;
         }
         
         .business-name {
-          font-size: 1.5rem;
+          font-size: 24px;
           font-weight: bold;
           color: #3F51B5;
-          margin-bottom: 0.5rem;
+          margin-bottom: 8px;
         }
         
         .address-line {
-          font-size: 0.875rem;
+          font-size: 14px;
           color: #6c757d;
-          margin-bottom: 0.25rem;
+          margin-bottom: 4px;
         }
         
         .gstin-highlight {
           background: #e3f2fd;
           color: #3F51B5;
           font-weight: bold;
-          padding: 0.25rem 0.5rem;
+          padding: 6px 12px;
           border-radius: 4px;
           display: inline-block;
-          margin-top: 0.5rem;
-          font-size: 0.875rem;
+          margin-top: 8px;
+          font-size: 14px;
         }
         
         .invoice-title-section {
@@ -199,64 +219,60 @@ function generateInvoiceHTML(invoice: Invoice): string {
         }
         
         .invoice-title {
-          font-size: 2.5rem;
+          font-size: 40px;
           font-weight: bold;
           color: #212529;
-          margin-bottom: 0.5rem;
+          margin-bottom: 8px;
         }
         
         .invoice-number {
-          font-size: 1rem;
+          font-size: 16px;
           color: #6c757d;
-          margin-bottom: 1rem;
+          margin-bottom: 15px;
         }
         
         .status-badge {
-          padding: 0.25rem 0.75rem;
+          padding: 6px 12px;
           border-radius: 4px;
-          font-size: 0.75rem;
+          font-size: 12px;
           font-weight: 500;
-          margin-bottom: 1rem;
+          margin-bottom: 15px;
           display: inline-block;
         }
         
-        .status-paid { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-        .status-sent { background: #cce5ff; color: #004085; border: 1px solid #99d6ff; }
-        .status-overdue { background: #f8d7da; color: #721c24; border: 1px solid #f1aeb5; }
-        .status-draft { background: #e2e3e5; color: #383d41; border: 1px solid #d6d8db; }
-        .status-cancelled { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        .status-paid { background: #d4edda; color: #155724; }
+        .status-sent { background: #cce5ff; color: #004085; }
+        .status-overdue { background: #f8d7da; color: #721c24; }
+        .status-draft { background: #e2e3e5; color: #383d41; }
+        .status-cancelled { background: #fff3cd; color: #856404; }
         
         .date-info {
-          font-size: 0.875rem;
-          margin-bottom: 0.25rem;
-        }
-        
-        .invoice-content {
-          padding: 2rem;
+          font-size: 14px;
+          margin-bottom: 4px;
         }
         
         .bill-to-section {
-          margin-bottom: 2rem;
+          margin-bottom: 30px;
         }
         
         .section-title {
-          font-size: 1.125rem;
+          font-size: 18px;
           font-weight: bold;
           color: #3F51B5;
-          margin-bottom: 0.5rem;
+          margin-bottom: 8px;
         }
         
         .client-name {
-          font-size: 1.125rem;
+          font-size: 18px;
           font-weight: bold;
           color: #3F51B5;
-          margin-bottom: 0.5rem;
+          margin-bottom: 8px;
         }
         
         .line-items-table {
           width: 100%;
           border-collapse: collapse;
-          margin-bottom: 2rem;
+          margin-bottom: 30px;
         }
         
         .table-header {
@@ -264,33 +280,35 @@ function generateInvoiceHTML(invoice: Invoice): string {
         }
         
         .table-header th {
-          padding: 0.75rem 0.5rem;
+          padding: 12px 8px;
           text-align: left;
           font-weight: bold;
-          font-size: 0.875rem;
+          font-size: 14px;
           color: #212529;
           border-bottom: 2px solid #dee2e6;
         }
         
-        .table-header th:first-child { text-align: left; }
-        .table-header th:last-child,
-        .table-header th:nth-last-child(2) { text-align: right; }
+        .table-header th:nth-child(3),
+        .table-header th:nth-child(4) { 
+          text-align: right; 
+        }
         
         .line-item-row td {
-          padding: 0.75rem 0.5rem;
-          font-size: 0.875rem;
+          padding: 12px 8px;
+          font-size: 14px;
           border-bottom: 1px solid #f1f3f4;
         }
         
-        .line-item-row td:first-child { text-align: left; }
-        .line-item-row td:last-child,
-        .line-item-row td:nth-last-child(2) { text-align: right; }
+        .line-item-row td:nth-child(3),
+        .line-item-row td:nth-child(4) { 
+          text-align: right; 
+        }
         
         .totals-section {
           display: flex;
           justify-content: space-between;
-          gap: 2rem;
-          margin-bottom: 2rem;
+          gap: 30px;
+          margin-bottom: 30px;
         }
         
         .notes-section {
@@ -304,15 +322,15 @@ function generateInvoiceHTML(invoice: Invoice): string {
         .total-row {
           display: flex;
           justify-content: space-between;
-          padding: 0.25rem 0;
-          font-size: 0.875rem;
+          padding: 4px 0;
+          font-size: 14px;
         }
         
         .total-row.grand-total {
           border-top: 2px solid #dee2e6;
-          padding-top: 0.75rem;
-          margin-top: 0.5rem;
-          font-size: 1.125rem;
+          padding-top: 12px;
+          margin-top: 8px;
+          font-size: 18px;
           font-weight: bold;
         }
         
@@ -335,33 +353,24 @@ function generateInvoiceHTML(invoice: Invoice): string {
         
         .payment-info {
           border-top: 1px solid #dee2e6;
-          padding-top: 1.5rem;
-          margin-top: 1.5rem;
+          padding-top: 24px;
+          margin-top: 24px;
         }
         
         .payment-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 1rem;
-          margin-top: 0.75rem;
+          gap: 15px;
+          margin-top: 12px;
         }
         
         .payment-item {
-          font-size: 0.875rem;
+          font-size: 14px;
           color: #6c757d;
         }
         
         .payment-item strong {
           color: #212529;
-        }
-        
-        @media print {
-          body { margin: 0; }
-          .invoice-container { 
-            box-shadow: none; 
-            border-radius: 0;
-            max-width: none;
-          }
         }
       </style>
     </head>
@@ -370,11 +379,7 @@ function generateInvoiceHTML(invoice: Invoice): string {
         <!-- Header Section -->
         <div class="invoice-header">
           <div class="biller-info">
-            ${invoice.billerInfo.logoUrl 
-              ? `<img src="${invoice.billerInfo.logoUrl}" alt="Logo" class="logo-image" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
-                 <div class="logo-placeholder" style="display: none;">LOGO</div>`
-              : `<div class="logo-placeholder">LOGO</div>`
-            }
+            <div class="logo-placeholder">LOGO</div>
             <div class="business-name">${invoice.billerInfo.businessName}</div>
             <div class="address-line">${invoice.billerInfo.addressLine1}</div>
             ${invoice.billerInfo.addressLine2 ? `<div class="address-line">${invoice.billerInfo.addressLine2}</div>` : ''}
@@ -391,91 +396,88 @@ function generateInvoiceHTML(invoice: Invoice): string {
           </div>
         </div>
         
-        <!-- Content Section -->
-        <div class="invoice-content">
-          <!-- Bill To Section -->
-          <div class="bill-to-section">
-            <div class="section-title">Bill To:</div>
-            <div class="client-name">${invoice.client.name}</div>
-            <div class="address-line">${invoice.client.addressLine1}</div>
-            ${invoice.client.addressLine2 ? `<div class="address-line">${invoice.client.addressLine2}</div>` : ''}
-            <div class="address-line">${invoice.client.city}, ${invoice.client.state} - ${invoice.client.postalCode}</div>
-            ${invoice.client.gstin ? `<div class="address-line">GSTIN: ${invoice.client.gstin}</div>` : ''}
+        <!-- Bill To Section -->
+        <div class="bill-to-section">
+          <div class="section-title">Bill To:</div>
+          <div class="client-name">${invoice.client.name}</div>
+          <div class="address-line">${invoice.client.addressLine1}</div>
+          ${invoice.client.addressLine2 ? `<div class="address-line">${invoice.client.addressLine2}</div>` : ''}
+          <div class="address-line">${invoice.client.city}, ${invoice.client.state} - ${invoice.client.postalCode}</div>
+          ${invoice.client.gstin ? `<div class="address-line">GSTIN: ${invoice.client.gstin}</div>` : ''}
+        </div>
+        
+        <!-- Line Items Table -->
+        <table class="line-items-table">
+          <thead class="table-header">
+            <tr>
+              <th style="width: 8%;">#</th>
+              <th style="width: 50%;">Item/Service</th>
+              <th style="width: 21%;">Rate (${currencySymbol})</th>
+              <th style="width: 21%;">Amount (${currencySymbol})</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${invoice.lineItems.map((item, index) => `
+              <tr class="line-item-row">
+                <td>${index + 1}</td>
+                <td>${item.productName}</td>
+                <td>${item.rate.toFixed(2)}</td>
+                <td>${item.amount.toFixed(2)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        
+        <!-- Totals Section -->
+        <div class="totals-section">
+          <div class="notes-section">
+            ${invoice.notes ? `
+              <div class="section-title">Notes:</div>
+              <div class="address-line">${invoice.notes}</div>
+            ` : ''}
           </div>
           
-          <!-- Line Items Table -->
-          <table class="line-items-table">
-            <thead class="table-header">
-              <tr>
-                <th style="width: 8%;">#</th>
-                <th style="width: 50%;">Item/Service</th>
-                <th style="width: 21%;">Rate (${currencySymbol})</th>
-                <th style="width: 21%;">Amount (${currencySymbol})</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${invoice.lineItems.map((item, index) => `
-                <tr class="line-item-row">
-                  <td>${index + 1}</td>
-                  <td>${item.productName}</td>
-                  <td>${item.rate.toFixed(2)}</td>
-                  <td>${item.amount.toFixed(2)}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-          
-          <!-- Totals Section -->
-          <div class="totals-section">
-            <div class="notes-section">
-              ${invoice.notes ? `
-                <div class="section-title">Notes:</div>
-                <div class="address-line">${invoice.notes}</div>
-              ` : ''}
+          <div class="totals-table">
+            <div class="total-row">
+              <span class="total-label">Subtotal:</span>
+              <span class="total-value">${currencySymbol}${invoice.subTotal.toFixed(2)}</span>
             </div>
             
-            <div class="totals-table">
+            ${!invoice.isInterState ? `
               <div class="total-row">
-                <span class="total-label">Subtotal:</span>
-                <span class="total-value">${currencySymbol}${invoice.subTotal.toFixed(2)}</span>
+                <span class="total-label">CGST (${cgstRate}%):</span>
+                <span class="total-value">${currencySymbol}${invoice.totalCGST.toFixed(2)}</span>
               </div>
-              
-              ${!invoice.isInterState ? `
-                <div class="total-row">
-                  <span class="total-label">CGST (${cgstRate}%):</span>
-                  <span class="total-value">${currencySymbol}${invoice.totalCGST.toFixed(2)}</span>
-                </div>
-                <div class="total-row">
-                  <span class="total-label">SGST (${sgstRate}%):</span>
-                  <span class="total-value">${currencySymbol}${invoice.totalSGST.toFixed(2)}</span>
-                </div>
-              ` : `
-                <div class="total-row">
-                  <span class="total-label">IGST (${igstRate}%):</span>
-                  <span class="total-value">${currencySymbol}${invoice.totalIGST.toFixed(2)}</span>
-                </div>
-              `}
-              
-              <div class="total-row grand-total">
-                <span class="total-label">Grand Total:</span>
-                <span class="total-value">${currencySymbol}${invoice.grandTotal.toFixed(2)}</span>
+              <div class="total-row">
+                <span class="total-label">SGST (${sgstRate}%):</span>
+                <span class="total-value">${currencySymbol}${invoice.totalSGST.toFixed(2)}</span>
               </div>
+            ` : `
+              <div class="total-row">
+                <span class="total-label">IGST (${igstRate}%):</span>
+                <span class="total-value">${currencySymbol}${invoice.totalIGST.toFixed(2)}</span>
+              </div>
+            `}
+            
+            <div class="total-row grand-total">
+              <span class="total-label">Grand Total:</span>
+              <span class="total-value">${currencySymbol}${invoice.grandTotal.toFixed(2)}</span>
             </div>
           </div>
-          
-          <!-- Payment Information -->
-          ${(invoice.billerInfo.bankName || invoice.billerInfo.upiId) ? `
-            <div class="payment-info">
-              <div class="section-title">Payment Information:</div>
-              <div class="payment-grid">
-                ${invoice.billerInfo.bankName ? `<div class="payment-item"><strong>Bank:</strong> ${invoice.billerInfo.bankName}</div>` : ''}
-                ${invoice.billerInfo.accountNumber ? `<div class="payment-item"><strong>A/C No:</strong> ${invoice.billerInfo.accountNumber}</div>` : ''}
-                ${invoice.billerInfo.ifscCode ? `<div class="payment-item"><strong>IFSC:</strong> ${invoice.billerInfo.ifscCode}</div>` : ''}
-                ${invoice.billerInfo.upiId ? `<div class="payment-item"><strong>UPI:</strong> ${invoice.billerInfo.upiId}</div>` : ''}
-              </div>
-            </div>
-          ` : ''}
         </div>
+        
+        <!-- Payment Information -->
+        ${(invoice.billerInfo.bankName || invoice.billerInfo.upiId) ? `
+          <div class="payment-info">
+            <div class="section-title">Payment Information:</div>
+            <div class="payment-grid">
+              ${invoice.billerInfo.bankName ? `<div class="payment-item"><strong>Bank:</strong> ${invoice.billerInfo.bankName}</div>` : ''}
+              ${invoice.billerInfo.accountNumber ? `<div class="payment-item"><strong>A/C No:</strong> ${invoice.billerInfo.accountNumber}</div>` : ''}
+              ${invoice.billerInfo.ifscCode ? `<div class="payment-item"><strong>IFSC:</strong> ${invoice.billerInfo.ifscCode}</div>` : ''}
+              ${invoice.billerInfo.upiId ? `<div class="payment-item"><strong>UPI:</strong> ${invoice.billerInfo.upiId}</div>` : ''}
+            </div>
+          </div>
+        ` : ''}
       </div>
     </body>
     </html>
