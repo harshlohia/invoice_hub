@@ -271,8 +271,8 @@ export class InvoicePDFGenerator {
     // Table headers
     const headers = ['#', 'Item/Service', 'Qty', 'Rate (Rs.)', 'Discount (%)', 'Amount (Rs.)'];
     
-    // Adjusted column widths to ensure full coverage
-    const columnWidths = [12, 60, 18, 30, 30, 30]; // Total: 180mm (matches table width)
+    // Fixed column widths with proper spacing to prevent overlapping
+    const columnWidths = [10, 55, 15, 28, 25, 37]; // Total: 170mm (matches table width)
     const columnPositions = [tableStartX];
     
     for (let i = 0; i < columnWidths.length - 1; i++) {
@@ -283,7 +283,7 @@ export class InvoicePDFGenerator {
     this.addRect(tableStartX, tableStartY, tableWidth, headerHeight, 'F', '#f8f9fa');
     this.addRect(tableStartX, tableStartY, tableWidth, headerHeight, 'S', undefined, '#dee2e6');
     
-    // Header text with better typography
+    // Header text with better typography and proper spacing
     headers.forEach((header, index) => {
       const align = index === 0 ? 'left' : index === 1 ? 'left' : 'right';
       let x: number;
@@ -291,19 +291,19 @@ export class InvoicePDFGenerator {
       if (align === 'right') {
         // For right-aligned columns, position text at the right edge minus padding
         if (index === headers.length - 1) {
-          // Last column - align to table end
-          x = tableEndX - 3;
+          // Last column (Amount) - align to table end with proper padding
+          x = tableEndX - 2;
         } else {
-          // Other right-aligned columns
-          x = columnPositions[index] + columnWidths[index] - 3;
+          // Other right-aligned columns - align to column end with padding
+          x = columnPositions[index] + columnWidths[index] - 2;
         }
       } else {
-        // Left-aligned columns
-        x = columnPositions[index] + 3;
+        // Left-aligned columns - start with padding
+        x = columnPositions[index] + 2;
       }
       
       this.addText(header, x, tableStartY + 8, { 
-        fontSize: 10, 
+        fontSize: 9, 
         fontStyle: 'bold', 
         align,
         color: '#495057'
@@ -340,21 +340,21 @@ export class InvoicePDFGenerator {
         if (align === 'right') {
           // For right-aligned columns, position text at the right edge minus padding
           if (colIndex === rowData.length - 1) {
-            // Last column (Amount) - align to table end
-            x = tableEndX - 3;
+            // Last column (Amount) - align to table end with proper padding
+            x = tableEndX - 2;
           } else {
-            // Other right-aligned columns
-            x = columnPositions[colIndex] + columnWidths[colIndex] - 3;
+            // Other right-aligned columns - align to column end with padding
+            x = columnPositions[colIndex] + columnWidths[colIndex] - 2;
           }
         } else {
-          // Left-aligned columns
-          x = columnPositions[colIndex] + 3;
+          // Left-aligned columns - start with padding
+          x = columnPositions[colIndex] + 2;
         }
         
-        // Truncate long text for item name
+        // Truncate long text for item name to prevent overflow
         let displayText = data;
-        if (colIndex === 1 && data.length > 25) {
-          displayText = data.substring(0, 22) + '...';
+        if (colIndex === 1 && data.length > 20) {
+          displayText = data.substring(0, 18) + '...';
         }
         
         this.addText(displayText, x, rowY + 7, { 
@@ -370,7 +370,7 @@ export class InvoicePDFGenerator {
     // Table border with better styling - ensure full coverage
     this.addRect(tableStartX, tableStartY, tableWidth, this.currentY - tableStartY, 'S', undefined, '#dee2e6');
     
-    // Vertical lines - ensure they extend to the full table width
+    // Vertical lines with proper positioning to separate columns clearly
     for (let i = 1; i < columnPositions.length; i++) {
       this.addLine(columnPositions[i], tableStartY, columnPositions[i], this.currentY, '#dee2e6');
     }
