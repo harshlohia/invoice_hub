@@ -728,6 +728,127 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
             </div>
           </div>
           )}
+
+          {/* Digital Signature */}
+          <div style={{
+            marginTop: '32px',
+            display: 'flex',
+            justifyContent: 'flex-end',
+            alignItems: 'center'
+          }}>
+            <div style={{
+              position: 'relative',
+              display: 'inline-block'
+            }}>
+              {/* Green Stamp Background */}
+              <div style={{
+                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                borderRadius: '50%',
+                width: '120px',
+                height: '120px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)',
+                border: '3px solid #065f46',
+                position: 'relative',
+                transform: 'rotate(-5deg)'
+              }}>
+                {/* Inner Circle */}
+                <div style={{
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  borderRadius: '50%',
+                  width: '100px',
+                  height: '100px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: '2px solid rgba(255, 255, 255, 0.3)',
+                  textAlign: 'center',
+                  padding: '8px'
+                }}>
+                  {/* Business Name */}
+                  <div style={{
+                    color: '#ffffff',
+                    fontSize: '10px',
+                    fontWeight: 'bold',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px',
+                    lineHeight: '1.1',
+                    textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)',
+                    wordWrap: 'break-word',
+                    maxWidth: '80px'
+                  }}>
+                    {invoice.billerInfo.businessName}
+                  </div>
+                  
+                  {/* Separator Line */}
+                  <div style={{
+                    width: '60px',
+                    height: '1px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+                    margin: '4px 0'
+                  }}></div>
+                  
+                  {/* Authorized Signature Text */}
+                  <div style={{
+                    color: '#ffffff',
+                    fontSize: '7px',
+                    fontWeight: '600',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.3px',
+                    textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)'
+                  }}>
+                    Authorized
+                  </div>
+                  <div style={{
+                    color: '#ffffff',
+                    fontSize: '7px',
+                    fontWeight: '600',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.3px',
+                    textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)'
+                  }}>
+                    Signature
+                  </div>
+                </div>
+                
+                {/* Decorative Stars */}
+                <div style={{
+                  position: 'absolute',
+                  top: '8px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  color: '#ffffff',
+                  fontSize: '8px',
+                  opacity: '0.8'
+                }}>★</div>
+                <div style={{
+                  position: 'absolute',
+                  bottom: '8px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  color: '#ffffff',
+                  fontSize: '8px',
+                  opacity: '0.8'
+                }}>★</div>
+              </div>
+              
+              {/* Date stamp */}
+              <div style={{
+                position: 'absolute',
+                bottom: '-20px',
+                right: '10px',
+                fontSize: '9px',
+                color: '#6b7280',
+                fontWeight: '500',
+                transform: 'rotate(-5deg)'
+              }}>
+                {format(new Date(), "dd/MM/yyyy")}
+              </div>
+            </div>
+          </div>
         </CardContent>
       </div> 
       <CardFooter className="p-6 border-t bg-gray-50 flex flex-col sm:flex-row justify-end items-center gap-2 do-not-print-in-pdf">
@@ -937,6 +1058,27 @@ function generateFooterHTML(invoice: Invoice): string {
           </div>
         </div>
       ` : ''}
+      
+      <!-- Digital Signature -->
+      <div style="margin-top: 32px; display: flex; justify-content: flex-end; align-items: center;">
+        <div style="position: relative; display: inline-block;">
+          <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-radius: 50%; width: 120px; height: 120px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3); border: 3px solid #065f46; position: relative; transform: rotate(-5deg);">
+            <div style="background: rgba(255, 255, 255, 0.1); border-radius: 50%; width: 100px; height: 100px; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 2px solid rgba(255, 255, 255, 0.3); text-align: center; padding: 8px;">
+              <div style="color: #ffffff; font-size: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1.1; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); word-wrap: break-word; max-width: 80px;">
+                ${invoice.billerInfo.businessName}
+              </div>
+              <div style="width: 60px; height: 1px; background-color: rgba(255, 255, 255, 0.6); margin: 4px 0;"></div>
+              <div style="color: #ffffff; font-size: 7px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);">Authorized</div>
+              <div style="color: #ffffff; font-size: 7px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);">Signature</div>
+            </div>
+            <div style="position: absolute; top: 8px; left: 50%; transform: translateX(-50%); color: #ffffff; font-size: 8px; opacity: 0.8;">★</div>
+            <div style="position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); color: #ffffff; font-size: 8px; opacity: 0.8;">★</div>
+          </div>
+          <div style="position: absolute; bottom: -20px; right: 10px; font-size: 9px; color: #6b7280; font-weight: 500; transform: rotate(-5deg);">
+            ${format(new Date(), "dd/MM/yyyy")}
+          </div>
+        </div>
+      </div>
     </div>
   `;
 }
