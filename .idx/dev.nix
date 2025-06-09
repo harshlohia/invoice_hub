@@ -7,6 +7,7 @@
   packages = [
     pkgs.nodejs_20
     pkgs.zulu
+    pkgs.chromium
   ];
   # Sets environment variables in the workspace
   env = {};
