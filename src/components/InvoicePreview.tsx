@@ -198,11 +198,12 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
         fontSize: '14px',
         lineHeight: '1.5',
         color: '#000000',
-        minWidth: '800px' // Ensure minimum width for proper table display
+        width: '900px', // Fixed width to ensure consistent layout
+        maxWidth: 'none' // Override any max-width constraints
       }}> 
         <CardHeader style={{
           backgroundColor: '#f8f9fa',
-          padding: '32px',
+          padding: '24px',
           borderBottom: '1px solid #e5e7eb'
         }}>
           <div style={{
@@ -210,73 +211,77 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
             flexDirection: 'row',
             justifyContent: 'space-between',
             alignItems: 'flex-start',
-            gap: '24px'
+            gap: '24px',
+            width: '100%'
           }}>
-            <div style={{ flex: '1', minWidth: '300px' }}>
+            {/* Left side - Company Info */}
+            <div style={{ flex: '1', maxWidth: '400px' }}>
               {invoice.billerInfo.logoUrl ? (
                 <Image
                   src={invoice.billerInfo.logoUrl}
                   alt={`${invoice.billerInfo.businessName} logo`}
-                  width={150}
-                  height={75}
+                  width={120}
+                  height={60}
                   style={{ 
                     objectFit: 'contain',
-                    marginBottom: '16px'
+                    marginBottom: '12px'
                   }} 
                   data-ai-hint="company logo"
                 />
               ) : (
                 <div style={{
-                  height: '80px',
-                  width: '160px',
+                  height: '60px',
+                  width: '120px',
                   backgroundColor: '#e5e7eb',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   color: '#6b7280',
-                  marginBottom: '16px',
+                  marginBottom: '12px',
                   borderRadius: '4px',
-                  fontSize: '14px',
+                  fontSize: '12px',
                   border: '1px solid #d1d5db'
                 }} data-ai-hint="logo placeholder">
-                  {invoice.billerInfo.businessName}
+                  Logo
                 </div>
               )}
               <h2 style={{
-                fontSize: '24px',
+                fontSize: '20px',
                 fontWeight: 'bold',
                 color: '#3f51b5',
                 marginBottom: '8px',
                 margin: '0 0 8px 0'
               }}>{invoice.billerInfo.businessName}</h2>
               <div style={{
-                fontSize: '14px',
+                fontSize: '12px',
                 color: '#6b7280',
                 lineHeight: '1.4'
               }}>
-                <p style={{ margin: '4px 0' }}>{invoice.billerInfo.addressLine1}</p>
-                {invoice.billerInfo.addressLine2 && <p style={{ margin: '4px 0' }}>{invoice.billerInfo.addressLine2}</p>}
-                <p style={{ margin: '4px 0' }}>{invoice.billerInfo.city}, {invoice.billerInfo.state} - {invoice.billerInfo.postalCode}</p>
+                <p style={{ margin: '2px 0' }}>{invoice.billerInfo.addressLine1}</p>
+                {invoice.billerInfo.addressLine2 && <p style={{ margin: '2px 0' }}>{invoice.billerInfo.addressLine2}</p>}
+                <p style={{ margin: '2px 0' }}>{invoice.billerInfo.city}, {invoice.billerInfo.state} - {invoice.billerInfo.postalCode}</p>
                 {invoice.billerInfo.gstin && (
                   <p style={{
                     fontWeight: '600',
                     color: '#3f51b5',
                     backgroundColor: '#eff6ff',
-                    padding: '8px 12px',
+                    padding: '4px 8px',
                     borderRadius: '4px',
-                    marginTop: '8px',
+                    marginTop: '6px',
                     display: 'inline-block',
                     border: '1px solid #bfdbfe',
-                    margin: '8px 0 0 0'
+                    margin: '6px 0 0 0'
                   }}>
                     GSTIN: {invoice.billerInfo.gstin}
                   </p>
                 )}
               </div>
             </div>
-            <div style={{ textAlign: 'right', minWidth: '250px' }}>
+
+            {/* Right side - Invoice Info */}
+            <div style={{ textAlign: 'right', minWidth: '300px' }}>
               <h1 style={{
-                fontSize: '36px',
+                fontSize: '32px',
                 fontWeight: 'bold',
                 textTransform: 'uppercase',
                 color: '#4b5563',
@@ -284,38 +289,42 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
                 margin: '0 0 8px 0'
               }}>Invoice</h1>
               <p style={{
-                fontSize: '20px',
+                fontSize: '18px',
                 color: '#6b7280',
-                marginBottom: '16px',
-                margin: '0 0 16px 0'
+                marginBottom: '12px',
+                margin: '0 0 12px 0'
               }}># {invoice.invoiceNumber}</p>
+              
+              {/* Status */}
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'flex-end',
                 gap: '8px',
-                marginBottom: '16px'
+                marginBottom: '12px'
               }}>
                  {statusIcons[invoice.status]}
                 <span style={{
-                  fontSize: '14px',
+                  fontSize: '12px',
                   fontWeight: '500',
                   textTransform: 'capitalize',
-                  padding: '4px 12px',
+                  padding: '4px 8px',
                   backgroundColor: '#f3f4f6',
                   borderRadius: '4px'
                 }}>{invoice.status}</span>
               </div>
+              
+              {/* Dates */}
               <div style={{
                 borderTop: '1px solid #e5e7eb',
-                paddingTop: '16px',
-                fontSize: '14px',
+                paddingTop: '12px',
+                fontSize: '12px',
                 lineHeight: '1.6'
               }}>
-                <p style={{ margin: '4px 0' }}>
+                <p style={{ margin: '3px 0' }}>
                   <span style={{ fontWeight: '600', color: '#374151' }}>Date:</span> {format(invoiceDate, "dd MMM, yyyy")}
                 </p>
-                <p style={{ margin: '4px 0' }}>
+                <p style={{ margin: '3px 0' }}>
                   <span style={{ fontWeight: '600', color: '#374151' }}>Due Date:</span> {format(dueDate, "dd MMM, yyyy")}
                 </p>
               </div>
@@ -323,50 +332,51 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
           </div>
         </CardHeader>
 
-        <CardContent style={{ padding: '32px' }}>
+        <CardContent style={{ padding: '24px' }}>
+          {/* Bill To Section */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-            gap: '32px',
-            marginBottom: '32px'
+            gridTemplateColumns: '1fr 1fr',
+            gap: '24px',
+            marginBottom: '24px'
           }}>
             <div>
               <h3 style={{
                 fontWeight: 'bold',
                 color: '#374151',
-                marginBottom: '12px',
-                fontSize: '18px',
+                marginBottom: '8px',
+                fontSize: '16px',
                 borderBottom: '2px solid #e5e7eb',
-                paddingBottom: '8px',
-                margin: '0 0 12px 0'
+                paddingBottom: '4px',
+                margin: '0 0 8px 0'
               }}>Bill To:</h3>
-              <div style={{ lineHeight: '1.6' }}>
+              <div style={{ lineHeight: '1.5' }}>
                 <p style={{
                   fontWeight: '600',
                   color: '#3f51b5',
-                  fontSize: '18px',
-                  margin: '4px 0'
+                  fontSize: '16px',
+                  margin: '3px 0'
                 }}>{invoice.client.name}</p>
                 <p style={{
-                  fontSize: '14px',
+                  fontSize: '12px',
                   color: '#6b7280',
-                  margin: '4px 0'
+                  margin: '2px 0'
                 }}>{invoice.client.addressLine1}</p>
                 {invoice.client.addressLine2 && <p style={{
-                  fontSize: '14px',
+                  fontSize: '12px',
                   color: '#6b7280',
-                  margin: '4px 0'
+                  margin: '2px 0'
                 }}>{invoice.client.addressLine2}</p>}
                 <p style={{
-                  fontSize: '14px',
+                  fontSize: '12px',
                   color: '#6b7280',
-                  margin: '4px 0'
+                  margin: '2px 0'
                 }}>{invoice.client.city}, {invoice.client.state} - {invoice.client.postalCode}</p>
                 {invoice.client.gstin && <p style={{
-                  fontSize: '14px',
+                  fontSize: '12px',
                   fontWeight: '600',
                   color: '#374151',
-                  margin: '4px 0'
+                  margin: '2px 0'
                 }}>GSTIN: {invoice.client.gstin}</p>}
               </div>
             </div>
@@ -375,96 +385,96 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
                 <h3 style={{
                   fontWeight: 'bold',
                   color: '#374151',
-                  marginBottom: '12px',
-                  fontSize: '18px',
+                  marginBottom: '8px',
+                  fontSize: '16px',
                   borderBottom: '2px solid #e5e7eb',
-                  paddingBottom: '8px',
-                  margin: '0 0 12px 0'
+                  paddingBottom: '4px',
+                  margin: '0 0 8px 0'
                 }}>Ship To:</h3>
-                <div style={{ lineHeight: '1.6' }}>
+                <div style={{ lineHeight: '1.5' }}>
                   <p style={{
                     fontWeight: '600',
                     color: '#3f51b5',
-                    fontSize: '18px',
-                    margin: '4px 0'
+                    fontSize: '16px',
+                    margin: '3px 0'
                   }}>{invoice.shippingAddress.name}</p>
                   <p style={{
-                    fontSize: '14px',
+                    fontSize: '12px',
                     color: '#6b7280',
-                    margin: '4px 0'
+                    margin: '2px 0'
                   }}>{invoice.shippingAddress.addressLine1}</p>
                   {invoice.shippingAddress.addressLine2 && <p style={{
-                    fontSize: '14px',
+                    fontSize: '12px',
                     color: '#6b7280',
-                    margin: '4px 0'
+                    margin: '2px 0'
                   }}>{invoice.shippingAddress.addressLine2}</p>}
                   <p style={{
-                    fontSize: '14px',
+                    fontSize: '12px',
                     color: '#6b7280',
-                    margin: '4px 0'
+                    margin: '2px 0'
                   }}>{invoice.shippingAddress.city}, {invoice.shippingAddress.state} - {invoice.shippingAddress.postalCode}</p>
                 </div>
               </div>
             )}
           </div>
 
-          <div style={{ marginBottom: '32px', overflowX: 'visible' }}>
+          {/* Line Items Table */}
+          <div style={{ marginBottom: '24px', width: '100%' }}>
             <table style={{
               width: '100%',
-              fontSize: '12px',
+              fontSize: '11px',
               borderCollapse: 'collapse',
-              border: '1px solid #d1d5db',
-              tableLayout: 'fixed'
+              border: '1px solid #d1d5db'
             }}>
               <thead style={{ backgroundColor: '#f3f4f6' }}>
                 <tr>
                   <th style={{
-                    padding: '12px 8px',
+                    padding: '8px 6px',
                     textAlign: 'left',
                     fontWeight: 'bold',
                     color: '#374151',
                     border: '1px solid #d1d5db',
-                    width: '8%'
+                    width: '40px'
                   }}>#</th>
                   <th style={{
-                    padding: '12px 8px',
+                    padding: '8px 6px',
                     textAlign: 'left',
                     fontWeight: 'bold',
                     color: '#374151',
                     border: '1px solid #d1d5db',
-                    width: '35%'
+                    width: '280px'
                   }}>Item/Service</th>
                   <th style={{
-                    padding: '12px 8px',
+                    padding: '8px 6px',
                     textAlign: 'center',
                     fontWeight: 'bold',
                     color: '#374151',
                     border: '1px solid #d1d5db',
-                    width: '10%'
+                    width: '60px'
                   }}>Qty</th>
                   <th style={{
-                    padding: '12px 8px',
+                    padding: '8px 6px',
                     textAlign: 'right',
                     fontWeight: 'bold',
                     color: '#374151',
                     border: '1px solid #d1d5db',
-                    width: '15%'
+                    width: '100px'
                   }}>Rate ({currencySymbol})</th>
                   <th style={{
-                    padding: '12px 8px',
+                    padding: '8px 6px',
                     textAlign: 'right',
                     fontWeight: 'bold',
                     color: '#374151',
                     border: '1px solid #d1d5db',
-                    width: '12%'
+                    width: '80px'
                   }}>Disc (%)</th>
                   <th style={{
-                    padding: '12px 8px',
+                    padding: '8px 6px',
                     textAlign: 'right',
                     fontWeight: 'bold',
                     color: '#374151',
                     border: '1px solid #d1d5db',
-                    width: '20%'
+                    width: '120px'
                   }}>Amount ({currencySymbol})</th>
                 </tr>
               </thead>
@@ -472,34 +482,34 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
                 {invoice.lineItems.map((item, index) => (
                   <tr key={item.id} style={{ borderBottom: '1px solid #d1d5db' }}>
                     <td style={{
-                      padding: '12px 8px',
+                      padding: '8px 6px',
                       border: '1px solid #d1d5db',
                       textAlign: 'left'
                     }}>{index + 1}</td>
                     <td style={{
-                      padding: '12px 8px',
+                      padding: '8px 6px',
                       fontWeight: '500',
                       border: '1px solid #d1d5db',
                       textAlign: 'left',
                       wordWrap: 'break-word'
                     }}>{item.productName}</td>
                     <td style={{
-                      padding: '12px 8px',
+                      padding: '8px 6px',
                       textAlign: 'center',
                       border: '1px solid #d1d5db'
                     }}>{item.quantity}</td>
                     <td style={{
-                      padding: '12px 8px',
+                      padding: '8px 6px',
                       textAlign: 'right',
                       border: '1px solid #d1d5db'
                     }}>{item.rate.toFixed(2)}</td>
                     <td style={{
-                      padding: '12px 8px',
+                      padding: '8px 6px',
                       textAlign: 'right',
                       border: '1px solid #d1d5db'
                     }}>{item.discountPercentage.toFixed(1)}%</td>
                     <td style={{
-                      padding: '12px 8px',
+                      padding: '8px 6px',
                       textAlign: 'right',
                       fontWeight: '600',
                       border: '1px solid #d1d5db'
@@ -510,83 +520,69 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
             </table>
           </div>
 
+          {/* Bottom Section - Notes and Totals */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: '1fr 350px',
-            gap: '32px',
+            gridTemplateColumns: '1fr 300px',
+            gap: '24px',
             alignItems: 'start'
           }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Left side - Notes and Terms */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {invoice.notes && (
                 <div>
                   <h4 style={{
                     fontWeight: 'bold',
                     color: '#374151',
-                    marginBottom: '8px',
-                    margin: '0 0 8px 0'
+                    marginBottom: '6px',
+                    margin: '0 0 6px 0'
                   }}>Notes:</h4>
                   <p style={{
-                    fontSize: '14px',
+                    fontSize: '12px',
                     color: '#6b7280',
                     backgroundColor: '#f9fafb',
-                    padding: '12px',
+                    padding: '8px',
                     borderRadius: '4px',
                     border: '1px solid #e5e7eb',
                     margin: '0'
                   }}>{invoice.notes}</p>
                 </div>
               )}
-              {invoice.termsAndConditions && (
-                <div>
-                  <h4 style={{
-                    fontWeight: 'bold',
-                    color: '#374151',
-                    marginBottom: '8px',
-                    margin: '0 0 8px 0'
-                  }}>Terms & Conditions:</h4>
-                  <p style={{
-                    fontSize: '14px',
-                    color: '#6b7280',
-                    backgroundColor: '#f9fafb',
-                    padding: '12px',
-                    borderRadius: '4px',
-                    border: '1px solid #e5e7eb',
-                    margin: '0'
-                  }}>{invoice.termsAndConditions}</p>
-                </div>
-              )}
-              {!invoice.termsAndConditions && (
-                <div>
-                  <h4 style={{
-                    fontWeight: 'bold',
-                    color: '#374151',
-                    marginBottom: '8px',
-                    margin: '0 0 8px 0'
-                  }}>Terms & Conditions:</h4>
-                  <p style={{
-                    fontSize: '14px',
-                    color: '#6b7280',
-                    backgroundColor: '#f9fafb',
-                    padding: '12px',
-                    borderRadius: '4px',
-                    border: '1px solid #e5e7eb',
-                    margin: '0'
-                  }}>Thank you for your business! Payment is due within the specified date.</p>
-                </div>
-              )}
+              
+              <div>
+                <h4 style={{
+                  fontWeight: 'bold',
+                  color: '#374151',
+                  marginBottom: '6px',
+                  margin: '0 0 6px 0'
+                }}>Terms & Conditions:</h4>
+                <p style={{
+                  fontSize: '12px',
+                  color: '#6b7280',
+                  backgroundColor: '#f9fafb',
+                  padding: '8px',
+                  borderRadius: '4px',
+                  border: '1px solid #e5e7eb',
+                  margin: '0'
+                }}>
+                  {invoice.termsAndConditions || "Thank you for your business! Payment is due within the specified date."}
+                </p>
+              </div>
             </div>
+            
+            {/* Right side - Totals */}
             <div>
               <div style={{
                 backgroundColor: '#f9fafb',
-                padding: '16px',
+                padding: '12px',
                 borderRadius: '4px',
                 border: '1px solid #e5e7eb'
               }}>
                 <div style={{
                   display: 'flex',
                   justifyContent: 'space-between',
-                  fontSize: '14px',
-                  marginBottom: '8px'
+                  fontSize: '12px',
+                  marginBottom: '6px'
                 }}>
                   <span style={{ color: '#6b7280' }}>Subtotal:</span> 
                   <span style={{ fontWeight: '600' }}>{currencySymbol}{invoice.subTotal.toFixed(2)}</span>
@@ -596,8 +592,8 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
                   <div style={{
                     display: 'flex',
                     justifyContent: 'space-between',
-                    fontSize: '14px',
-                    marginBottom: '8px'
+                    fontSize: '12px',
+                    marginBottom: '6px'
                   }}>
                     <span style={{ color: '#6b7280' }}>
                       CGST ({(invoice.lineItems[0]?.taxRate || 18) / 2}%):
@@ -607,8 +603,8 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
                   <div style={{
                     display: 'flex',
                     justifyContent: 'space-between',
-                    fontSize: '14px',
-                    marginBottom: '8px'
+                    fontSize: '12px',
+                    marginBottom: '6px'
                   }}>
                     <span style={{ color: '#6b7280' }}>
                       SGST ({(invoice.lineItems[0]?.taxRate || 18) / 2}%):
@@ -621,8 +617,8 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
                   <div style={{
                     display: 'flex',
                     justifyContent: 'space-between',
-                    fontSize: '14px',
-                    marginBottom: '8px'
+                    fontSize: '12px',
+                    marginBottom: '6px'
                   }}>
                     <span style={{ color: '#6b7280' }}>
                       IGST ({invoice.lineItems[0]?.taxRate || 18}%):
@@ -632,13 +628,13 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
                 )}
                 <div style={{
                   borderTop: '1px solid #d1d5db',
-                  paddingTop: '12px',
-                  marginTop: '12px'
+                  paddingTop: '8px',
+                  marginTop: '8px'
                 }}>
                   <div style={{
                     display: 'flex',
                     justifyContent: 'space-between',
-                    fontSize: '18px',
+                    fontSize: '16px',
                     fontWeight: 'bold',
                     color: '#3f51b5'
                   }}>
@@ -650,33 +646,34 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
             </div>
           </div>
 
+          {/* Payment Information */}
           {invoice.billerInfo.bankName && (
           <div style={{
-            marginTop: '32px',
-            paddingTop: '24px',
+            marginTop: '24px',
+            paddingTop: '16px',
             borderTop: '1px solid #e5e7eb'
           }}>
             <h4 style={{
               fontWeight: 'bold',
               color: '#374151',
-              marginBottom: '16px',
-              fontSize: '18px',
-              margin: '0 0 16px 0'
+              marginBottom: '12px',
+              fontSize: '16px',
+              margin: '0 0 12px 0'
             }}>Payment Information:</h4>
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-              gap: '8px 24px',
-              fontSize: '14px',
+              gridTemplateColumns: 'repeat(2, 1fr)',
+              gap: '6px 16px',
+              fontSize: '12px',
               backgroundColor: '#f9fafb',
-              padding: '16px',
+              padding: '12px',
               borderRadius: '4px',
               border: '1px solid #e5e7eb'
             }}>
-              {invoice.billerInfo.bankName && <p style={{ margin: '4px 0' }}><strong>Bank:</strong> {invoice.billerInfo.bankName}</p>}
-              {invoice.billerInfo.accountNumber && <p style={{ margin: '4px 0' }}><strong>A/C No:</strong> {invoice.billerInfo.accountNumber}</p>}
-              {invoice.billerInfo.ifscCode && <p style={{ margin: '4px 0' }}><strong>IFSC:</strong> {invoice.billerInfo.ifscCode}</p>}
-              {invoice.billerInfo.upiId && <p style={{ margin: '4px 0' }}><strong>UPI:</strong> {invoice.billerInfo.upiId}</p>}
+              {invoice.billerInfo.bankName && <p style={{ margin: '2px 0' }}><strong>Bank:</strong> {invoice.billerInfo.bankName}</p>}
+              {invoice.billerInfo.accountNumber && <p style={{ margin: '2px 0' }}><strong>A/C No:</strong> {invoice.billerInfo.accountNumber}</p>}
+              {invoice.billerInfo.ifscCode && <p style={{ margin: '2px 0' }}><strong>IFSC:</strong> {invoice.billerInfo.ifscCode}</p>}
+              {invoice.billerInfo.upiId && <p style={{ margin: '2px 0' }}><strong>UPI:</strong> {invoice.billerInfo.upiId}</p>}
             </div>
           </div>
           )}
