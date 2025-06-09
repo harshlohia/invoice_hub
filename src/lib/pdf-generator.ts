@@ -23,16 +23,18 @@ export class InvoicePDFGenerator {
     accent: [255, 152, 0], // #FF9800 - Orange accent
     text: [33, 33, 33], // Dark text
     mutedText: [107, 114, 126], // Muted text color
-    lightGray: [236, 239, 241], // #ECEFF1 - Light gray background
+    lightGray: [248, 250, 252], // Very light gray background like web
     mediumGray: [158, 158, 158],
     white: [255, 255, 255],
     border: [229, 231, 235], // Light border color
-    tableHeader: [248, 250, 252], // Very light gray for table header
+    tableHeader: [248, 250, 252], // Very light gray for table header (NOT blue)
     green: [34, 197, 94], // For paid status
     red: [239, 68, 68], // For overdue status
     blue: [59, 130, 246], // For sent status
     yellow: [245, 158, 11], // For cancelled status
-    gray: [107, 114, 126] // For draft status
+    gray: [107, 114, 126], // For draft status
+    overdueRed: [220, 38, 38], // Darker red for overdue badge
+    overdueBackground: [254, 242, 242] // Light red background for overdue
   };
 
   constructor() {
@@ -134,36 +136,26 @@ export class InvoicePDFGenerator {
   }
 
   private addHeader(invoice: Invoice): void {
-    // Header background matching web preview
-    this.addRectangle(0, 0, this.pageWidth, 70, this.colors.lightGray);
+    // Header background matching web preview (very light gray)
+    this.addRectangle(0, 0, this.pageWidth, 75, this.colors.lightGray);
 
-    // Logo placeholder (matching web preview style)
-    if (invoice.billerInfo.logoUrl) {
-      this.addRectangle(this.margin, this.margin, 40, 20, this.colors.white, this.colors.border);
-      this.addText('Logo', this.margin + 20, this.margin + 12, { 
-        align: 'center', 
-        fontSize: 8, 
-        color: this.colors.mutedText 
-      });
-    } else {
-      // Gray placeholder box like in web preview
-      this.addRectangle(this.margin, this.margin, 40, 20, [200, 200, 200]);
-      this.addText('Logo', this.margin + 20, this.margin + 12, { 
-        align: 'center', 
-        fontSize: 8, 
-        color: this.colors.white 
-      });
-    }
+    // Logo placeholder (matching web preview style exactly)
+    this.addRectangle(this.margin, this.margin, 45, 25, [200, 200, 200], this.colors.border);
+    this.addText('Logo', this.margin + 22.5, this.margin + 15, { 
+      align: 'center', 
+      fontSize: 10, 
+      color: this.colors.white 
+    });
 
-    // Company name with primary blue color (matching web)
-    this.addText(invoice.billerInfo.businessName, this.margin, this.margin + 35, { 
-      fontSize: 20, 
+    // Company name with primary blue color (matching web exactly)
+    this.addText(invoice.billerInfo.businessName, this.margin, this.margin + 40, { 
+      fontSize: 18, 
       fontStyle: 'bold',
       color: this.colors.primary
     });
 
     // Company address (smaller, muted text like web)
-    let addressY = this.margin + 45;
+    let addressY = this.margin + 50;
     this.addText(invoice.billerInfo.addressLine1, this.margin, addressY, { 
       fontSize: 9, 
       color: this.colors.mutedText 
@@ -192,78 +184,83 @@ export class InvoicePDFGenerator {
     }
 
     // Right side - Invoice title and details (matching web layout exactly)
-    this.addText('INVOICE', this.pageWidth - this.margin, this.margin + 15, { 
-      fontSize: 32, 
+    this.addText('INVOICE', this.pageWidth - this.margin, this.margin + 20, { 
+      fontSize: 28, 
       fontStyle: 'bold', 
       align: 'right',
       color: [119, 119, 119] // Gray color like in web
     });
 
-    this.addText(`# ${invoice.invoiceNumber}`, this.pageWidth - this.margin, this.margin + 28, { 
-      fontSize: 16, 
+    this.addText(`# ${invoice.invoiceNumber}`, this.pageWidth - this.margin, this.margin + 32, { 
+      fontSize: 14, 
       align: 'right',
       color: this.colors.mutedText
     });
 
-    // Status badge (matching web colors exactly)
-    const statusColors = {
-      'paid': this.colors.green,
-      'sent': this.colors.blue,
-      'overdue': this.colors.red,
-      'draft': this.colors.gray,
-      'cancelled': this.colors.yellow
+    // Status badge (matching web colors and style exactly)
+    const statusConfig = {
+      'paid': { color: this.colors.green, bgColor: [220, 252, 231] },
+      'sent': { color: this.colors.blue, bgColor: [219, 234, 254] },
+      'overdue': { color: this.colors.overdueRed, bgColor: this.colors.overdueBackground },
+      'draft': { color: this.colors.gray, bgColor: [249, 250, 251] },
+      'cancelled': { color: this.colors.yellow, bgColor: [254, 249, 195] }
     };
     
-    const statusColor = statusColors[invoice.status] || this.colors.gray;
+    const config = statusConfig[invoice.status] || statusConfig['draft'];
     const statusText = invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1);
     
-    // Status badge with rounded corners effect
-    this.addRectangle(this.pageWidth - this.margin - 35, this.margin + 35, 35, 10, statusColor);
-    this.addText(statusText, this.pageWidth - this.margin - 17.5, this.margin + 41, {
+    // Status badge with proper styling
+    const badgeWidth = 40;
+    const badgeHeight = 12;
+    const badgeX = this.pageWidth - this.margin - badgeWidth;
+    const badgeY = this.margin + 40;
+    
+    this.addRectangle(badgeX, badgeY, badgeWidth, badgeHeight, config.bgColor, config.color, 0.5);
+    this.addText(statusText, badgeX + badgeWidth/2, badgeY + 8, {
       fontSize: 8,
       fontStyle: 'bold',
       align: 'center',
-      color: this.colors.white
+      color: config.color
     });
 
     // Separator line
-    this.addLine(this.pageWidth - this.margin - 50, this.margin + 50, this.pageWidth - this.margin, this.margin + 50, this.colors.border);
+    this.addLine(this.pageWidth - this.margin - 60, this.margin + 58, this.pageWidth - this.margin, this.margin + 58, this.colors.border);
 
-    // Invoice dates (matching web style)
+    // Invoice dates (matching web style exactly)
     const invoiceDate = invoice.invoiceDate instanceof Date ? invoice.invoiceDate : invoice.invoiceDate.toDate();
     const dueDate = invoice.dueDate instanceof Date ? invoice.dueDate : invoice.dueDate.toDate();
 
-    this.addText('Date:', this.pageWidth - this.margin - 45, this.margin + 57, { 
+    this.addText('Date:', this.pageWidth - this.margin - 50, this.margin + 65, { 
       fontSize: 9, 
       fontStyle: 'bold',
       color: this.colors.text
     });
-    this.addText(format(invoiceDate, 'dd MMM, yyyy'), this.pageWidth - this.margin, this.margin + 57, { 
+    this.addText(format(invoiceDate, 'dd MMM, yyyy'), this.pageWidth - this.margin, this.margin + 65, { 
       fontSize: 9, 
       align: 'right',
       color: this.colors.text
     });
 
-    this.addText('Due Date:', this.pageWidth - this.margin - 45, this.margin + 64, { 
+    this.addText('Due Date:', this.pageWidth - this.margin - 50, this.margin + 72, { 
       fontSize: 9, 
       fontStyle: 'bold',
       color: this.colors.text
     });
-    this.addText(format(dueDate, 'dd MMM, yyyy'), this.pageWidth - this.margin, this.margin + 64, { 
+    this.addText(format(dueDate, 'dd MMM, yyyy'), this.pageWidth - this.margin, this.margin + 72, { 
       fontSize: 9, 
       align: 'right',
       color: this.colors.text
     });
 
-    this.currentY = 85;
+    this.currentY = 90;
   }
 
   private addBillToSection(invoice: Invoice): void {
     this.checkPageBreak(50);
 
-    // Bill To section (matching web layout)
+    // Bill To section (matching web layout exactly)
     this.addText('Bill To:', this.margin, this.currentY, { 
-      fontSize: 14, 
+      fontSize: 12, 
       fontStyle: 'bold',
       color: this.colors.text
     });
@@ -271,36 +268,36 @@ export class InvoicePDFGenerator {
 
     // Client name in primary blue (like web)
     this.addText(invoice.client.name, this.margin, this.currentY, { 
-      fontSize: 14, 
+      fontSize: 13, 
       fontStyle: 'bold',
       color: this.colors.primary
     });
     this.currentY += 8;
 
-    // Address in muted text
+    // Address in muted text (exactly like web)
     this.addText(invoice.client.addressLine1, this.margin, this.currentY, { 
-      fontSize: 10,
+      fontSize: 9,
       color: this.colors.mutedText
     });
     this.currentY += 5;
 
     if (invoice.client.addressLine2) {
       this.addText(invoice.client.addressLine2, this.margin, this.currentY, { 
-        fontSize: 10,
+        fontSize: 9,
         color: this.colors.mutedText
       });
       this.currentY += 5;
     }
 
     this.addText(`${invoice.client.city}, ${invoice.client.state} - ${invoice.client.postalCode}`, this.margin, this.currentY, { 
-      fontSize: 10,
+      fontSize: 9,
       color: this.colors.mutedText
     });
     this.currentY += 5;
 
     if (invoice.client.gstin) {
       this.addText(`GSTIN: ${invoice.client.gstin}`, this.margin, this.currentY, { 
-        fontSize: 10,
+        fontSize: 9,
         color: this.colors.mutedText
       });
       this.currentY += 5;
@@ -314,60 +311,60 @@ export class InvoicePDFGenerator {
 
     const currencySymbol = invoice.currency === "INR" ? "Rs." : (invoice.currency || "Rs.");
 
-    // Table headers (matching web exactly)
-    const tableColumns = [
-      { header: '#', dataKey: 'sno', width: 15 },
-      { header: 'Item/Service', dataKey: 'productName', width: 65 },
-      { header: 'Qty', dataKey: 'quantity', width: 20 },
-      { header: `Rate (${currencySymbol})`, dataKey: 'rate', width: 30 },
-      { header: 'Discount (%)', dataKey: 'discount', width: 25 },
-      { header: `Amount (${currencySymbol})`, dataKey: 'amount', width: 30 }
-    ];
+    // Prepare table data exactly like web
+    const tableData = invoice.lineItems.map((item, index) => [
+      (index + 1).toString(),
+      item.productName,
+      item.quantity.toString(),
+      item.rate.toFixed(2),
+      item.discountPercentage.toFixed(2) + '%',
+      item.amount.toFixed(2)
+    ]);
 
-    const tableRows = invoice.lineItems.map((item, index) => ({
-      sno: (index + 1).toString(),
-      productName: item.productName,
-      quantity: item.quantity.toString(),
-      rate: item.rate.toFixed(2),
-      discount: item.discountPercentage.toFixed(2) + '%',
-      amount: item.amount.toFixed(2)
-    }));
-
-    // Custom table to match web design exactly
+    // Table with exact web styling
     this.doc.autoTable({
       startY: this.currentY,
-      head: [tableColumns.map(col => col.header)],
-      body: tableRows.map(row => tableColumns.map(col => row[col.dataKey as keyof typeof row])),
+      head: [['#', 'Item/Service', 'Qty', `Rate (${currencySymbol})`, 'Discount (%)', `Amount (${currencySymbol})`]],
+      body: tableData,
       theme: 'grid',
       styles: {
         fontSize: 9,
-        cellPadding: 6,
-        lineColor: this.colors.border,
-        lineWidth: 0.1,
-        textColor: this.colors.text,
+        cellPadding: 4,
+        lineColor: [229, 231, 235], // Light gray borders
+        lineWidth: 0.5,
+        textColor: [33, 33, 33], // Dark text
+        font: 'helvetica',
       },
       headStyles: {
-        fillColor: this.colors.tableHeader,
-        textColor: this.colors.text,
+        fillColor: [248, 250, 252], // Very light gray header (NOT blue)
+        textColor: [33, 33, 33], // Dark text in header
         fontStyle: 'bold',
-        fontSize: 10,
-        lineColor: this.colors.border,
-        lineWidth: 0.1,
+        fontSize: 9,
+        lineColor: [229, 231, 235],
+        lineWidth: 0.5,
+        halign: 'center',
+      },
+      bodyStyles: {
+        fillColor: [255, 255, 255], // White background
+        textColor: [33, 33, 33],
       },
       alternateRowStyles: {
-        fillColor: [252, 252, 252] // Very light alternating rows
+        fillColor: [249, 250, 251] // Very light alternating rows
       },
       columnStyles: {
-        0: { cellWidth: 15, halign: 'center' },
-        1: { cellWidth: 65, halign: 'left' },
-        2: { cellWidth: 20, halign: 'center' },
-        3: { cellWidth: 30, halign: 'right' },
-        4: { cellWidth: 25, halign: 'center' },
-        5: { cellWidth: 30, halign: 'right' }
+        0: { cellWidth: 15, halign: 'center' }, // #
+        1: { cellWidth: 70, halign: 'left' },   // Item/Service
+        2: { cellWidth: 20, halign: 'center' }, // Qty
+        3: { cellWidth: 25, halign: 'right' },  // Rate
+        4: { cellWidth: 25, halign: 'center' }, // Discount
+        5: { cellWidth: 30, halign: 'right' }   // Amount
       },
       margin: { left: this.margin, right: this.margin },
-      tableLineColor: this.colors.border,
-      tableLineWidth: 0.1,
+      tableLineColor: [229, 231, 235],
+      tableLineWidth: 0.5,
+      didDrawPage: (data: any) => {
+        // Ensure consistent styling across pages
+      }
     });
 
     this.currentY = (this.doc as any).lastAutoTable.finalY + 20;
@@ -376,73 +373,73 @@ export class InvoicePDFGenerator {
   private addTotalsSection(invoice: Invoice): void {
     this.checkPageBreak(80);
 
-    const startX = this.pageWidth - 100;
-    const labelWidth = 50;
-    const valueWidth = 40;
+    const startX = this.pageWidth - 90;
+    const labelWidth = 45;
+    const valueWidth = 35;
     const currencySymbol = invoice.currency === "INR" ? "Rs." : (invoice.currency || "Rs.");
 
     let totalY = this.currentY;
 
     // Subtotal
     this.addText('Subtotal:', startX, totalY, { 
-      fontSize: 11,
+      fontSize: 10,
       color: this.colors.mutedText
     });
     this.addText(`${currencySymbol}${invoice.subTotal.toFixed(2)}`, startX + labelWidth + valueWidth, totalY, { 
-      fontSize: 11, 
+      fontSize: 10, 
       align: 'right',
       fontStyle: 'bold'
     });
-    totalY += 8;
+    totalY += 7;
 
-    // Tax details (matching web layout)
+    // Tax details (matching web layout exactly)
     if (!invoice.isInterState) {
       this.addText('CGST:', startX, totalY, { 
-        fontSize: 11,
+        fontSize: 10,
         color: this.colors.mutedText
       });
       this.addText(`${currencySymbol}${invoice.totalCGST.toFixed(2)}`, startX + labelWidth + valueWidth, totalY, { 
-        fontSize: 11, 
+        fontSize: 10, 
         align: 'right',
         fontStyle: 'bold'
       });
-      totalY += 8;
+      totalY += 7;
 
       this.addText('SGST:', startX, totalY, { 
-        fontSize: 11,
+        fontSize: 10,
         color: this.colors.mutedText
       });
       this.addText(`${currencySymbol}${invoice.totalSGST.toFixed(2)}`, startX + labelWidth + valueWidth, totalY, { 
-        fontSize: 11, 
+        fontSize: 10, 
         align: 'right',
         fontStyle: 'bold'
       });
-      totalY += 8;
+      totalY += 7;
     } else {
       this.addText('IGST:', startX, totalY, { 
-        fontSize: 11,
+        fontSize: 10,
         color: this.colors.mutedText
       });
       this.addText(`${currencySymbol}${invoice.totalIGST.toFixed(2)}`, startX + labelWidth + valueWidth, totalY, { 
-        fontSize: 11, 
+        fontSize: 10, 
         align: 'right',
         fontStyle: 'bold'
       });
-      totalY += 8;
+      totalY += 7;
     }
 
     // Separator line
     this.addLine(startX, totalY + 2, startX + labelWidth + valueWidth, totalY + 2, this.colors.border);
     totalY += 10;
 
-    // Grand Total (matching web style with larger text and primary color)
+    // Grand Total (matching web style with primary color)
     this.addText('Grand Total:', startX, totalY, { 
-      fontSize: 16, 
+      fontSize: 14, 
       fontStyle: 'bold',
       color: this.colors.text
     });
     this.addText(`${currencySymbol}${invoice.grandTotal.toFixed(2)}`, startX + labelWidth + valueWidth, totalY, { 
-      fontSize: 16, 
+      fontSize: 14, 
       fontStyle: 'bold', 
       align: 'right',
       color: this.colors.primary
@@ -457,7 +454,7 @@ export class InvoicePDFGenerator {
 
       if (invoice.notes) {
         this.addText('Notes:', this.margin, this.currentY, { 
-          fontSize: 12, 
+          fontSize: 11, 
           fontStyle: 'bold',
           color: this.colors.text
         });
@@ -467,14 +464,14 @@ export class InvoicePDFGenerator {
         if (Array.isArray(noteLines)) {
           noteLines.forEach((line: string, index: number) => {
             this.addText(line, this.margin, this.currentY + (index * 5), { 
-              fontSize: 10,
+              fontSize: 9,
               color: this.colors.mutedText
             });
           });
           this.currentY += noteLines.length * 5 + 10;
         } else {
           this.addText(invoice.notes, this.margin, this.currentY, { 
-            fontSize: 10,
+            fontSize: 9,
             color: this.colors.mutedText
           });
           this.currentY += 15;
@@ -484,7 +481,7 @@ export class InvoicePDFGenerator {
       if (invoice.termsAndConditions) {
         this.checkPageBreak(30);
         this.addText('Terms & Conditions:', this.margin, this.currentY, { 
-          fontSize: 12, 
+          fontSize: 11, 
           fontStyle: 'bold',
           color: this.colors.text
         });
@@ -494,14 +491,14 @@ export class InvoicePDFGenerator {
         if (Array.isArray(termLines)) {
           termLines.forEach((line: string, index: number) => {
             this.addText(line, this.margin, this.currentY + (index * 5), { 
-              fontSize: 10,
+              fontSize: 9,
               color: this.colors.mutedText
             });
           });
           this.currentY += termLines.length * 5 + 10;
         } else {
           this.addText(invoice.termsAndConditions, this.margin, this.currentY, { 
-            fontSize: 10,
+            fontSize: 9,
             color: this.colors.mutedText
           });
           this.currentY += 15;
@@ -515,26 +512,30 @@ export class InvoicePDFGenerator {
       this.checkPageBreak(50);
 
       this.addText('Payment Information:', this.margin, this.currentY, { 
-        fontSize: 12, 
+        fontSize: 11, 
         fontStyle: 'bold',
         color: this.colors.text
       });
       this.currentY += 10;
 
+      // Light background box for payment info (like web)
+      const boxHeight = 35;
+      this.addRectangle(this.margin, this.currentY, this.pageWidth - 2 * this.margin, boxHeight, [248, 250, 252], this.colors.border);
+
       // Two column layout like web
-      const leftCol = this.margin;
+      const leftCol = this.margin + 10;
       const rightCol = this.margin + (this.pageWidth - 2 * this.margin) / 2;
-      let leftY = this.currentY;
-      let rightY = this.currentY;
+      let leftY = this.currentY + 8;
+      let rightY = this.currentY + 8;
 
       if (invoice.billerInfo.bankName) {
         this.addText('Bank:', leftCol, leftY, { 
-          fontSize: 10, 
+          fontSize: 9, 
           fontStyle: 'bold',
           color: this.colors.text
         });
-        this.addText(invoice.billerInfo.bankName, leftCol + 20, leftY, { 
-          fontSize: 10,
+        this.addText(invoice.billerInfo.bankName, leftCol + 25, leftY, { 
+          fontSize: 9,
           color: this.colors.mutedText
         });
         leftY += 6;
@@ -542,12 +543,12 @@ export class InvoicePDFGenerator {
 
       if (invoice.billerInfo.accountNumber) {
         this.addText('A/C No:', leftCol, leftY, { 
-          fontSize: 10, 
+          fontSize: 9, 
           fontStyle: 'bold',
           color: this.colors.text
         });
-        this.addText(invoice.billerInfo.accountNumber, leftCol + 20, leftY, { 
-          fontSize: 10,
+        this.addText(invoice.billerInfo.accountNumber, leftCol + 25, leftY, { 
+          fontSize: 9,
           color: this.colors.mutedText
         });
         leftY += 6;
@@ -555,12 +556,12 @@ export class InvoicePDFGenerator {
 
       if (invoice.billerInfo.ifscCode) {
         this.addText('IFSC:', rightCol, rightY, { 
-          fontSize: 10, 
+          fontSize: 9, 
           fontStyle: 'bold',
           color: this.colors.text
         });
-        this.addText(invoice.billerInfo.ifscCode, rightCol + 20, rightY, { 
-          fontSize: 10,
+        this.addText(invoice.billerInfo.ifscCode, rightCol + 25, rightY, { 
+          fontSize: 9,
           color: this.colors.mutedText
         });
         rightY += 6;
@@ -568,18 +569,18 @@ export class InvoicePDFGenerator {
 
       if (invoice.billerInfo.upiId) {
         this.addText('UPI:', rightCol, rightY, { 
-          fontSize: 10, 
+          fontSize: 9, 
           fontStyle: 'bold',
           color: this.colors.text
         });
-        this.addText(invoice.billerInfo.upiId, rightCol + 20, rightY, { 
-          fontSize: 10,
+        this.addText(invoice.billerInfo.upiId, rightCol + 25, rightY, { 
+          fontSize: 9,
           color: this.colors.mutedText
         });
         rightY += 6;
       }
 
-      this.currentY = Math.max(leftY, rightY) + 10;
+      this.currentY += boxHeight + 15;
     }
   }
 
@@ -588,7 +589,7 @@ export class InvoicePDFGenerator {
     this.doc = new jsPDF('p', 'mm', 'a4');
     this.currentY = this.margin;
 
-    // Add all sections in order (matching web layout)
+    // Add all sections in order (matching web layout exactly)
     this.addHeader(invoice);
     this.addBillToSection(invoice);
     this.addLineItemsTable(invoice);
