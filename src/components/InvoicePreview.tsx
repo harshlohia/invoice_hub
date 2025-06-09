@@ -1,6 +1,6 @@
 "use client";
 import type { Invoice } from "@/lib/types";
-import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Download, Printer, Send, Edit, Loader2, CheckCircle, AlertCircle, Clock, FilePenLine, MoreVertical, Trash2 as CancelIcon } from "lucide-react";
@@ -81,7 +81,7 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
     setIsDownloading(true);
 
     try {
-      const pdfGenerator = new InvoicePDFGenerator();
+      const pdfGenerator = new InvoicePDFGenerator('classic');
       pdfGenerator.downloadPDF(invoice);
       
       toast({
