@@ -104,7 +104,7 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
 
       // Create canvas from the invoice element with enhanced options
       const canvas = await html2canvas(elementToCapture, {
-        scale: 3, // Higher resolution for better quality
+        scale: 2, // Good balance between quality and performance
         useCORS: true,
         allowTaint: true,
         logging: false,
@@ -116,100 +116,6 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
           return element.classList.contains('do-not-print-in-pdf') ||
                  element.tagName === 'BUTTON' ||
                  element.getAttribute('role') === 'button';
-        },
-        onclone: (clonedDoc) => {
-          // Ensure all styles are properly applied in the cloned document
-          const clonedElement = clonedDoc.querySelector('[data-invoice-content]') as HTMLElement;
-          if (clonedElement) {
-            // Reset any transforms that might affect positioning
-            clonedElement.style.transform = 'none';
-            clonedElement.style.position = 'static';
-            clonedElement.style.maxWidth = 'none';
-            clonedElement.style.width = '210mm'; // A4 width
-            clonedElement.style.minHeight = '297mm'; // A4 height
-            clonedElement.style.padding = '20mm';
-            clonedElement.style.boxSizing = 'border-box';
-            clonedElement.style.fontFamily = 'Arial, sans-serif';
-            clonedElement.style.fontSize = '12px';
-            clonedElement.style.lineHeight = '1.4';
-            clonedElement.style.color = '#000000';
-            
-            // Ensure proper styling for all child elements
-            const allElements = clonedElement.querySelectorAll('*');
-            allElements.forEach((el: Element) => {
-              const htmlEl = el as HTMLElement;
-              // Ensure text is black and backgrounds are preserved
-              if (htmlEl.style.color === '' || htmlEl.style.color === 'inherit') {
-                htmlEl.style.color = '#000000';
-              }
-              // Ensure borders and backgrounds are visible
-              if (htmlEl.classList.contains('border')) {
-                htmlEl.style.border = '1px solid #e5e7eb';
-              }
-              if (htmlEl.classList.contains('bg-muted')) {
-                htmlEl.style.backgroundColor = '#f8f9fa';
-              }
-              if (htmlEl.classList.contains('text-primary')) {
-                htmlEl.style.color = '#3F51B5';
-                htmlEl.style.fontWeight = 'bold';
-              }
-              if (htmlEl.classList.contains('text-muted-foreground')) {
-                htmlEl.style.color = '#6b7280';
-              }
-              if (htmlEl.classList.contains('font-bold')) {
-                htmlEl.style.fontWeight = 'bold';
-              }
-              if (htmlEl.classList.contains('text-xl')) {
-                htmlEl.style.fontSize = '20px';
-              }
-              if (htmlEl.classList.contains('text-lg')) {
-                htmlEl.style.fontSize = '18px';
-              }
-              if (htmlEl.classList.contains('text-sm')) {
-                htmlEl.style.fontSize = '14px';
-              }
-              if (htmlEl.classList.contains('text-xs')) {
-                htmlEl.style.fontSize = '12px';
-              }
-            });
-
-            // Style the table specifically
-            const table = clonedElement.querySelector('table');
-            if (table) {
-              table.style.width = '100%';
-              table.style.borderCollapse = 'collapse';
-              table.style.marginTop = '20px';
-              table.style.marginBottom = '20px';
-              
-              const headers = table.querySelectorAll('th');
-              headers.forEach((th: Element) => {
-                const htmlTh = th as HTMLElement;
-                htmlTh.style.backgroundColor = '#f8f9fa';
-                htmlTh.style.padding = '12px 8px';
-                htmlTh.style.border = '1px solid #e5e7eb';
-                htmlTh.style.fontWeight = 'bold';
-                htmlTh.style.fontSize = '12px';
-                htmlTh.style.color = '#000000';
-              });
-              
-              const cells = table.querySelectorAll('td');
-              cells.forEach((td: Element) => {
-                const htmlTd = td as HTMLElement;
-                htmlTd.style.padding = '10px 8px';
-                htmlTd.style.border = '1px solid #e5e7eb';
-                htmlTd.style.fontSize = '11px';
-                htmlTd.style.color = '#000000';
-              });
-            }
-
-            // Style separators
-            const separators = clonedElement.querySelectorAll('[role="separator"]');
-            separators.forEach((sep: Element) => {
-              const htmlSep = sep as HTMLElement;
-              htmlSep.style.borderTop = '1px solid #e5e7eb';
-              htmlSep.style.margin = '16px 0';
-            });
-          }
         }
       });
 
@@ -231,15 +137,15 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
       const canvasWidth = canvas.width;
       const canvasHeight = canvas.height;
 
-      // Calculate scaling to fit content within PDF page
-      const margin = 0; // No margin since we already have padding in the content
+      // Calculate scaling to fit content within PDF page with margins
+      const margin = 10; // 10mm margin
       const availableWidth = pdfWidth - (margin * 2);
       const availableHeight = pdfHeight - (margin * 2);
       
-      // Convert pixels to mm (96 DPI to 25.4mm per inch)
+      // Convert pixels to mm (assuming 96 DPI)
       const pxToMm = 25.4 / 96;
-      const imgWidthMm = canvasWidth * pxToMm / 3; // Divide by scale factor
-      const imgHeightMm = canvasHeight * pxToMm / 3;
+      const imgWidthMm = canvasWidth * pxToMm / 2; // Divide by scale factor
+      const imgHeightMm = canvasHeight * pxToMm / 2;
       
       // Scale to fit if necessary
       const scaleX = availableWidth / imgWidthMm;
@@ -286,151 +192,426 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
 
   return (
     <Card className="max-w-4xl mx-auto shadow-lg">
-      <div ref={invoiceCardRef} data-invoice-content className="bg-white"> 
-        <CardHeader className="bg-gray-50 p-8 border-b">
-          <div className="flex flex-col md:flex-row justify-between items-start gap-6">
-            <div className="flex-1">
+      <div ref={invoiceCardRef} data-invoice-content style={{
+        backgroundColor: '#ffffff',
+        fontFamily: 'Arial, sans-serif',
+        fontSize: '14px',
+        lineHeight: '1.5',
+        color: '#000000'
+      }}> 
+        <CardHeader style={{
+          backgroundColor: '#f8f9fa',
+          padding: '32px',
+          borderBottom: '1px solid #e5e7eb'
+        }}>
+          <div style={{
+            display: 'flex',
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+            gap: '24px',
+            flexWrap: 'wrap'
+          }}>
+            <div style={{ flex: '1', minWidth: '300px' }}>
               {invoice.billerInfo.logoUrl ? (
                 <Image
                   src={invoice.billerInfo.logoUrl}
                   alt={`${invoice.billerInfo.businessName} logo`}
                   width={150}
                   height={75}
-                  className="mb-4"
-                  style={{ objectFit: 'contain' }} 
+                  style={{ 
+                    objectFit: 'contain',
+                    marginBottom: '16px'
+                  }} 
                   data-ai-hint="company logo"
                 />
               ) : (
-                <div className="h-20 w-40 bg-gray-200 flex items-center justify-center text-gray-600 mb-4 rounded text-sm border" data-ai-hint="logo placeholder">
+                <div style={{
+                  height: '80px',
+                  width: '160px',
+                  backgroundColor: '#e5e7eb',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#6b7280',
+                  marginBottom: '16px',
+                  borderRadius: '4px',
+                  fontSize: '14px',
+                  border: '1px solid #d1d5db'
+                }} data-ai-hint="logo placeholder">
                   {invoice.billerInfo.businessName}
                 </div>
               )}
-              <h2 className="text-2xl font-bold text-blue-700 mb-2">{invoice.billerInfo.businessName}</h2>
-              <div className="text-sm text-gray-600 space-y-1">
-                <p>{invoice.billerInfo.addressLine1}</p>
-                {invoice.billerInfo.addressLine2 && <p>{invoice.billerInfo.addressLine2}</p>}
-                <p>{invoice.billerInfo.city}, {invoice.billerInfo.state} - {invoice.billerInfo.postalCode}</p>
+              <h2 style={{
+                fontSize: '24px',
+                fontWeight: 'bold',
+                color: '#3f51b5',
+                marginBottom: '8px',
+                margin: '0 0 8px 0'
+              }}>{invoice.billerInfo.businessName}</h2>
+              <div style={{
+                fontSize: '14px',
+                color: '#6b7280',
+                lineHeight: '1.4'
+              }}>
+                <p style={{ margin: '4px 0' }}>{invoice.billerInfo.addressLine1}</p>
+                {invoice.billerInfo.addressLine2 && <p style={{ margin: '4px 0' }}>{invoice.billerInfo.addressLine2}</p>}
+                <p style={{ margin: '4px 0' }}>{invoice.billerInfo.city}, {invoice.billerInfo.state} - {invoice.billerInfo.postalCode}</p>
                 {invoice.billerInfo.gstin && (
-                  <p className="font-semibold text-blue-700 bg-blue-50 px-3 py-1 rounded mt-2 inline-block border">
+                  <p style={{
+                    fontWeight: '600',
+                    color: '#3f51b5',
+                    backgroundColor: '#eff6ff',
+                    padding: '8px 12px',
+                    borderRadius: '4px',
+                    marginTop: '8px',
+                    display: 'inline-block',
+                    border: '1px solid #bfdbfe',
+                    margin: '8px 0 0 0'
+                  }}>
                     GSTIN: {invoice.billerInfo.gstin}
                   </p>
                 )}
               </div>
             </div>
-            <div className="text-left md:text-right">
-              <h1 className="text-4xl font-bold uppercase text-gray-700 mb-2">Invoice</h1>
-              <p className="text-xl text-gray-600 mb-4"># {invoice.invoiceNumber}</p>
-              <div className="flex items-center justify-start md:justify-end gap-2 mb-4">
+            <div style={{ textAlign: 'right', minWidth: '250px' }}>
+              <h1 style={{
+                fontSize: '36px',
+                fontWeight: 'bold',
+                textTransform: 'uppercase',
+                color: '#4b5563',
+                marginBottom: '8px',
+                margin: '0 0 8px 0'
+              }}>Invoice</h1>
+              <p style={{
+                fontSize: '20px',
+                color: '#6b7280',
+                marginBottom: '16px',
+                margin: '0 0 16px 0'
+              }}># {invoice.invoiceNumber}</p>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                gap: '8px',
+                marginBottom: '16px'
+              }}>
                  {statusIcons[invoice.status]}
-                <span className="text-sm font-medium capitalize px-3 py-1 bg-gray-100 rounded">{invoice.status}</span>
+                <span style={{
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  textTransform: 'capitalize',
+                  padding: '4px 12px',
+                  backgroundColor: '#f3f4f6',
+                  borderRadius: '4px'
+                }}>{invoice.status}</span>
               </div>
-              <div className="border-t pt-4 space-y-2">
-                <p className="text-sm"><span className="font-semibold text-gray-700">Date:</span> {format(invoiceDate, "dd MMM, yyyy")}</p>
-                <p className="text-sm"><span className="font-semibold text-gray-700">Due Date:</span> {format(dueDate, "dd MMM, yyyy")}</p>
+              <div style={{
+                borderTop: '1px solid #e5e7eb',
+                paddingTop: '16px',
+                fontSize: '14px',
+                lineHeight: '1.6'
+              }}>
+                <p style={{ margin: '4px 0' }}>
+                  <span style={{ fontWeight: '600', color: '#374151' }}>Date:</span> {format(invoiceDate, "dd MMM, yyyy")}
+                </p>
+                <p style={{ margin: '4px 0' }}>
+                  <span style={{ fontWeight: '600', color: '#374151' }}>Due Date:</span> {format(dueDate, "dd MMM, yyyy")}
+                </p>
               </div>
             </div>
           </div>
         </CardHeader>
 
-        <CardContent className="p-8">
-          <div className="grid md:grid-cols-2 gap-8 mb-8">
+        <CardContent style={{ padding: '32px' }}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+            gap: '32px',
+            marginBottom: '32px'
+          }}>
             <div>
-              <h3 className="font-bold text-gray-700 mb-3 text-lg border-b pb-2">Bill To:</h3>
-              <div className="space-y-1">
-                <p className="font-semibold text-blue-700 text-lg">{invoice.client.name}</p>
-                <p className="text-sm text-gray-600">{invoice.client.addressLine1}</p>
-                {invoice.client.addressLine2 && <p className="text-sm text-gray-600">{invoice.client.addressLine2}</p>}
-                <p className="text-sm text-gray-600">{invoice.client.city}, {invoice.client.state} - {invoice.client.postalCode}</p>
-                {invoice.client.gstin && <p className="text-sm font-semibold text-gray-700">GSTIN: {invoice.client.gstin}</p>}
+              <h3 style={{
+                fontWeight: 'bold',
+                color: '#374151',
+                marginBottom: '12px',
+                fontSize: '18px',
+                borderBottom: '2px solid #e5e7eb',
+                paddingBottom: '8px',
+                margin: '0 0 12px 0'
+              }}>Bill To:</h3>
+              <div style={{ lineHeight: '1.6' }}>
+                <p style={{
+                  fontWeight: '600',
+                  color: '#3f51b5',
+                  fontSize: '18px',
+                  margin: '4px 0'
+                }}>{invoice.client.name}</p>
+                <p style={{
+                  fontSize: '14px',
+                  color: '#6b7280',
+                  margin: '4px 0'
+                }}>{invoice.client.addressLine1}</p>
+                {invoice.client.addressLine2 && <p style={{
+                  fontSize: '14px',
+                  color: '#6b7280',
+                  margin: '4px 0'
+                }}>{invoice.client.addressLine2}</p>}
+                <p style={{
+                  fontSize: '14px',
+                  color: '#6b7280',
+                  margin: '4px 0'
+                }}>{invoice.client.city}, {invoice.client.state} - {invoice.client.postalCode}</p>
+                {invoice.client.gstin && <p style={{
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  color: '#374151',
+                  margin: '4px 0'
+                }}>GSTIN: {invoice.client.gstin}</p>}
               </div>
             </div>
             {invoice.shippingAddress && (
               <div>
-                <h3 className="font-bold text-gray-700 mb-3 text-lg border-b pb-2">Ship To:</h3>
-                <div className="space-y-1">
-                  <p className="font-semibold text-blue-700 text-lg">{invoice.shippingAddress.name}</p>
-                  <p className="text-sm text-gray-600">{invoice.shippingAddress.addressLine1}</p>
-                  {invoice.shippingAddress.addressLine2 && <p className="text-sm text-gray-600">{invoice.shippingAddress.addressLine2}</p>}
-                  <p className="text-sm text-gray-600">{invoice.shippingAddress.city}, {invoice.shippingAddress.state} - {invoice.shippingAddress.postalCode}</p>
+                <h3 style={{
+                  fontWeight: 'bold',
+                  color: '#374151',
+                  marginBottom: '12px',
+                  fontSize: '18px',
+                  borderBottom: '2px solid #e5e7eb',
+                  paddingBottom: '8px',
+                  margin: '0 0 12px 0'
+                }}>Ship To:</h3>
+                <div style={{ lineHeight: '1.6' }}>
+                  <p style={{
+                    fontWeight: '600',
+                    color: '#3f51b5',
+                    fontSize: '18px',
+                    margin: '4px 0'
+                  }}>{invoice.shippingAddress.name}</p>
+                  <p style={{
+                    fontSize: '14px',
+                    color: '#6b7280',
+                    margin: '4px 0'
+                  }}>{invoice.shippingAddress.addressLine1}</p>
+                  {invoice.shippingAddress.addressLine2 && <p style={{
+                    fontSize: '14px',
+                    color: '#6b7280',
+                    margin: '4px 0'
+                  }}>{invoice.shippingAddress.addressLine2}</p>}
+                  <p style={{
+                    fontSize: '14px',
+                    color: '#6b7280',
+                    margin: '4px 0'
+                  }}>{invoice.shippingAddress.city}, {invoice.shippingAddress.state} - {invoice.shippingAddress.postalCode}</p>
                 </div>
               </div>
             )}
           </div>
 
-          <div className="overflow-x-auto mb-8">
-            <table className="w-full text-sm border-collapse border border-gray-300">
-              <thead className="bg-gray-100">
+          <div style={{ marginBottom: '32px', overflowX: 'auto' }}>
+            <table style={{
+              width: '100%',
+              fontSize: '14px',
+              borderCollapse: 'collapse',
+              border: '1px solid #d1d5db'
+            }}>
+              <thead style={{ backgroundColor: '#f3f4f6' }}>
                 <tr>
-                  <th className="p-3 text-left font-bold text-gray-700 border border-gray-300">#</th>
-                  <th className="p-3 text-left font-bold text-gray-700 border border-gray-300">Item/Service</th>
-                  <th className="p-3 text-center font-bold text-gray-700 border border-gray-300">Qty</th>
-                  <th className="p-3 text-right font-bold text-gray-700 border border-gray-300">Rate ({currencySymbol})</th>
-                  <th className="p-3 text-right font-bold text-gray-700 border border-gray-300">Discount (%)</th>
-                  <th className="p-3 text-right font-bold text-gray-700 border border-gray-300">Amount ({currencySymbol})</th>
+                  <th style={{
+                    padding: '12px 8px',
+                    textAlign: 'left',
+                    fontWeight: 'bold',
+                    color: '#374151',
+                    border: '1px solid #d1d5db'
+                  }}>#</th>
+                  <th style={{
+                    padding: '12px 8px',
+                    textAlign: 'left',
+                    fontWeight: 'bold',
+                    color: '#374151',
+                    border: '1px solid #d1d5db'
+                  }}>Item/Service</th>
+                  <th style={{
+                    padding: '12px 8px',
+                    textAlign: 'center',
+                    fontWeight: 'bold',
+                    color: '#374151',
+                    border: '1px solid #d1d5db'
+                  }}>Qty</th>
+                  <th style={{
+                    padding: '12px 8px',
+                    textAlign: 'right',
+                    fontWeight: 'bold',
+                    color: '#374151',
+                    border: '1px solid #d1d5db'
+                  }}>Rate ({currencySymbol})</th>
+                  <th style={{
+                    padding: '12px 8px',
+                    textAlign: 'right',
+                    fontWeight: 'bold',
+                    color: '#374151',
+                    border: '1px solid #d1d5db'
+                  }}>Discount (%)</th>
+                  <th style={{
+                    padding: '12px 8px',
+                    textAlign: 'right',
+                    fontWeight: 'bold',
+                    color: '#374151',
+                    border: '1px solid #d1d5db'
+                  }}>Amount ({currencySymbol})</th>
                 </tr>
               </thead>
               <tbody>
                 {invoice.lineItems.map((item, index) => (
-                  <tr key={item.id} className="border-b border-gray-300">
-                    <td className="p-3 border border-gray-300">{index + 1}</td>
-                    <td className="p-3 border border-gray-300 font-medium">{item.productName}</td>
-                    <td className="p-3 text-center border border-gray-300">{item.quantity}</td>
-                    <td className="p-3 text-right border border-gray-300">{item.rate.toFixed(2)}</td>
-                    <td className="p-3 text-right border border-gray-300">{item.discountPercentage.toFixed(2)}%</td>
-                    <td className="p-3 text-right border border-gray-300 font-semibold">{item.amount.toFixed(2)}</td>
+                  <tr key={item.id} style={{ borderBottom: '1px solid #d1d5db' }}>
+                    <td style={{
+                      padding: '12px 8px',
+                      border: '1px solid #d1d5db'
+                    }}>{index + 1}</td>
+                    <td style={{
+                      padding: '12px 8px',
+                      fontWeight: '500',
+                      border: '1px solid #d1d5db'
+                    }}>{item.productName}</td>
+                    <td style={{
+                      padding: '12px 8px',
+                      textAlign: 'center',
+                      border: '1px solid #d1d5db'
+                    }}>{item.quantity}</td>
+                    <td style={{
+                      padding: '12px 8px',
+                      textAlign: 'right',
+                      border: '1px solid #d1d5db'
+                    }}>{item.rate.toFixed(2)}</td>
+                    <td style={{
+                      padding: '12px 8px',
+                      textAlign: 'right',
+                      border: '1px solid #d1d5db'
+                    }}>{item.discountPercentage.toFixed(2)}%</td>
+                    <td style={{
+                      padding: '12px 8px',
+                      textAlign: 'right',
+                      fontWeight: '600',
+                      border: '1px solid #d1d5db'
+                    }}>{item.amount.toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-8">
-            <div className="space-y-4">
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+            gap: '32px'
+          }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {invoice.notes && (
                 <div>
-                  <h4 className="font-bold text-gray-700 mb-2">Notes:</h4>
-                  <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded border">{invoice.notes}</p>
+                  <h4 style={{
+                    fontWeight: 'bold',
+                    color: '#374151',
+                    marginBottom: '8px',
+                    margin: '0 0 8px 0'
+                  }}>Notes:</h4>
+                  <p style={{
+                    fontSize: '14px',
+                    color: '#6b7280',
+                    backgroundColor: '#f9fafb',
+                    padding: '12px',
+                    borderRadius: '4px',
+                    border: '1px solid #e5e7eb',
+                    margin: '0'
+                  }}>{invoice.notes}</p>
                 </div>
               )}
               {invoice.termsAndConditions && (
                 <div>
-                  <h4 className="font-bold text-gray-700 mb-2">Terms & Conditions:</h4>
-                  <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded border">{invoice.termsAndConditions}</p>
+                  <h4 style={{
+                    fontWeight: 'bold',
+                    color: '#374151',
+                    marginBottom: '8px',
+                    margin: '0 0 8px 0'
+                  }}>Terms & Conditions:</h4>
+                  <p style={{
+                    fontSize: '14px',
+                    color: '#6b7280',
+                    backgroundColor: '#f9fafb',
+                    padding: '12px',
+                    borderRadius: '4px',
+                    border: '1px solid #e5e7eb',
+                    margin: '0'
+                  }}>{invoice.termsAndConditions}</p>
                 </div>
               )}
             </div>
-            <div className="space-y-3">
-              <div className="bg-gray-50 p-4 rounded border">
-                <div className="flex justify-between text-sm mb-2">
-                  <span className="text-gray-600">Subtotal:</span> 
-                  <span className="font-semibold">{currencySymbol}{invoice.subTotal.toFixed(2)}</span>
+            <div>
+              <div style={{
+                backgroundColor: '#f9fafb',
+                padding: '16px',
+                borderRadius: '4px',
+                border: '1px solid #e5e7eb'
+              }}>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  fontSize: '14px',
+                  marginBottom: '8px'
+                }}>
+                  <span style={{ color: '#6b7280' }}>Subtotal:</span> 
+                  <span style={{ fontWeight: '600' }}>{currencySymbol}{invoice.subTotal.toFixed(2)}</span>
                 </div>
                 {!invoice.isInterState && (
                   <>
-                  <div className="flex justify-between text-sm mb-2">
-                    <span className="text-gray-600">
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    fontSize: '14px',
+                    marginBottom: '8px'
+                  }}>
+                    <span style={{ color: '#6b7280' }}>
                       CGST ({(invoice.lineItems[0]?.taxRate || 18) / 2}%):
                     </span> 
-                    <span className="font-semibold">{currencySymbol}{invoice.totalCGST.toFixed(2)}</span>
+                    <span style={{ fontWeight: '600' }}>{currencySymbol}{invoice.totalCGST.toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between text-sm mb-2">
-                    <span className="text-gray-600">
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    fontSize: '14px',
+                    marginBottom: '8px'
+                  }}>
+                    <span style={{ color: '#6b7280' }}>
                       SGST ({(invoice.lineItems[0]?.taxRate || 18) / 2}%):
                     </span> 
-                    <span className="font-semibold">{currencySymbol}{invoice.totalSGST.toFixed(2)}</span>
+                    <span style={{ fontWeight: '600' }}>{currencySymbol}{invoice.totalSGST.toFixed(2)}</span>
                   </div>
                   </>
                 )}
                 {invoice.isInterState && (
-                  <div className="flex justify-between text-sm mb-2">
-                    <span className="text-gray-600">
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    fontSize: '14px',
+                    marginBottom: '8px'
+                  }}>
+                    <span style={{ color: '#6b7280' }}>
                       IGST ({invoice.lineItems[0]?.taxRate || 18}%):
                     </span> 
-                    <span className="font-semibold">{currencySymbol}{invoice.totalIGST.toFixed(2)}</span>
+                    <span style={{ fontWeight: '600' }}>{currencySymbol}{invoice.totalIGST.toFixed(2)}</span>
                   </div>
                 )}
-                <div className="border-t pt-3 mt-3">
-                  <div className="flex justify-between text-xl font-bold text-blue-700">
+                <div style={{
+                  borderTop: '1px solid #d1d5db',
+                  paddingTop: '12px',
+                  marginTop: '12px'
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    fontSize: '20px',
+                    fontWeight: 'bold',
+                    color: '#3f51b5'
+                  }}>
                     <span>Grand Total:</span> 
                     <span>{currencySymbol}{invoice.grandTotal.toFixed(2)}</span>
                   </div>
@@ -440,13 +621,32 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
           </div>
 
           {invoice.billerInfo.bankName && (
-          <div className="mt-8 pt-6 border-t">
-            <h4 className="font-bold text-gray-700 mb-4 text-lg">Payment Information:</h4>
-            <div className="grid md:grid-cols-2 gap-x-6 gap-y-2 text-sm bg-gray-50 p-4 rounded border">
-              {invoice.billerInfo.bankName && <p><strong>Bank:</strong> {invoice.billerInfo.bankName}</p>}
-              {invoice.billerInfo.accountNumber && <p><strong>A/C No:</strong> {invoice.billerInfo.accountNumber}</p>}
-              {invoice.billerInfo.ifscCode && <p><strong>IFSC:</strong> {invoice.billerInfo.ifscCode}</p>}
-              {invoice.billerInfo.upiId && <p><strong>UPI:</strong> {invoice.billerInfo.upiId}</p>}
+          <div style={{
+            marginTop: '32px',
+            paddingTop: '24px',
+            borderTop: '1px solid #e5e7eb'
+          }}>
+            <h4 style={{
+              fontWeight: 'bold',
+              color: '#374151',
+              marginBottom: '16px',
+              fontSize: '18px',
+              margin: '0 0 16px 0'
+            }}>Payment Information:</h4>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+              gap: '8px 24px',
+              fontSize: '14px',
+              backgroundColor: '#f9fafb',
+              padding: '16px',
+              borderRadius: '4px',
+              border: '1px solid #e5e7eb'
+            }}>
+              {invoice.billerInfo.bankName && <p style={{ margin: '4px 0' }}><strong>Bank:</strong> {invoice.billerInfo.bankName}</p>}
+              {invoice.billerInfo.accountNumber && <p style={{ margin: '4px 0' }}><strong>A/C No:</strong> {invoice.billerInfo.accountNumber}</p>}
+              {invoice.billerInfo.ifscCode && <p style={{ margin: '4px 0' }}><strong>IFSC:</strong> {invoice.billerInfo.ifscCode}</p>}
+              {invoice.billerInfo.upiId && <p style={{ margin: '4px 0' }}><strong>UPI:</strong> {invoice.billerInfo.upiId}</p>}
             </div>
           </div>
           )}
