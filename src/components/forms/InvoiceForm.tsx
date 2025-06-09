@@ -425,7 +425,7 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
                       </SelectTrigger></FormControl>
                       <SelectContent>
                         {(loadingAuth || loadingClients) && !initialData ? (
-                            <SelectItem value="loading" disabled>
+                            <SelectItem value="loading\" disabled>
                                 <div className="flex items-center">
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading...
                                 </div>
