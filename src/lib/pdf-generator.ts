@@ -343,85 +343,94 @@ export class InvoicePDFGenerator {
   }
 
   private addTotalsSection(invoice: Invoice) {
-    this.checkPageBreak(60);
+    this.checkPageBreak(80);
     
-    // Fixed positioning for totals section
-    const totalsBoxWidth = 70; // Increased width for better spacing
-    const totalsBoxX = this.pageWidth - this.margin - totalsBoxWidth; // Right-aligned position
-    const totalsBoxY = this.currentY; // Start at current Y position
+    // Calculate totals box dimensions
+    const boxWidth = 80;
+    const boxHeight = 50;
+    const boxX = this.pageWidth - this.margin - boxWidth;
+    const boxY = this.currentY;
     
-    // Calculate number of lines needed
-    let numberOfLines = 3; // Subtotal + Grand Total + one tax line
-    if (!invoice.isInterState) {
-      numberOfLines = 4; // Subtotal + CGST + SGST + Grand Total
-    }
+    // Draw the totals container box
+    this.addRect(boxX, boxY, boxWidth, boxHeight, 'F', '#f8f9fa');
+    this.addRect(boxX, boxY, boxWidth, boxHeight, 'S', undefined, '#dee2e6');
     
-    const lineHeight = 8;
-    const boxPadding = 6;
-    const totalsBoxHeight = (numberOfLines * lineHeight) + (boxPadding * 2);
-
-    // Draw totals background box
-    this.addRect(totalsBoxX, totalsBoxY, totalsBoxWidth, totalsBoxHeight, 'F', '#f8f9fa');
-    this.addRect(totalsBoxX, totalsBoxY, totalsBoxWidth, totalsBoxHeight, 'S', undefined, '#dee2e6');
-
-    // Position for text inside the box
-    const labelX = totalsBoxX + 4; // Left padding inside box
-    const valueX = totalsBoxX + totalsBoxWidth - 4; // Right padding inside box
-    let textY = totalsBoxY + boxPadding + 6; // Start position for text
-
+    // Text positioning within the box
+    const labelStartX = boxX + 5;
+    const valueEndX = boxX + boxWidth - 5;
+    let textY = boxY + 12;
+    const lineSpacing = 8;
+    
     // Subtotal
-    this.addText('Subtotal:', labelX, textY, { fontSize: 10, color: '#495057' });
-    this.addText(`Rs. ${invoice.subTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, valueX, textY, { 
+    this.addText('Subtotal:', labelStartX, textY, { 
+      fontSize: 10, 
+      color: '#495057' 
+    });
+    this.addText(`Rs. ${invoice.subTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, valueEndX, textY, { 
       fontSize: 10, 
       align: 'right',
       color: '#212529'
     });
-    textY += lineHeight;
+    textY += lineSpacing;
 
-    // Tax details
+    // Tax lines
     if (!invoice.isInterState) {
       // CGST
-      this.addText('CGST:', labelX, textY, { fontSize: 10, color: '#495057' });
-      this.addText(`Rs. ${invoice.totalCGST.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, valueX, textY, { 
+      this.addText('CGST:', labelStartX, textY, { 
+        fontSize: 10, 
+        color: '#495057' 
+      });
+      this.addText(`Rs. ${invoice.totalCGST.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, valueEndX, textY, { 
         fontSize: 10, 
         align: 'right',
         color: '#212529'
       });
-      textY += lineHeight;
+      textY += lineSpacing;
 
       // SGST
-      this.addText('SGST:', labelX, textY, { fontSize: 10, color: '#495057' });
-      this.addText(`Rs. ${invoice.totalSGST.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, valueX, textY, { 
+      this.addText('SGST:', labelStartX, textY, { 
+        fontSize: 10, 
+        color: '#495057' 
+      });
+      this.addText(`Rs. ${invoice.totalSGST.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, valueEndX, textY, { 
         fontSize: 10, 
         align: 'right',
         color: '#212529'
       });
-      textY += lineHeight;
+      textY += lineSpacing;
     } else {
       // IGST
-      this.addText('IGST:', labelX, textY, { fontSize: 10, color: '#495057' });
-      this.addText(`Rs. ${invoice.totalIGST.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, valueX, textY, { 
+      this.addText('IGST:', labelStartX, textY, { 
+        fontSize: 10, 
+        color: '#495057' 
+      });
+      this.addText(`Rs. ${invoice.totalIGST.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, valueEndX, textY, { 
         fontSize: 10, 
         align: 'right',
         color: '#212529'
       });
-      textY += lineHeight;
+      textY += lineSpacing;
     }
 
-    // Separator line before grand total
-    this.addLine(labelX, textY - 3, valueX, textY - 3, '#495057', 0.5);
+    // Separator line
+    this.addLine(labelStartX, textY - 3, valueEndX, textY - 3, '#495057', 0.5);
+    textY += 2;
 
-    // Grand Total with emphasis
-    this.addText('Grand Total:', labelX, textY, { fontSize: 11, fontStyle: 'bold', color: '#212529' });
-    this.addText(`Rs. ${invoice.grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, valueX, textY, { 
-      fontSize: 11, 
+    // Grand Total
+    this.addText('Grand Total:', labelStartX, textY, { 
+      fontSize: 12, 
+      fontStyle: 'bold', 
+      color: '#212529' 
+    });
+    this.addText(`Rs. ${invoice.grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, valueEndX, textY, { 
+      fontSize: 12, 
       fontStyle: 'bold', 
       color: '#3F51B5', 
       align: 'right'
     });
     
-    // Update currentY to be after the totals box with some spacing
-    this.currentY = totalsBoxY + totalsBoxHeight + 20;
+    // Update currentY to be below the totals box
+    this.currentY = boxY + boxHeight + 20;
   }
 
   private addNotesSection(invoice: Invoice) {
