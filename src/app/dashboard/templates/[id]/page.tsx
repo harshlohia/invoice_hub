@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Edit, Copy, Star, Users, Download, Loader2, AlertTriangle, Eye } from "lucide-react";
+import { ArrowLeft, Edit, Copy, Star, Users, Download, Loader2, AlertTriangle, Eye, Sparkles } from "lucide-react";
 import Link from 'next/link';
 import type { InvoiceTemplate } from '@/lib/types';
 import { TemplatePreview } from '@/components/TemplatePreview';
@@ -16,6 +16,19 @@ import { onAuthStateChanged, type User, type Auth } from 'firebase/auth';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { format } from 'date-fns';
+import { DEFAULT_TEMPLATE_SECTIONS, DEFAULT_TEMPLATE_STYLE } from '@/lib/types';
+
+// Default template that's not stored in DB
+const DEFAULT_TEMPLATE: InvoiceTemplate = {
+  id: 'default',
+  name: 'BillFlow Default',
+  description: 'Clean and professional default template with modern styling and your brand colors',
+  isPublic: true,
+  isDefault: true,
+  sections: DEFAULT_TEMPLATE_SECTIONS,
+  style: DEFAULT_TEMPLATE_STYLE,
+  usageCount: 0
+};
 
 export default function TemplateDetailPage() {
   const params = useParams();
@@ -46,6 +59,13 @@ export default function TemplateDetailPage() {
     setLoading(true);
     setError(null);
     try {
+      // Handle default template specially
+      if (templateId === 'default') {
+        setTemplate(DEFAULT_TEMPLATE);
+        setLoading(false);
+        return;
+      }
+
       const templateRef = doc(db, 'templates', templateId);
       const templateSnap = await getDoc(templateRef);
       
@@ -53,7 +73,7 @@ export default function TemplateDetailPage() {
         const templateData = { id: templateSnap.id, ...templateSnap.data() } as InvoiceTemplate;
         setTemplate(templateData);
         
-        // Increment usage count for analytics
+        // Increment usage count for analytics (only for non-default templates)
         await updateDoc(templateRef, {
           usageCount: increment(1)
         });
@@ -126,6 +146,7 @@ export default function TemplateDetailPage() {
   }
 
   const isOwner = template.userId === currentUser?.uid;
+  const isDefault = template.id === 'default';
   const createdDate = template.createdAt ? new Date(template.createdAt.seconds * 1000) : null;
   const updatedDate = template.updatedAt ? new Date(template.updatedAt.seconds * 1000) : null;
 
@@ -142,17 +163,18 @@ export default function TemplateDetailPage() {
             <div className="flex items-center gap-3 mb-2">
               <h1 className="text-3xl font-headline font-bold tracking-tight">{template.name}</h1>
               <div className="flex gap-2">
-                {template.isPublic && <Badge variant="secondary"><Users className="h-3 w-3 mr-1" />Public</Badge>}
-                {template.isDefault && <Badge variant="default"><Star className="h-3 w-3 mr-1" />Default</Badge>}
-                {isOwner && <Badge variant="outline">Mine</Badge>}
+                {isDefault && <Badge className="bg-accent text-accent-foreground"><Sparkles className="h-3 w-3 mr-1" />Default</Badge>}
+                {template.isPublic && !isDefault && <Badge variant="secondary"><Users className="h-3 w-3 mr-1" />Public</Badge>}
+                {template.isDefault && !isDefault && <Badge variant="default"><Star className="h-3 w-3 mr-1" />My Default</Badge>}
+                {isOwner && !isDefault && <Badge variant="outline">Mine</Badge>}
               </div>
             </div>
             <p className="text-muted-foreground">{template.description || 'No description provided.'}</p>
           </div>
         </div>
         <div className="flex gap-2">
-          {isOwner && (
-            <Button variant="outline\" asChild>
+          {isOwner && !isDefault && (
+            <Button variant="outline" asChild>
               <Link href={`/dashboard/templates/${templateId}/edit`}>
                 <Edit className="mr-2 h-4 w-4" /> Edit
               </Link>
@@ -209,9 +231,13 @@ export default function TemplateDetailPage() {
                   <span className="text-muted-foreground">Spacing:</span>
                   <span className="capitalize">{template.style?.spacing || 'normal'}</span>
                 </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Type:</span>
+                  <span>{isDefault ? 'Built-in Default' : template.isPublic ? 'Community' : 'Personal'}</span>
+                </div>
               </div>
 
-              {createdDate && (
+              {!isDefault && createdDate && (
                 <div className="pt-4 border-t">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Created:</span>
@@ -223,6 +249,14 @@ export default function TemplateDetailPage() {
                       <span>{format(updatedDate, 'MMM dd, yyyy')}</span>
                     </div>
                   )}
+                </div>
+              )}
+
+              {isDefault && (
+                <div className="pt-4 border-t">
+                  <div className="text-sm text-muted-foreground">
+                    This is the built-in default template that comes with BillFlow. It features a clean, professional design with your brand colors.
+                  </div>
                 </div>
               )}
             </CardContent>
@@ -288,7 +322,7 @@ export default function TemplateDetailPage() {
                 Use for New Invoice
               </Button>
               
-              {isOwner ? (
+              {isOwner && !isDefault ? (
                 <Button variant="outline" className="w-full" asChild>
                   <Link href={`/dashboard/templates/${templateId}/edit`}>
                     <Edit className="mr-2 h-4 w-4" />
@@ -298,7 +332,7 @@ export default function TemplateDetailPage() {
               ) : (
                 <Button variant="outline" className="w-full" onClick={handleCloneTemplate}>
                   <Copy className="mr-2 h-4 w-4" />
-                  Clone Template
+                  {isDefault ? 'Customize This Template' : 'Clone Template'}
                 </Button>
               )}
               
@@ -306,6 +340,12 @@ export default function TemplateDetailPage() {
                 <Download className="mr-2 h-4 w-4" />
                 Export Template
               </Button>
+
+              {isDefault && (
+                <div className="text-xs text-muted-foreground text-center pt-2">
+                  💡 Clone this template to create your own customized version
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
