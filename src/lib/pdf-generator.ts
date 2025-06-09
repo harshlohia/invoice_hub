@@ -219,7 +219,19 @@ export class InvoicePDFGenerator {
     
     if (invoice.billerInfo.gstin) {
       companyY += 4;
-      this.addText(`GSTIN: ${invoice.billerInfo.gstin}`, companyStartX, companyY, { fontSize: 9, color: '#6c757d' });
+      // Highlight the GSTIN with background color and bold text
+      const gstinText = `GSTIN: ${invoice.billerInfo.gstin}`;
+      const textWidth = this.doc.getTextWidth(gstinText) + 4;
+      
+      // Add background rectangle for GSTIN
+      this.addRect(companyStartX - 2, companyY - 3, textWidth, 6, 'F', '#e3f2fd');
+      
+      // Add highlighted GSTIN text
+      this.addText(gstinText, companyStartX, companyY, { 
+        fontSize: 9, 
+        fontStyle: 'bold', 
+        color: this.themeColor 
+      });
     }
 
     // Invoice title and details - right aligned
@@ -317,22 +329,22 @@ export class InvoicePDFGenerator {
     const tableStartX = this.margin;
     const tableEndX = this.pageWidth - this.margin;
 
-    // Column widths matching the design
-    const columnWidths = [8, 60, 15, 25, 22, 25];
+    // Updated column widths - removed qty and discount columns
+    const columnWidths = [10, 60, 30]; // #, Item/Service, Rate, Amount
     const columnPositions = [tableStartX];
     
     for (let i = 0; i < columnWidths.length - 1; i++) {
       columnPositions.push(columnPositions[i] + columnWidths[i]);
     }
 
-    // Table headers with background - matching the preview design
-    const headers = ['#', 'Item/Service', 'Qty', 'Rate (Rs.)', 'Discount (%)', 'Amount (Rs.)'];
+    // Updated table headers - removed qty and discount columns
+    const headers = ['#', 'Item/Service', 'Rate (Rs.)', 'Amount (Rs.)'];
     
     // Header background
     this.addRect(tableStartX, tableStartY, tableWidth, headerHeight, 'F', '#f8f9fa');
     
     headers.forEach((header, index) => {
-      const align = index === 0 ? 'left' : index === 1 ? 'left' : index === 2 ? 'center' : 'right';
+      const align = index === 0 ? 'left' : index === 1 ? 'left' : 'right';
       let x: number;
       
       if (align === 'right') {
@@ -341,8 +353,6 @@ export class InvoicePDFGenerator {
         } else {
           x = columnPositions[index] + columnWidths[index] - 2;
         }
-      } else if (align === 'center') {
-        x = columnPositions[index] + columnWidths[index] / 2;
       } else {
         x = columnPositions[index] + 2;
       }
@@ -360,24 +370,22 @@ export class InvoicePDFGenerator {
 
     this.currentY = tableStartY + headerHeight + 2;
 
-    // Table rows - clean design
+    // Table rows - clean design with updated columns
     invoice.lineItems.forEach((item, index) => {
       this.checkPageBreak(rowHeight + 5);
       
       const rowY = this.currentY;
 
-      // Row data
+      // Updated row data - removed qty and discount
       const rowData = [
         (index + 1).toString(),
         item.productName,
-        item.quantity.toString(),
         item.rate.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-        `${item.discountPercentage.toFixed(1)}%`,
         item.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
       ];
 
       rowData.forEach((data, colIndex) => {
-        const align = colIndex === 0 ? 'left' : colIndex === 1 ? 'left' : colIndex === 2 ? 'center' : 'right';
+        const align = colIndex === 0 ? 'left' : colIndex === 1 ? 'left' : 'right';
         let x: number;
         
         if (align === 'right') {
@@ -386,16 +394,14 @@ export class InvoicePDFGenerator {
           } else {
             x = columnPositions[colIndex] + columnWidths[colIndex] - 2;
           }
-        } else if (align === 'center') {
-          x = columnPositions[colIndex] + columnWidths[colIndex] / 2;
         } else {
           x = columnPositions[colIndex] + 2;
         }
         
         // Truncate long text for item name
         let displayText = data;
-        if (colIndex === 1 && data.length > 30) {
-          displayText = data.substring(0, 28) + '...';
+        if (colIndex === 1 && data.length > 35) {
+          displayText = data.substring(0, 33) + '...';
         }
         
         this.addText(displayText, x, rowY + 6, { 
@@ -436,10 +442,12 @@ export class InvoicePDFGenerator {
     });
     totalsY += lineSpacing;
 
-    // Tax lines
+    // Tax lines with percentages
+    const taxRate = invoice.lineItems[0]?.taxRate || 18;
+    
     if (!invoice.isInterState) {
-      // CGST
-      this.addText('CGST:', totalsX, totalsY, { 
+      // CGST with percentage
+      this.addText(`CGST (${taxRate / 2}%):`, totalsX, totalsY, { 
         fontSize: 9, 
         color: '#6c757d' 
       });
@@ -450,8 +458,8 @@ export class InvoicePDFGenerator {
       });
       totalsY += lineSpacing;
 
-      // SGST
-      this.addText('SGST:', totalsX, totalsY, { 
+      // SGST with percentage
+      this.addText(`SGST (${taxRate / 2}%):`, totalsX, totalsY, { 
         fontSize: 9, 
         color: '#6c757d' 
       });
@@ -462,8 +470,8 @@ export class InvoicePDFGenerator {
       });
       totalsY += lineSpacing;
     } else {
-      // IGST
-      this.addText('IGST:', totalsX, totalsY, { 
+      // IGST with percentage
+      this.addText(`IGST (${taxRate}%):`, totalsX, totalsY, { 
         fontSize: 9, 
         color: '#6c757d' 
       });

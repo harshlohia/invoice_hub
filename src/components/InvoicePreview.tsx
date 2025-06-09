@@ -137,7 +137,11 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
               <p className="text-sm text-muted-foreground">{invoice.billerInfo.addressLine1}</p>
               {invoice.billerInfo.addressLine2 && <p className="text-sm text-muted-foreground">{invoice.billerInfo.addressLine2}</p>}
               <p className="text-sm text-muted-foreground">{invoice.billerInfo.city}, {invoice.billerInfo.state} - {invoice.billerInfo.postalCode}</p>
-              <p className="text-sm text-muted-foreground">GSTIN: {invoice.billerInfo.gstin}</p>
+              {invoice.billerInfo.gstin && (
+                <p className="text-sm font-semibold text-primary bg-primary/10 px-2 py-1 rounded mt-1 inline-block">
+                  GSTIN: {invoice.billerInfo.gstin}
+                </p>
+              )}
             </div>
             <div className="text-left md:text-right">
               <h1 className="text-3xl font-headline font-bold uppercase text-gray-700 dark:text-gray-300">Invoice</h1>
@@ -180,9 +184,7 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
                 <tr>
                   <th className="p-2 text-left font-semibold text-foreground">#</th>
                   <th className="p-2 text-left font-semibold text-foreground">Item/Service</th>
-                  <th className="p-2 text-right font-semibold text-foreground">Qty</th>
                   <th className="p-2 text-right font-semibold text-foreground">Rate ({currencySymbol})</th>
-                  <th className="p-2 text-right font-semibold text-foreground">Discount (%)</th>
                   <th className="p-2 text-right font-semibold text-foreground">Amount ({currencySymbol})</th>
                 </tr>
               </thead>
@@ -191,9 +193,7 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
                   <tr key={item.id} className="border-b">
                     <td className="p-2">{index + 1}</td>
                     <td className="p-2">{item.productName}</td>
-                    <td className="p-2 text-right">{item.quantity}</td>
                     <td className="p-2 text-right">{item.rate.toFixed(2)}</td>
-                    <td className="p-2 text-right">{item.discountPercentage.toFixed(2)}%</td>
                     <td className="p-2 text-right">{item.amount.toFixed(2)}</td>
                   </tr>
                 ))}
@@ -214,12 +214,27 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
               <div className="flex justify-between text-sm"><span className="text-muted-foreground">Subtotal:</span> <span className="font-medium">{currencySymbol}{invoice.subTotal.toFixed(2)}</span></div>
               {!invoice.isInterState && (
                 <>
-                <div className="flex justify-between text-sm"><span className="text-muted-foreground">CGST:</span> <span className="font-medium">{currencySymbol}{invoice.totalCGST.toFixed(2)}</span></div>
-                <div className="flex justify-between text-sm"><span className="text-muted-foreground">SGST:</span> <span className="font-medium">{currencySymbol}{invoice.totalSGST.toFixed(2)}</span></div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    CGST ({(invoice.lineItems[0]?.taxRate || 18) / 2}%):
+                  </span> 
+                  <span className="font-medium">{currencySymbol}{invoice.totalCGST.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    SGST ({(invoice.lineItems[0]?.taxRate || 18) / 2}%):
+                  </span> 
+                  <span className="font-medium">{currencySymbol}{invoice.totalSGST.toFixed(2)}</span>
+                </div>
                 </>
               )}
               {invoice.isInterState && (
-                <div className="flex justify-between text-sm"><span className="text-muted-foreground">IGST:</span> <span className="font-medium">{currencySymbol}{invoice.totalIGST.toFixed(2)}</span></div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    IGST ({invoice.lineItems[0]?.taxRate || 18}%):
+                  </span> 
+                  <span className="font-medium">{currencySymbol}{invoice.totalIGST.toFixed(2)}</span>
+                </div>
               )}
               <Separator/>
               <div className="flex justify-between text-xl font-bold text-primary"><span className="text-foreground">Grand Total:</span> <span>{currencySymbol}{invoice.grandTotal.toFixed(2)}</span></div>
