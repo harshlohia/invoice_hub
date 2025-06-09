@@ -1,4 +1,3 @@
-
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -70,7 +69,6 @@ const invoiceFormSchema = z.object({
   isInterState: z.boolean().default(false),
   lineItems: z.array(lineItemSchema).min(1, "At least one line item is required."),
   notes: z.string().optional(),
-  termsAndConditions: z.string().optional(),
   billerInfo: billerInfoFormSchema, 
   currency: z.string().default("INR"),
 });
@@ -110,7 +108,6 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
         ? initialData.lineItems.map(item => ({ ...item, id: item.id || crypto.randomUUID() }))
         : [{ id: crypto.randomUUID(), productName: "", quantity: 1, rate: 0, discountPercentage: 0, taxRate: 18 }],
       notes: initialData?.notes || "",
-      termsAndConditions: initialData?.termsAndConditions || "Thank you for your business! Payment is due within the specified date.",
       billerInfo: initialData ? initialData.billerInfo : defaultBillerInfo,
       currency: initialData?.currency || "INR",
     },
@@ -187,7 +184,6 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
           id: item.id || crypto.randomUUID(), 
         })),
         notes: initialData.notes || "",
-        termsAndConditions: initialData.termsAndConditions || "Thank you for your business! Payment is due within the specified date.",
         billerInfo: initialData.billerInfo,
         currency: initialData.currency || "INR",
       });
@@ -284,7 +280,6 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
       client: clientForInvoice, 
       lineItems: processedLineItems,
       notes: values.notes,
-      termsAndConditions: values.termsAndConditions,
       isInterState: values.isInterState,
       status: values.status, 
       currency: values.currency || "INR",
@@ -550,8 +545,6 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
             <CardContent className="space-y-6">
                 <FormField control={form.control} name="notes" render={({ field }) => (
                     <FormItem><FormLabel>Notes (Optional)</FormLabel><FormControl><Textarea placeholder="Any additional notes for the client..." {...field} /></FormControl><FormMessage /></FormItem>)} />
-                <FormField control={form.control} name="termsAndConditions" render={({ field }) => (
-                    <FormItem><FormLabel>Terms & Conditions (Optional)</FormLabel><FormControl><Textarea placeholder="Payment terms, warranty info, etc." {...field} /></FormControl><FormMessage /></FormItem>)} />
                 
                 <Separator />
                 <h3 className="text-lg font-medium font-headline">Payment Details (from Biller Info)</h3>
@@ -601,4 +594,3 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
     </Form>
   );
 }
-

@@ -209,12 +209,6 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
                   <p>{invoice.notes}</p>
                 </>
               )}
-              {invoice.termsAndConditions && (
-                <>
-                  <h4 className="font-semibold text-foreground mt-2">Terms & Conditions:</h4>
-                  <p>{invoice.termsAndConditions}</p>
-                </>
-              )}
             </div>
             <div className="space-y-2 mt-4 md:mt-0">
               <div className="flex justify-between text-sm"><span className="text-muted-foreground">Subtotal:</span> <span className="font-medium">{currencySymbol}{invoice.subTotal.toFixed(2)}</span></div>

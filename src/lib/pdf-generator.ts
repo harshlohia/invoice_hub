@@ -168,7 +168,7 @@ export class InvoicePDFGenerator {
     // Totals Section - Right aligned
     this.addTotalsSection(invoice);
     
-    // Terms and Payment Info with divider
+    // Notes and Payment Info with divider (removed terms and conditions)
     this.addFooterSections(invoice);
 
     if (download) {
@@ -494,18 +494,18 @@ export class InvoicePDFGenerator {
   }
 
   private addFooterSections(invoice: Invoice) {
-    // Terms & Conditions
-    if (invoice.termsAndConditions) {
+    // Notes section (if present)
+    if (invoice.notes) {
       this.checkPageBreak(25);
       
-      this.addText('Terms & Conditions:', this.margin, this.currentY, { 
+      this.addText('Notes:', this.margin, this.currentY, { 
         fontSize: 11, 
         fontStyle: 'bold', 
         color: '#212529' 
       });
       this.currentY += 6;
       
-      const textHeight = this.addText(invoice.termsAndConditions, this.margin, this.currentY, { 
+      const textHeight = this.addText(invoice.notes, this.margin, this.currentY, { 
         fontSize: 9, 
         color: '#6c757d',
         maxWidth: this.pageWidth - 2 * this.margin
@@ -513,7 +513,7 @@ export class InvoicePDFGenerator {
       this.currentY += Math.max(textHeight, 10) + 15;
     }
 
-    // Payment Information with divider
+    // Payment Information with divider (removed terms and conditions)
     if (invoice.billerInfo.bankName || invoice.billerInfo.upiId) {
       this.checkPageBreak(30);
       
