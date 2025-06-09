@@ -501,44 +501,55 @@ export class InvoicePDFGenerator {
       this.currentY += termsHeight + 15;
     }
 
-    // Payment Information
+    // Payment Information - Optimized with reduced spacing
     if (invoice.billerInfo.bankName || invoice.billerInfo.upiId) {
-      this.checkPageBreak(40);
+      this.checkPageBreak(25);
       
       this.addText('Payment Information:', this.margin, this.currentY, { fontSize: 12, fontStyle: 'bold', color: '#212529' });
-      this.currentY += 10;
+      this.currentY += 6; // Reduced from 10 to 6
 
-      // Payment info background
-      const paymentBoxHeight = 35;
-      this.addRect(this.margin, this.currentY - 5, this.pageWidth - 2 * this.margin, paymentBoxHeight, 'F', '#f8f9fa');
-      this.addRect(this.margin, this.currentY - 5, this.pageWidth - 2 * this.margin, paymentBoxHeight, 'S', undefined, '#dee2e6');
+      // Calculate required height based on content
+      let contentLines = 0;
+      if (invoice.billerInfo.bankName) contentLines++;
+      if (invoice.billerInfo.ifscCode || invoice.billerInfo.upiId) contentLines++;
+      
+      const paymentBoxHeight = Math.max(18, contentLines * 6 + 8); // Dynamic height with minimum
+      
+      // Payment info background with reduced height
+      this.addRect(this.margin, this.currentY - 2, this.pageWidth - 2 * this.margin, paymentBoxHeight, 'F', '#f8f9fa');
+      this.addRect(this.margin, this.currentY - 2, this.pageWidth - 2 * this.margin, paymentBoxHeight, 'S', undefined, '#dee2e6');
 
-      const leftCol = this.margin + 5;
+      const leftCol = this.margin + 3; // Reduced padding
       const rightCol = this.pageWidth / 2;
 
+      // Compact layout with reduced line spacing
       if (invoice.billerInfo.bankName) {
-        this.addText(`Bank: ${invoice.billerInfo.bankName}`, leftCol, this.currentY, { fontSize: 10, color: '#495057' });
+        this.addText(`Bank: ${invoice.billerInfo.bankName}`, leftCol, this.currentY + 2, { fontSize: 9, color: '#495057' });
         if (invoice.billerInfo.accountNumber) {
-          this.addText(`A/C No: ${invoice.billerInfo.accountNumber}`, rightCol, this.currentY, { fontSize: 10, color: '#495057' });
+          this.addText(`A/C No: ${invoice.billerInfo.accountNumber}`, rightCol, this.currentY + 2, { fontSize: 9, color: '#495057' });
         }
-        this.currentY += 6;
+        this.currentY += 5; // Reduced from 6 to 5
       }
 
       if (invoice.billerInfo.ifscCode) {
-        this.addText(`IFSC: ${invoice.billerInfo.ifscCode}`, leftCol, this.currentY, { fontSize: 10, color: '#495057' });
+        this.addText(`IFSC: ${invoice.billerInfo.ifscCode}`, leftCol, this.currentY + 2, { fontSize: 9, color: '#495057' });
         if (invoice.billerInfo.upiId) {
-          this.addText(`UPI: ${invoice.billerInfo.upiId}`, rightCol, this.currentY, { fontSize: 10, color: '#495057' });
+          this.addText(`UPI: ${invoice.billerInfo.upiId}`, rightCol, this.currentY + 2, { fontSize: 9, color: '#495057' });
         }
-        this.currentY += 6;
+        this.currentY += 5; // Reduced from 6 to 5
+      } else if (invoice.billerInfo.upiId && !invoice.billerInfo.ifscCode) {
+        // If only UPI exists without IFSC
+        this.addText(`UPI: ${invoice.billerInfo.upiId}`, leftCol, this.currentY + 2, { fontSize: 9, color: '#495057' });
+        this.currentY += 5;
       }
       
-      this.currentY += 15;
+      this.currentY += 8; // Reduced from 15 to 8
     }
 
-    // Footer
-    this.addLine(this.margin, this.pageHeight - 30, this.pageWidth - this.margin, this.pageHeight - 30, '#dee2e6');
-    this.addText('Thank you for your business!', this.pageWidth / 2, this.pageHeight - 20, { 
-      fontSize: 11, 
+    // Footer with reduced spacing
+    this.addLine(this.margin, this.pageHeight - 25, this.pageWidth - this.margin, this.pageHeight - 25, '#dee2e6'); // Moved up
+    this.addText('Thank you for your business!', this.pageWidth / 2, this.pageHeight - 15, { // Moved up
+      fontSize: 10, // Reduced font size
       align: 'center', 
       color: '#6c757d',
       fontStyle: 'italic'
