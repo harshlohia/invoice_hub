@@ -156,3 +156,5 @@ export abstract class BasePDFTemplate implements PDFTemplate {
     pdf.save(fileName);
   }
 }
+
+export { BasePDFTemplate }
