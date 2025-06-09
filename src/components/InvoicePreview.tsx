@@ -1,6 +1,6 @@
 "use client";
 import type { Invoice } from "@/lib/types";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Download, Printer, Send, Edit, Loader2, CheckCircle, AlertCircle, Clock, FilePenLine, MoreVertical, Trash2 as CancelIcon } from "lucide-react";
@@ -8,6 +8,8 @@ import { format } from 'date-fns';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRef, useState, useEffect, forwardRef, useImperativeHandle } from 'react';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
 import { doc, updateDoc, serverTimestamp, Timestamp } from "firebase/firestore";
@@ -77,86 +79,85 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
   };
 
   const handleDownloadPdf = async () => {
+    if (!invoiceCardRef.current) {
+      toast({
+        title: "Error",
+        description: "Invoice content not found for PDF generation.",
+        variant: "destructive",
+      });
+      return;
+    }
     setIsDownloading(true);
 
     try {
-      // Prepare invoice data for PDF generation
-      const pdfData = {
-        invoiceNumber: invoice.invoiceNumber,
-        date: invoice.invoiceDate,
-        dueDate: invoice.dueDate,
-        client: {
-          name: invoice.client.name,
-          email: invoice.client.email,
-          address: invoice.client.addressLine1,
-          city: invoice.client.city,
-          state: invoice.client.state,
-          zip: invoice.client.postalCode
-        },
-        businessInfo: {
-          name: invoice.billerInfo.businessName,
-          address: invoice.billerInfo.addressLine1,
-          city: invoice.billerInfo.city,
-          state: invoice.billerInfo.state,
-          zip: invoice.billerInfo.postalCode,
-          email: invoice.billerInfo.email,
-          phone: invoice.billerInfo.phone,
-          gstin: invoice.billerInfo.gstin
-        },
-        items: invoice.lineItems.map(item => ({
-          description: item.productName,
-          quantity: item.quantity,
-          rate: item.rate,
-          amount: item.amount
-        })),
-        subtotal: invoice.subTotal,
-        tax: invoice.totalCGST + invoice.totalSGST + invoice.totalIGST,
-        total: invoice.grandTotal,
-        notes: invoice.notes,
-        isInterState: invoice.isInterState,
-        totalCGST: invoice.totalCGST,
-        totalSGST: invoice.totalSGST,
-        totalIGST: invoice.totalIGST
-      };
-
-      console.log('Sending PDF generation request...');
+      const elementToCapture = invoiceCardRef.current;
       
-      const response = await fetch('/api/generate-pdf', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(pdfData),
+      // Create canvas from the invoice element
+      const canvas = await html2canvas(elementToCapture, {
+        scale: 2, // Higher resolution
+        useCORS: true, 
+        logging: false,
+        backgroundColor: '#ffffff',
+        ignoreElements: (element) => element.classList.contains('do-not-print-in-pdf'),
+        onclone: (clonedDoc) => {
+          // Ensure all styles are properly applied in the cloned document
+          const clonedElement = clonedDoc.querySelector('[data-invoice-content]');
+          if (clonedElement) {
+            (clonedElement as HTMLElement).style.transform = 'none';
+            (clonedElement as HTMLElement).style.position = 'static';
+          }
+        }
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      // Get the PDF blob
-      const pdfBlob = await response.blob();
+      // Convert canvas to image data
+      const imgData = canvas.toDataURL('image/png');
       
-      // Create download link
-      const url = window.URL.createObjectURL(pdfBlob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `invoice-${invoice.invoiceNumber}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
+      // Create PDF
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      // Calculate dimensions to fit the content properly
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      
+      const canvasWidth = canvas.width;
+      const canvasHeight = canvas.height;
+
+      // Calculate scaling to fit content within PDF page with margins
+      const margin = 10; // 10mm margin
+      const availableWidth = pdfWidth - (margin * 2);
+      const availableHeight = pdfHeight - (margin * 2);
+      
+      const scaleX = availableWidth / (canvasWidth * 0.264583); // Convert px to mm
+      const scaleY = availableHeight / (canvasHeight * 0.264583);
+      const scale = Math.min(scaleX, scaleY);
+      
+      const imgWidth = (canvasWidth * 0.264583) * scale;
+      const imgHeight = (canvasHeight * 0.264583) * scale;
+      
+      // Center the image on the page
+      const x = (pdfWidth - imgWidth) / 2;
+      const y = margin;
+
+      // Add image to PDF
+      pdf.addImage(imgData, 'PNG', x, y, imgWidth, imgHeight);
+      
+      // Save the PDF
+      pdf.save(`invoice-${invoice.invoiceNumber || 'document'}.pdf`);
       
       toast({
         title: "Success",
-        description: `Invoice ${invoice.invoiceNumber}.pdf downloaded.`,
+        description: `Invoice ${invoice.invoiceNumber}.pdf downloaded successfully.`,
       });
 
     } catch (error) {
       console.error("Error generating PDF:", error);
       toast({
         title: "PDF Generation Failed",
-        description: error instanceof Error ? error.message : "An error occurred while generating the PDF. Please try again.",
+        description: "An error occurred while generating the PDF. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -174,7 +175,7 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
 
   return (
     <Card className="max-w-4xl mx-auto shadow-lg">
-      <div ref={invoiceCardRef}> 
+      <div ref={invoiceCardRef} data-invoice-content> 
         <CardHeader className="bg-muted/30 p-6">
           <div className="flex flex-col md:flex-row justify-between items-start gap-4">
             <div>
@@ -244,7 +245,9 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
                 <tr>
                   <th className="p-2 text-left font-semibold text-foreground">#</th>
                   <th className="p-2 text-left font-semibold text-foreground">Item/Service</th>
+                  <th className="p-2 text-right font-semibold text-foreground">Qty</th>
                   <th className="p-2 text-right font-semibold text-foreground">Rate ({currencySymbol})</th>
+                  <th className="p-2 text-right font-semibold text-foreground">Discount (%)</th>
                   <th className="p-2 text-right font-semibold text-foreground">Amount ({currencySymbol})</th>
                 </tr>
               </thead>
@@ -253,7 +256,9 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
                   <tr key={item.id} className="border-b">
                     <td className="p-2">{index + 1}</td>
                     <td className="p-2">{item.productName}</td>
+                    <td className="p-2 text-right">{item.quantity}</td>
                     <td className="p-2 text-right">{item.rate.toFixed(2)}</td>
+                    <td className="p-2 text-right">{item.discountPercentage.toFixed(2)}%</td>
                     <td className="p-2 text-right">{item.amount.toFixed(2)}</td>
                   </tr>
                 ))}
@@ -267,6 +272,12 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
                 <>
                   <h4 className="font-semibold text-foreground">Notes:</h4>
                   <p>{invoice.notes}</p>
+                </>
+              )}
+              {invoice.termsAndConditions && (
+                <>
+                  <h4 className="font-semibold text-foreground mt-2">Terms & Conditions:</h4>
+                  <p>{invoice.termsAndConditions}</p>
                 </>
               )}
             </div>
@@ -349,7 +360,7 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
           ) : (
             <Download className="mr-2 h-4 w-4" />
           )}
-          {isDownloading ? 'Downloading...' : 'Download PDF'}
+          {isDownloading ? 'Generating PDF...' : 'Download PDF'}
         </Button>
       </CardFooter>
     </Card>

@@ -7,13 +7,9 @@
   packages = [
     pkgs.nodejs_20
     pkgs.zulu
-    pkgs.chromium
   ];
   # Sets environment variables in the workspace
-  env = {
-    PUPPETEER_EXECUTABLE_PATH = "${pkgs.chromium}/bin/chromium";
-    PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true";
-  };
+  env = {};
   # This adds a file watcher to startup the firebase emulators. The emulators will only start if
   # a firebase.json file is written into the user's directory
   services.firebase.emulators = {
