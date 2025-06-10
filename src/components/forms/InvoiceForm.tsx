@@ -372,7 +372,7 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
                       <PopoverTrigger asChild>
                         <FormControl>
                           <Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
-                            {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                            {field.value && !isNaN(new Date(field.value).getTime()) ? format(new Date(field.value), "PPP") : <span>Pick a date</span>}
                             <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                           </Button>
                         </FormControl>
@@ -392,7 +392,7 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
                       <PopoverTrigger asChild>
                         <FormControl>
                           <Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
-                            {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                            {field.value && !isNaN(new Date(field.value).getTime()) ? format(new Date(field.value), "PPP") : <span>Pick a date</span>}
                             <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                           </Button>
                         </FormControl>
@@ -545,7 +545,7 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
                         <PopoverTrigger asChild>
                           <FormControl>
                             <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
-                              {field.value ? format(field.value, "dd/MM") : <span>Date</span>}
+                              {field.value && field.value instanceof Date && !isNaN(field.value.getTime()) ? format(field.value, "PPP") : <span>Date</span>}
                               <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                             </Button>
                           </FormControl>
