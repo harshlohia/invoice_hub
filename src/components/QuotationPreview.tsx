@@ -43,9 +43,9 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
       const availableWidth = pdfWidth - (margin * 2);
       const availableHeight = pdfHeight - (margin * 2);
 
-      // Determine how many rows can fit per page (considering first page has header)
-      const maxRowsFirstPage = 3; // First page has less space due to header
-      const maxRowsPerPage = 8; // Subsequent pages can fit more rows
+      // Better calculation for rows per page
+      const maxRowsFirstPage = 4; // First page has less space due to header
+      const maxRowsPerPage = 10; // Subsequent pages can fit more rows
 
       const totalRows = quotation.rows.length;
       let totalPages = 1;
@@ -54,6 +54,57 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
         const remainingRows = totalRows - maxRowsFirstPage;
         totalPages = 1 + Math.ceil(remainingRows / maxRowsPerPage);
       }
+
+      // Improved image conversion function with better error handling
+      const convertImageToBase64 = async (imageUrl: string): Promise<string> => {
+        try {
+          // Handle Firebase Storage URLs with proper CORS handling
+          const corsProxyUrl = imageUrl.includes('firebasestorage.googleapis.com') 
+            ? imageUrl + '&cors=true'
+            : imageUrl;
+
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          
+          return new Promise((resolve, reject) => {
+            img.onload = () => {
+              try {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                if (!ctx) {
+                  resolve('');
+                  return;
+                }
+                
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0);
+                
+                const base64 = canvas.toDataURL('image/jpeg', 0.8);
+                resolve(base64);
+              } catch (error) {
+                console.error('Canvas conversion error:', error);
+                resolve('');
+              }
+            };
+            
+            img.onerror = () => {
+              console.error('Image load error for:', imageUrl);
+              resolve('');
+            };
+            
+            img.src = corsProxyUrl;
+            
+            // Timeout after 5 seconds
+            setTimeout(() => {
+              resolve('');
+            }, 5000);
+          });
+        } catch (error) {
+          console.error('Error converting image:', error);
+          return '';
+        }
+      };
 
       // Generate each page
       for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
@@ -76,44 +127,15 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
           pageRows = quotation.rows.slice(startIndex, endIndex);
         }
 
-        // Create a temporary container for this page's content
-        const pageContainer = document.createElement('div');
-        pageContainer.style.cssText = `
-          background-color: #ffffff;
-          font-family: Arial, sans-serif;
-          font-size: 12px;
-          line-height: 1.4;
-          color: #000000;
-          width: 800px;
-          padding: 20px;
-          margin: 0;
-          box-sizing: border-box;
-        `;
-
-        // Load and convert images to base64
-        const convertImageToBase64 = async (imageUrl: string): Promise<string> => {
-          try {
-            const response = await fetch(imageUrl);
-            const blob = await response.blob();
-            return new Promise((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve(reader.result as string);
-              reader.onerror = reject;
-              reader.readAsDataURL(blob);
-            });
-          } catch (error) {
-            console.error('Error converting image:', error);
-            return '';
-          }
-        };
-
         // Convert all images in pageRows to base64
         for (const row of pageRows) {
           for (const item of row.items) {
             if (item.type === 'image' && item.value && typeof item.value === 'string') {
               try {
                 const base64Image = await convertImageToBase64(item.value);
-                item.value = base64Image;
+                if (base64Image) {
+                  item.value = base64Image;
+                }
               } catch (error) {
                 console.error('Failed to convert image for PDF:', error);
                 item.value = '';
@@ -122,46 +144,72 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
           }
         }
 
+        // Create a temporary container for this page's content
+        const pageContainer = document.createElement('div');
+        pageContainer.style.cssText = `
+          background-color: #ffffff;
+          font-family: 'Arial', sans-serif;
+          font-size: 11px;
+          line-height: 1.3;
+          color: #000000;
+          width: 210mm;
+          min-height: 297mm;
+          padding: 15mm;
+          margin: 0;
+          box-sizing: border-box;
+          position: relative;
+        `;
+
         // Add content to page container
-        pageContainer.innerHTML = await generatePageHTML(quotation, pageRows, pageIndex, totalPages, startIndex);
+        pageContainer.innerHTML = generatePageHTML(quotation, pageRows, pageIndex, totalPages, startIndex);
 
         // Temporarily add to DOM for rendering
         document.body.appendChild(pageContainer);
 
-        // Wait a bit for images to render
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Wait for content to render and images to load
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
         try {
-          // Create canvas for this page
+          // Create canvas for this page with better settings
           const canvas = await html2canvas(pageContainer, {
-            scale: 2,
+            scale: 1.5,
             useCORS: true,
-            allowTaint: false,
+            allowTaint: true,
             logging: false,
             backgroundColor: '#ffffff',
-            width: 800,
-            height: 1120, // A4 height ratio
+            width: pageContainer.offsetWidth,
+            height: Math.max(pageContainer.offsetHeight, 842), // Minimum A4 height in pixels
+            foreignObjectRendering: true,
+            imageTimeout: 10000,
             onclone: (clonedDoc) => {
-              // Ensure all images are loaded in the cloned document
+              // Ensure all images are properly loaded and styled in the cloned document
               const images = clonedDoc.querySelectorAll('img');
               images.forEach((img: HTMLImageElement) => {
                 img.style.display = 'block';
                 img.style.maxWidth = '100%';
                 img.style.height = 'auto';
+                img.style.objectFit = 'cover';
+              });
+              
+              // Ensure text doesn't get cut off
+              const textElements = clonedDoc.querySelectorAll('p, div, span');
+              textElements.forEach((el: HTMLElement) => {
+                el.style.wordWrap = 'break-word';
+                el.style.overflowWrap = 'break-word';
               });
             }
           });
 
           // Convert to image and add to PDF
-          const imgData = canvas.toDataURL('image/jpeg', 0.95);
+          const imgData = canvas.toDataURL('image/jpeg', 0.9);
 
           const canvasWidth = canvas.width;
           const canvasHeight = canvas.height;
 
           // Convert pixels to mm (assuming 96 DPI)
           const pxToMm = 25.4 / 96;
-          const imgWidthMm = (canvasWidth * pxToMm) / 2; // Divide by 2 because we used scale 2
-          const imgHeightMm = (canvasHeight * pxToMm) / 2;
+          const imgWidthMm = (canvasWidth * pxToMm) / 1.5; // Divide by scale factor
+          const imgHeightMm = (canvasHeight * pxToMm) / 1.5;
 
           // Scale to fit page
           const scaleX = availableWidth / imgWidthMm;
@@ -192,12 +240,12 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
   };
 
   // Helper function to generate complete page HTML
-  const generatePageHTML = async (quotation: Quotation, pageRows: QuotationRow[], pageIndex: number, totalPages: number, startIndex: number): Promise<string> => {
+  const generatePageHTML = (quotation: Quotation, pageRows: QuotationRow[], pageIndex: number, totalPages: number, startIndex: number): string => {
     const isFirstPage = pageIndex === 0;
     const isLastPage = pageIndex === totalPages - 1;
 
     return `
-      <div style="min-height: 1000px;">
+      <div style="min-height: 280mm; position: relative;">
         ${isFirstPage ? generateHeaderHTML(quotation) : generateContinuationHeaderHTML(quotation, pageIndex + 1)}
         ${pageRows.length > 0 ? generateRowsTableHTML(pageRows, startIndex, quotation.currency) : ''}
         ${isLastPage ? generateFooterHTML(quotation) : generateContinuationFooterHTML(pageIndex + 1, totalPages)}
@@ -208,80 +256,80 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
 // Helper function to generate header HTML
   const generateHeaderHTML = (quotation: Quotation): string => {
     return `
-      <div style="margin-bottom: 20px;">
+      <div style="margin-bottom: 25mm;">
         <!-- Header Section -->
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 5mm;">
           <div>
-            <h1 style="font-size: 28px; font-weight: bold; margin: 0 0 6px 0; color: #1f2937;">Quotation</h1>
-            <p style="color: #6b7280; margin: 0; font-size: 14px;">#${quotation.quotationNumber}</p>
+            <h1 style="font-size: 24px; font-weight: bold; margin: 0 0 2mm 0; color: #1f2937;">Quotation</h1>
+            <p style="color: #6b7280; margin: 0; font-size: 12px;">#${quotation.quotationNumber}</p>
           </div>
           <div style="text-align: right;">
-            <div style="background: #f3f4f6; color: #374151; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500;">
+            <div style="background: #f3f4f6; color: #374151; padding: 2mm; border-radius: 2mm; font-size: 10px; font-weight: 500;">
               ${quotation.status.charAt(0).toUpperCase() + quotation.status.slice(1)}
             </div>
           </div>
         </div>
 
         <!-- Biller and Client Info -->
-        <table style="width: 100%; margin-bottom: 20px;">
+        <table style="width: 100%; margin-bottom: 5mm; border-collapse: collapse;">
           <tr>
             <!-- Biller Info -->
-            <td style="width: 50%; padding-right: 10px; vertical-align: top;">
-              <div style="border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px;">
-                <h3 style="font-size: 14px; font-weight: 600; margin: 0 0 10px 0; color: #1f2937;">From</h3>
-                <div style="font-weight: 600; font-size: 14px; margin-bottom: 6px;">${quotation.billerInfo.businessName}</div>
-                ${quotation.billerInfo.gstin ? `<p style="font-size: 11px; color: #6b7280; margin: 0 0 6px 0;">GSTIN: ${quotation.billerInfo.gstin}</p>` : ''}
-                <div style="font-size: 11px; line-height: 1.4;">
-                  <p style="margin: 0;">${quotation.billerInfo.addressLine1}</p>
-                  ${quotation.billerInfo.addressLine2 ? `<p style="margin: 0;">${quotation.billerInfo.addressLine2}</p>` : ''}
-                  <p style="margin: 0;">${quotation.billerInfo.city}, ${quotation.billerInfo.state} ${quotation.billerInfo.postalCode}</p>
-                  <p style="margin: 0;">${quotation.billerInfo.country}</p>
+            <td style="width: 50%; padding-right: 3mm; vertical-align: top;">
+              <div style="border: 1px solid #e5e7eb; border-radius: 2mm; padding: 3mm;">
+                <h3 style="font-size: 12px; font-weight: 600; margin: 0 0 2mm 0; color: #1f2937;">From</h3>
+                <div style="font-weight: 600; font-size: 11px; margin-bottom: 1mm;">${quotation.billerInfo.businessName}</div>
+                ${quotation.billerInfo.gstin ? `<p style="font-size: 9px; color: #6b7280; margin: 0 0 1mm 0;">GSTIN: ${quotation.billerInfo.gstin}</p>` : ''}
+                <div style="font-size: 9px; line-height: 1.3;">
+                  <p style="margin: 0 0 0.5mm 0;">${quotation.billerInfo.addressLine1}</p>
+                  ${quotation.billerInfo.addressLine2 ? `<p style="margin: 0 0 0.5mm 0;">${quotation.billerInfo.addressLine2}</p>` : ''}
+                  <p style="margin: 0 0 0.5mm 0;">${quotation.billerInfo.city}, ${quotation.billerInfo.state} ${quotation.billerInfo.postalCode}</p>
+                  <p style="margin: 0 0 0.5mm 0;">${quotation.billerInfo.country}</p>
                 </div>
-                ${quotation.billerInfo.phone ? `<p style="font-size: 11px; margin: 4px 0 0 0;">Phone: ${quotation.billerInfo.phone}</p>` : ''}
-                ${quotation.billerInfo.email ? `<p style="font-size: 11px; margin: 2px 0 0 0;">Email: ${quotation.billerInfo.email}</p>` : ''}
+                ${quotation.billerInfo.phone ? `<p style="font-size: 9px; margin: 1mm 0 0 0;">Phone: ${quotation.billerInfo.phone}</p>` : ''}
+                ${quotation.billerInfo.email ? `<p style="font-size: 9px; margin: 0.5mm 0 0 0;">Email: ${quotation.billerInfo.email}</p>` : ''}
               </div>
             </td>
 
             <!-- Client Info -->
-            <td style="width: 50%; padding-left: 10px; vertical-align: top;">
-              <div style="border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px;">
-                <h3 style="font-size: 14px; font-weight: 600; margin: 0 0 10px 0; color: #1f2937;">To</h3>
-                <div style="font-weight: 600; font-size: 14px; margin-bottom: 6px;">${quotation.client.name}</div>
-                ${quotation.client.gstin ? `<p style="font-size: 11px; color: #6b7280; margin: 0 0 6px 0;">GSTIN: ${quotation.client.gstin}</p>` : ''}
-                <div style="font-size: 11px; line-height: 1.4;">
-                  <p style="margin: 0;">${quotation.client.addressLine1}</p>
-                  ${quotation.client.addressLine2 ? `<p style="margin: 0;">${quotation.client.addressLine2}</p>` : ''}
-                  <p style="margin: 0;">${quotation.client.city}, ${quotation.client.state} ${quotation.client.postalCode}</p>
-                  <p style="margin: 0;">${quotation.client.country}</p>
+            <td style="width: 50%; padding-left: 3mm; vertical-align: top;">
+              <div style="border: 1px solid #e5e7eb; border-radius: 2mm; padding: 3mm;">
+                <h3 style="font-size: 12px; font-weight: 600; margin: 0 0 2mm 0; color: #1f2937;">To</h3>
+                <div style="font-weight: 600; font-size: 11px; margin-bottom: 1mm;">${quotation.client.name}</div>
+                ${quotation.client.gstin ? `<p style="font-size: 9px; color: #6b7280; margin: 0 0 1mm 0;">GSTIN: ${quotation.client.gstin}</p>` : ''}
+                <div style="font-size: 9px; line-height: 1.3;">
+                  <p style="margin: 0 0 0.5mm 0;">${quotation.client.addressLine1}</p>
+                  ${quotation.client.addressLine2 ? `<p style="margin: 0 0 0.5mm 0;">${quotation.client.addressLine2}</p>` : ''}
+                  <p style="margin: 0 0 0.5mm 0;">${quotation.client.city}, ${quotation.client.state} ${quotation.client.postalCode}</p>
+                  <p style="margin: 0 0 0.5mm 0;">${quotation.client.country}</p>
                 </div>
-                <p style="font-size: 11px; margin: 4px 0 0 0;">Phone: ${quotation.client.phone}</p>
-                <p style="font-size: 11px; margin: 2px 0 0 0;">Email: ${quotation.client.email}</p>
+                <p style="font-size: 9px; margin: 1mm 0 0 0;">Phone: ${quotation.client.phone}</p>
+                <p style="font-size: 9px; margin: 0.5mm 0 0 0;">Email: ${quotation.client.email}</p>
               </div>
             </td>
           </tr>
         </table>
 
         <!-- Quotation Details -->
-        <div style="border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px; margin-bottom: 16px;">
-          <table style="width: 100%; margin-bottom: 12px;">
+        <div style="border: 1px solid #e5e7eb; border-radius: 2mm; padding: 3mm; margin-bottom: 4mm;">
+          <table style="width: 100%; margin-bottom: 3mm; border-collapse: collapse;">
             <tr>
-              <td style="width: 33.33%; padding-right: 8px;">
-                <p style="font-size: 11px; font-weight: 500; margin: 0 0 2px 0;">Quotation Date</p>
-                <p style="font-size: 11px; color: #6b7280; margin: 0;">${formatDate(quotation.quotationDate)}</p>
+              <td style="width: 33.33%; padding-right: 2mm;">
+                <p style="font-size: 10px; font-weight: 500; margin: 0 0 0.5mm 0;">Quotation Date</p>
+                <p style="font-size: 9px; color: #6b7280; margin: 0;">${formatDate(quotation.quotationDate)}</p>
               </td>
-              <td style="width: 33.33%; padding: 0 4px;">
-                <p style="font-size: 11px; font-weight: 500; margin: 0 0 2px 0;">Valid Until</p>
-                <p style="font-size: 11px; color: #6b7280; margin: 0;">${formatDate(quotation.validUntil)}</p>
+              <td style="width: 33.33%; padding: 0 1mm;">
+                <p style="font-size: 10px; font-weight: 500; margin: 0 0 0.5mm 0;">Valid Until</p>
+                <p style="font-size: 9px; color: #6b7280; margin: 0;">${formatDate(quotation.validUntil)}</p>
               </td>
-              <td style="width: 33.33%; padding-left: 8px;">
-                <p style="font-size: 11px; font-weight: 500; margin: 0 0 2px 0;">Currency</p>
-                <p style="font-size: 11px; color: #6b7280; margin: 0;">${quotation.currency}</p>
+              <td style="width: 33.33%; padding-left: 2mm;">
+                <p style="font-size: 10px; font-weight: 500; margin: 0 0 0.5mm 0;">Currency</p>
+                <p style="font-size: 9px; color: #6b7280; margin: 0;">${quotation.currency}</p>
               </td>
             </tr>
           </table>
           <div>
-            <h3 style="font-size: 14px; font-weight: 600; margin: 0 0 6px 0;">${quotation.title}</h3>
-            ${quotation.description ? `<p style="font-size: 11px; color: #6b7280; margin: 0;">${quotation.description}</p>` : ''}
+            <h3 style="font-size: 12px; font-weight: 600; margin: 0 0 1mm 0;">${quotation.title}</h3>
+            ${quotation.description ? `<p style="font-size: 9px; color: #6b7280; margin: 0; word-wrap: break-word;">${quotation.description}</p>` : ''}
           </div>
         </div>
       </div>
@@ -310,14 +358,14 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
     if (!rows.length) return '';
 
     return `
-      <div style="margin-bottom: 20px;">
-        <div style="border: 1px solid #e5e7eb; border-radius: 6px; overflow: hidden;">
-          <h3 style="font-size: 16px; font-weight: 600; margin: 0; padding: 12px; background: #f9fafb; border-bottom: 1px solid #e5e7eb;">Items</h3>
-          <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+      <div style="margin-bottom: 5mm;">
+        <div style="border: 1px solid #e5e7eb; border-radius: 2mm; overflow: hidden;">
+          <h3 style="font-size: 14px; font-weight: 600; margin: 0; padding: 3mm; background: #f9fafb; border-bottom: 1px solid #e5e7eb;">Items</h3>
+          <table style="width: 100%; border-collapse: collapse; font-size: 9px;">
             <thead>
               <tr style="background: #f9fafb;">
                 ${rows[0]?.items.map(item => `
-                  <th style="padding: 8px; border-bottom: 1px solid #e5e7eb; text-align: left; font-weight: 500; width: ${item.width}%;">
+                  <th style="padding: 2mm; border-bottom: 1px solid #e5e7eb; text-align: left; font-weight: 500; width: ${item.width}%; word-wrap: break-word;">
                     ${item.label}
                   </th>
                 `).join('')}
@@ -327,16 +375,16 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
               ${rows.map((row, index) => `
                 <tr style="${index % 2 === 0 ? 'background: #ffffff' : 'background: #f9fafb'};">
                   ${row.items.map(item => `
-                    <td style="padding: 8px; border-bottom: ${index < rows.length - 1 ? '1px solid #f3f4f6' : 'none'}; vertical-align: top; width: ${item.width}%;">
+                    <td style="padding: 2mm; border-bottom: ${index < rows.length - 1 ? '1px solid #f3f4f6' : 'none'}; vertical-align: top; width: ${item.width}%; word-wrap: break-word; overflow-wrap: break-word;">
                       ${item.type === 'image' && item.value ? 
-                        `<div style="width: 40px; height: 40px; border: 1px solid #e5e7eb; border-radius: 3px; overflow: hidden; background: #f9fafb; display: inline-block;">
-                          <img src="${item.value}" alt="${item.label}" style="width: 100%; height: 100%; object-fit: cover; display: block;" crossorigin="anonymous" />
+                        `<div style="width: 12mm; height: 12mm; border: 1px solid #e5e7eb; border-radius: 1mm; overflow: hidden; background: #f9fafb; display: inline-block;">
+                          <img src="${item.value}" alt="${item.label}" style="width: 100%; height: 100%; object-fit: cover; display: block;" crossorigin="anonymous" loading="eager" />
                         </div>` :
                         item.type === 'date' && item.value ? 
                           formatDate(item.value as Date) :
                           item.type === 'number' && typeof item.value === 'number' ?
                             item.value.toFixed(2) :
-                            (item.value?.toString() || '').substring(0, 50) + ((item.value?.toString() || '').length > 50 ? '...' : '')
+                            `<div style="word-wrap: break-word; overflow-wrap: break-word; max-width: 100%;">${(item.value?.toString() || '')}</div>`
                       }
                     </td>
                   `).join('')}
