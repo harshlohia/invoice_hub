@@ -4,16 +4,60 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import type { Quotation, QuotationRow, QuotationItem } from "@/lib/types";
 import { format } from "date-fns";
 import Image from "next/image";
+import { Download } from "lucide-react";
+import React, { forwardRef, useImperativeHandle, useRef } from "react";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 
 interface QuotationPreviewProps {
   quotation: Quotation;
   showHeader?: boolean;
 }
 
-export function QuotationPreview({ quotation, showHeader = true }: QuotationPreviewProps) {
+export interface QuotationPreviewHandle {
+  downloadPdf: () => Promise<void>;
+}
+
+export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPreviewProps>(
+  ({ quotation, showHeader = true }, ref) => {
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  const downloadPdf = async () => {
+    if (!contentRef.current) return;
+
+    try {
+      const canvas = await html2canvas(contentRef.current, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+      const imgX = (pdfWidth - imgWidth * ratio) / 2;
+      const imgY = 30;
+
+      pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
+      pdf.save(`quotation-${quotation.quotationNumber}.pdf`);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+    }
+  };
+
+  useImperativeHandle(ref, () => ({
+    downloadPdf,
+  }));
   const formatDate = (date: Date | string): string => {
     if (typeof date === 'string') {
       return format(new Date(date), 'dd/MM/yyyy');
@@ -70,11 +114,19 @@ export function QuotationPreview({ quotation, showHeader = true }: QuotationPrev
             <h1 className="text-3xl font-bold">Quotation</h1>
             <p className="text-muted-foreground">#{quotation.quotationNumber}</p>
           </div>
-          <Badge className={getStatusColor(quotation.status)}>
-            {quotation.status.charAt(0).toUpperCase() + quotation.status.slice(1)}
-          </Badge>
+          <div className="flex items-center gap-3">
+            <Button onClick={downloadPdf} className="flex items-center gap-2">
+              <Download className="h-4 w-4" />
+              Download PDF
+            </Button>
+            <Badge className={getStatusColor(quotation.status)}>
+              {quotation.status.charAt(0).toUpperCase() + quotation.status.slice(1)}
+            </Badge>
+          </div>
         </div>
       )}
+
+      <div ref={contentRef} className="space-y-6">
 
       {/* Header Information */}
       <div className="grid md:grid-cols-2 gap-6">
@@ -236,6 +288,9 @@ export function QuotationPreview({ quotation, showHeader = true }: QuotationPrev
           )}
         </div>
       )}
+      </div>
     </div>
   );
-}
+});
+
+QuotationPreview.displayName = "QuotationPreview";
