@@ -99,6 +99,8 @@ export function QuotationForm({ initialData, isEdit = false }: QuotationFormProp
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [billerInfo, setBillerInfo] = useState<BillerInfo>(defaultBillerInfo);
+  const [quotationSaved, setQuotationSaved] = useState(false);
+  const [savedQuotationId, setSavedQuotationId] = useState<string | null>(null);
 
   const form = useForm<QuotationFormValues>({
     resolver: zodResolver(quotationFormSchema),
@@ -121,8 +123,8 @@ export function QuotationForm({ initialData, isEdit = false }: QuotationFormProp
           ]
         }
       ],
-      notes: initialData?.notes || '',
-      termsAndConditions: initialData?.termsAndConditions || '',
+      notes: form.watch('notes') || '',
+      termsAndConditions: form.watch('termsAndConditions') || '',
       status: initialData?.status || 'draft',
       currency: initialData?.currency || 'INR',
     },
@@ -318,14 +320,16 @@ export function QuotationForm({ initialData, isEdit = false }: QuotationFormProp
           title: 'Success',
           description: 'Quotation updated successfully.',
         });
-        router.push(`/dashboard/quotations/${initialData.id}`);
+        setQuotationSaved(true);
+        setSavedQuotationId(initialData.id);
       } else {
-        await addDoc(collection(db, 'quotations'), quotationData);
+        const docRef = await addDoc(collection(db, 'quotations'), quotationData);
         toast({
           title: 'Success',
           description: 'Quotation created successfully.',
         });
-        router.push('/dashboard/quotations');
+        setQuotationSaved(true);
+        setSavedQuotationId(docRef.id);
       }
 
     } catch (error) {
@@ -348,440 +352,481 @@ export function QuotationForm({ initialData, isEdit = false }: QuotationFormProp
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8">
-      <div className="grid lg:grid-cols-2 gap-8">
-        {/* Form Section */}
-        <div className="space-y-6">
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="font-headline">Basic Information</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="quotationNumber"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Quotation Number</FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="status"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Status</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select status" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="draft">Draft</SelectItem>
-                              <SelectItem value="sent">Sent</SelectItem>
-                              <SelectItem value="accepted">Accepted</SelectItem>
-                              <SelectItem value="declined">Declined</SelectItem>
-                              <SelectItem value="expired">Expired</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="quotationDate"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-col">
-                          <FormLabel>Quotation Date</FormLabel>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <FormControl>
-                                <Button
-                                  variant="outline"
-                                  className={cn(
-                                    "w-full pl-3 text-left font-normal",
-                                    !field.value && "text-muted-foreground"
-                                  )}
-                                >
-                                  {field.value ? (
-                                    format(field.value, "PPP")
-                                  ) : (
-                                    <span>Pick a date</span>
-                                  )}
-                                  <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                </Button>
-                              </FormControl>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
-                              <Calendar
-                                mode="single"
-                                selected={field.value}
-                                onSelect={field.onChange}
-                                disabled={(date) =>
-                                  date > new Date() || date < new Date("1900-01-01")
-                                }
-                                initialFocus
-                              />
-                            </PopoverContent>
-                          </Popover>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="validUntil"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-col">
-                          <FormLabel>Valid Until</FormLabel>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <FormControl>
-                                <Button
-                                  variant="outline"
-                                  className={cn(
-                                    "w-full pl-3 text-left font-normal",
-                                    !field.value && "text-muted-foreground"
-                                  )}
-                                >
-                                  {field.value ? (
-                                    format(field.value, "PPP")
-                                  ) : (
-                                    <span>Pick a date</span>
-                                  )}
-                                  <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                </Button>
-                              </FormControl>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
-                              <Calendar
-                                mode="single"
-                                selected={field.value}
-                                onSelect={field.onChange}
-                                disabled={(date) => date < new Date()}
-                                initialFocus
-                              />
-                            </PopoverContent>
-                          </Popover>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  <FormField
-                    control={form.control}
-                    name="title"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Title</FormLabel>
+    <div className="max-w-4xl mx-auto space-y-8">
+      {/* Form Section */}
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+          <Card>
+            <CardHeader>
+              <CardTitle className="font-headline">Basic Information</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="quotationNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Quotation Number</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="status"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Status</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
-                          <Input {...field} placeholder="Enter quotation title" />
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select status" />
+                          </SelectTrigger>
                         </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                        <SelectContent>
+                          <SelectItem value="draft">Draft</SelectItem>
+                          <SelectItem value="sent">Sent</SelectItem>
+                          <SelectItem value="accepted">Accepted</SelectItem>
+                          <SelectItem value="declined">Declined</SelectItem>
+                          <SelectItem value="expired">Expired</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
-                  <FormField
-                    control={form.control}
-                    name="description"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Description</FormLabel>
-                        <FormControl>
-                          <Textarea {...field} placeholder="Enter quotation description" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="clientId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Client*</FormLabel>
-                        <Select
-                          onValueChange={(value) => {
-                            field.onChange(value);
-                            const client = clients.find(c => c.id === value);
-                            setSelectedClientData(client || null);
-                          }}
-                          value={field.value}
-                          disabled={loadingAuth || loadingClients}
-                        >
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="quotationDate"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel>Quotation Date</FormLabel>
+                      <Popover>
+                        <PopoverTrigger asChild>
                           <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder={
-                                (loadingAuth || (loadingClients && !initialData)) ? "Loading..." :
-                                (!currentUser && !initialData) ? "Please log in" :
-                                "Select a client"
-                              } />
-                            </SelectTrigger>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                "w-full pl-3 text-left font-normal",
+                                !field.value && "text-muted-foreground"
+                              )}
+                            >
+                              {field.value ? (
+                                format(field.value, "PPP")
+                              ) : (
+                                <span>Pick a date</span>
+                              )}
+                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                            </Button>
                           </FormControl>
-                          <SelectContent>
-                            {(loadingAuth || loadingClients) && !initialData ? (
-                              <SelectItem value="loading" disabled>
-                                <div className="flex items-center">
-                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                  Loading...
-                                </div>
-                              </SelectItem>
-                            ) : clients.length === 0 && !initialData ? (
-                              <SelectItem value="no-clients" disabled>
-                                No clients found. Add one first.
-                              </SelectItem>
-                            ) : (
-                              clients.map(client => (
-                                <SelectItem key={client.id} value={client.id}>
-                                  {client.name}
-                                </SelectItem>
-                              ))
-                            )}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </CardContent>
-              </Card>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={field.value}
+                            onSelect={field.onChange}
+                            disabled={(date) =>
+                              date > new Date() || date < new Date("1900-01-01")
+                            }
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-              {/* Items Section */}
-              <Card>
-                <CardHeader>
+                <FormField
+                  control={form.control}
+                  name="validUntil"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel>Valid Until</FormLabel>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                "w-full pl-3 text-left font-normal",
+                                !field.value && "text-muted-foreground"
+                              )}
+                            >
+                              {field.value ? (
+                                format(field.value, "PPP")
+                              ) : (
+                                <span>Pick a date</span>
+                              )}
+                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={field.value}
+                            onSelect={field.onChange}
+                            disabled={(date) => date < new Date()}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={form.control}
+                name="title"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Title</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Enter quotation title" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description</FormLabel>
+                    <FormControl>
+                      <Textarea {...field} placeholder="Enter quotation description" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="clientId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Client*</FormLabel>
+                    <Select
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        const client = clients.find(c => c.id === value);
+                        setSelectedClientData(client || null);
+                      }}
+                      value={field.value}
+                      disabled={loadingAuth || loadingClients}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder={
+                            (loadingAuth || (loadingClients && !initialData)) ? "Loading..." :
+                            (!currentUser && !initialData) ? "Please log in" :
+                            "Select a client"
+                          } />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {(loadingAuth || loadingClients) && !initialData ? (
+                          <SelectItem value="loading" disabled>
+                            <div className="flex items-center">
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Loading...
+                            </div>
+                          </SelectItem>
+                        ) : clients.length === 0 && !initialData ? (
+                          <SelectItem value="no-clients" disabled>
+                            No clients found. Add one first.
+                          </SelectItem>
+                        ) : (
+                          clients.map(client => (
+                            <SelectItem key={client.id} value={client.id}>
+                              {client.name}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Items Section */}
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <CardTitle className="font-headline">Items</CardTitle>
+                <Button type="button" onClick={addNewRow} size="sm">
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Row
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {form.watch('rows').map((row, rowIndex) => (
+                <div key={row.id} className="border rounded-lg p-4 space-y-4">
                   <div className="flex justify-between items-center">
-                    <CardTitle className="font-headline">Items</CardTitle>
-                    <Button type="button" onClick={addNewRow} size="sm">
-                      <Plus className="h-4 w-4 mr-1" />
-                      Add Row
-                    </Button>
+                    <h4 className="font-medium">Row {rowIndex + 1}</h4>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        onClick={() => addItemToRow(rowIndex)}
+                        size="sm"
+                        variant="outline"
+                      >
+                        <Plus className="h-3 w-3 mr-1" />
+                        Add Field
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={() => removeRow(rowIndex)}
+                        size="sm"
+                        variant="destructive"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
                   </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {form.watch('rows').map((row, rowIndex) => (
-                    <div key={row.id} className="border rounded-lg p-4 space-y-4">
-                      <div className="flex justify-between items-center">
-                        <h4 className="font-medium">Row {rowIndex + 1}</h4>
-                        <div className="flex gap-2">
+
+                  <div className="grid gap-4">
+                    {row.items.map((item, itemIndex) => (
+                      <div key={item.id} className="border rounded p-3 space-y-3">
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-2">
+                            <GripVertical className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-sm font-medium">Field {itemIndex + 1}</span>
+                          </div>
                           <Button
                             type="button"
-                            onClick={() => addItemToRow(rowIndex)}
+                            onClick={() => removeItemFromRow(rowIndex, itemIndex)}
                             size="sm"
-                            variant="outline"
-                          >
-                            <Plus className="h-3 w-3 mr-1" />
-                            Add Field
-                          </Button>
-                          <Button
-                            type="button"
-                            onClick={() => removeRow(rowIndex)}
-                            size="sm"
-                            variant="destructive"
+                            variant="ghost"
                           >
                             <Trash2 className="h-3 w-3" />
                           </Button>
                         </div>
-                      </div>
 
-                      <div className="grid gap-4">
-                        {row.items.map((item, itemIndex) => (
-                          <div key={item.id} className="border rounded p-3 space-y-3">
-                            <div className="flex justify-between items-center">
-                              <div className="flex items-center gap-2">
-                                <GripVertical className="h-4 w-4 text-muted-foreground" />
-                                <span className="text-sm font-medium">Field {itemIndex + 1}</span>
-                              </div>
-                              <Button
-                                type="button"
-                                onClick={() => removeItemFromRow(rowIndex, itemIndex)}
-                                size="sm"
-                                variant="ghost"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                <label className="text-xs font-medium">Type</label>
-                                <Select
-                                  value={item.type}
-                                  onValueChange={(value: 'text' | 'image' | 'number' | 'date') => {
-                                    const currentRows = form.getValues('rows');
-                                    currentRows[rowIndex].items[itemIndex].type = value;
-                                    form.setValue('rows', currentRows);
-                                  }}
-                                >
-                                  <SelectTrigger className="h-8">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {Object.entries(itemTypeIcons).map(([type, Icon]) => (
-                                      <SelectItem key={type} value={type}>
-                                        <div className="flex items-center gap-2">
-                                          <Icon className="h-3 w-3" />
-                                          {type.charAt(0).toUpperCase() + type.slice(1)}
-                                        </div>
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-
-                              <div>
-                                <label className="text-xs font-medium">Label</label>
-                                <Input
-                                  value={item.label}
-                                  onChange={(e) => {
-                                    const currentRows = form.getValues('rows');
-                                    currentRows[rowIndex].items[itemIndex].label = e.target.value;
-                                    form.setValue('rows', currentRows);
-                                  }}
-                                  className="h-8"
-                                />
-                              </div>
-                            </div>
-
-                            <div>
-                              <label className="text-xs font-medium">Value</label>
-                              {item.type === 'image' ? (
-                                <ImageUpload
-                                  value={item.value as string}
-                                  onChange={(url) => {
-                                    const currentRows = form.getValues('rows');
-                                    currentRows[rowIndex].items[itemIndex].value = url;
-                                    form.setValue('rows', currentRows);
-                                  }}
-                                />
-                              ) : item.type === 'number' ? (
-                                <Input
-                                  type="number"
-                                  value={item.value as number}
-                                  onChange={(e) => {
-                                    const currentRows = form.getValues('rows');
-                                    currentRows[rowIndex].items[itemIndex].value = parseFloat(e.target.value) || 0;
-                                    form.setValue('rows', currentRows);
-                                  }}
-                                  className="h-8"
-                                />
-                              ) : item.type === 'date' ? (
-                                <Popover>
-                                  <PopoverTrigger asChild>
-                                    <Button
-                                      variant="outline"
-                                      className="h-8 w-full justify-start text-left font-normal"
-                                    >
-                                      {item.value ? format(new Date(item.value as string), "PPP") : "Pick a date"}
-                                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                    </Button>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-auto p-0" align="start">
-                                    <Calendar
-                                      mode="single"
-                                      selected={item.value ? new Date(item.value as string) : undefined}
-                                      onSelect={(date) => {
-                                        if (date) {
-                                          const currentRows = form.getValues('rows');
-                                          currentRows[rowIndex].items[itemIndex].value = date;
-                                          form.setValue('rows', currentRows);
-                                        }
-                                      }}
-                                      initialFocus
-                                    />
-                                  </PopoverContent>
-                                </Popover>
-                              ) : (
-                                <Input
-                                  value={item.value as string}
-                                  onChange={(e) => {
-                                    const currentRows = form.getValues('rows');
-                                    currentRows[rowIndex].items[itemIndex].value = e.target.value;
-                                    form.setValue('rows', currentRows);
-                                  }}
-                                  className="h-8"
-                                />
-                              )}
-                            </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-xs font-medium">Type</label>
+                            <Select
+                              value={item.type}
+                              onValueChange={(value: 'text' | 'image' | 'number' | 'date') => {
+                                const currentRows = form.getValues('rows');
+                                currentRows[rowIndex].items[itemIndex].type = value;
+                                form.setValue('rows', currentRows);
+                              }}
+                            >
+                              <SelectTrigger className="h-8">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {Object.entries(itemTypeIcons).map(([type, Icon]) => (
+                                  <SelectItem key={type} value={type}>
+                                    <div className="flex items-center gap-2">
+                                      <Icon className="h-3 w-3" />
+                                      {type.charAt(0).toUpperCase() + type.slice(1)}
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </div>
-                        ))}
+
+                          <div>
+                            <label className="text-xs font-medium">Label</label>
+                            <Input
+                              value={item.label}
+                              onChange={(e) => {
+                                const currentRows = form.getValues('rows');
+                                currentRows[rowIndex].items[itemIndex].label = e.target.value;
+                                form.setValue('rows', currentRows);
+                              }}
+                              className="h-8"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-xs font-medium">Value</label>
+                          {item.type === 'image' ? (
+                            <ImageUpload
+                              value={item.value as string}
+                              onChange={(url) => {
+                                const currentRows = form.getValues('rows');
+                                currentRows[rowIndex].items[itemIndex].value = url;
+                                form.setValue('rows', currentRows);
+                              }}
+                            />
+                          ) : item.type === 'number' ? (
+                            <Input
+                              type="number"
+                              value={item.value as number}
+                              onChange={(e) => {
+                                const currentRows = form.getValues('rows');
+                                currentRows[rowIndex].items[itemIndex].value = parseFloat(e.target.value) || 0;
+                                form.setValue('rows', currentRows);
+                              }}
+                              className="h-8"
+                            />
+                          ) : item.type === 'date' ? (
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  className="h-8 w-full justify-start text-left font-normal"
+                                >
+                                  {item.value ? format(new Date(item.value as string), "PPP") : "Pick a date"}
+                                  <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                  mode="single"
+                                  selected={item.value ? new Date(item.value as string) : undefined}
+                                  onSelect={(date) => {
+                                    if (date) {
+                                      const currentRows = form.getValues('rows');
+                                      currentRows[rowIndex].items[itemIndex].value = date;
+                                      form.setValue('rows', currentRows);
+                                    }
+                                  }}
+                                  initialFocus
+                                />
+                              </PopoverContent>
+                            </Popover>
+                          ) : (
+                            <Input
+                              value={item.value as string}
+                              onChange={(e) => {
+                                const currentRows = form.getValues('rows');
+                                currentRows[rowIndex].items[itemIndex].value = e.target.value;
+                                form.setValue('rows', currentRows);
+                              }}
+                              className="h-8"
+                            />
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-
-                  {form.watch('rows').length === 0 && (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <p>No items added yet. Click "Add Row" to get started.</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Summary */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="font-headline">Summary</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span>Subtotal:</span>
-                      <span>₹{totals.subTotal.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Tax (18%):</span>
-                      <span>₹{totals.totalTax.toFixed(2)}</span>
-                    </div>
-                    <Separator />
-                    <div className="flex justify-between font-bold">
-                      <span>Grand Total:</span>
-                      <span>₹{totals.grandTotal.toFixed(2)}</span>
-                    </div>
+                    ))}
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              ))}
 
-              <div className="flex gap-4">
-                <Button type="submit" className="flex-1">
-                  {isEdit ? 'Update Quotation' : 'Create Quotation'}
-                </Button>
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={() => router.back()}
-                >
-                  Cancel
-                </Button>
+              {form.watch('rows').length === 0 && (
+                <div className="text-center py-8 text-muted-foreground">
+                  <p>No items added yet. Click "Add Row" to get started.</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Additional Fields */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="font-headline">Additional Information</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <FormField
+                control={form.control}
+                name="notes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Notes</FormLabel>
+                    <FormControl>
+                      <Textarea {...field} placeholder="Enter any additional notes" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="termsAndConditions"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Terms & Conditions</FormLabel>
+                    <FormControl>
+                      <Textarea {...field} placeholder="Enter terms and conditions" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Summary */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="font-headline">Summary</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span>Subtotal:</span>
+                  <span>₹{totals.subTotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Tax (18%):</span>
+                  <span>₹{totals.totalTax.toFixed(2)}</span>
+                </div>
+                <Separator />
+                <div className="flex justify-between font-bold">
+                  <span>Grand Total:</span>
+                  <span>₹{totals.grandTotal.toFixed(2)}</span>
+                </div>
               </div>
-            </form>
-          </Form>
-        </div>
+            </CardContent>
+          </Card>
 
-        {/* Live Preview */}
-        <Card>
+          <div className="flex gap-4">
+            <Button type="submit" className="flex-1">
+              {isEdit ? 'Update Quotation' : 'Create Quotation'}
+            </Button>
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={() => router.back()}
+            >
+              Cancel
+            </Button>
+          </div>
+        </form>
+      </Form>
+
+      {/* Preview Section - Moved to bottom */}
+      {(quotationSaved || selectedClientData && billerInfo.businessName) && (
+        <Card className="mt-8">
           <CardHeader>
-            <CardTitle className="font-headline">Preview</CardTitle>
+            <CardTitle className="font-headline">
+              {quotationSaved ? 'Quotation Created Successfully!' : 'Preview'}
+            </CardTitle>
+            {quotationSaved && (
+              <p className="text-muted-foreground">
+                Your quotation has been saved. You can now download the PDF or view the full quotation.
+              </p>
+            )}
           </CardHeader>
           <CardContent>
             {selectedClientData && billerInfo.businessName ? (
               <QuotationPreview
                 quotation={{
-                  id: 'preview',
+                  id: savedQuotationId || 'preview',
                   userId: currentUser?.uid || '',
                   quotationNumber: form.watch('quotationNumber'),
                   quotationDate: form.watch('quotationDate'),
@@ -802,15 +847,32 @@ export function QuotationForm({ initialData, isEdit = false }: QuotationFormProp
                   updatedAt: new Date(),
                 } as Quotation}
                 showHeader={false}
+                showDownloadButton={quotationSaved}
               />
             ) : (
               <div className="text-center py-8 text-muted-foreground">
                 <p>Complete the form to see preview</p>
               </div>
             )}
+            
+            {quotationSaved && savedQuotationId && (
+              <div className="mt-6 flex gap-4 justify-center">
+                <Button 
+                  onClick={() => router.push(`/dashboard/quotations/${savedQuotationId}`)}
+                  variant="outline"
+                >
+                  View Full Quotation
+                </Button>
+                <Button 
+                  onClick={() => router.push('/dashboard/quotations')}
+                >
+                  Back to Quotations
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
-      </div>
+      )}
     </div>
   );
 }
