@@ -1,11 +1,11 @@
+
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import type { Quotation, QuotationRow } from "@/lib/types";
+import type { Quotation, QuotationRow, QuotationItem } from "@/lib/types";
 import { format } from "date-fns";
-import { Timestamp } from "firebase/firestore";
 import Image from "next/image";
 
 interface QuotationPreviewProps {
@@ -14,59 +14,69 @@ interface QuotationPreviewProps {
 }
 
 export function QuotationPreview({ quotation, showHeader = true }: QuotationPreviewProps) {
-  const formatDate = (date: Date | Timestamp) => {
-    if (date instanceof Timestamp) {
-      return format(date.toDate(), "dd/MM/yyyy");
+  const formatDate = (date: Date | string): string => {
+    if (typeof date === 'string') {
+      return format(new Date(date), 'dd/MM/yyyy');
     }
-    return format(date, "dd/MM/yyyy");
+    return format(date, 'dd/MM/yyyy');
   };
 
-  const renderItemValue = (item: any) => {
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'draft': return 'bg-gray-100 text-gray-800';
+      case 'sent': return 'bg-blue-100 text-blue-800';
+      case 'accepted': return 'bg-green-100 text-green-800';
+      case 'declined': return 'bg-red-100 text-red-800';
+      case 'expired': return 'bg-orange-100 text-orange-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const renderItemValue = (item: QuotationItem) => {
     switch (item.type) {
       case 'image':
-        return item.value ? (
-          <div className="flex justify-center">
-            <Image
-              src={item.value}
-              alt={item.label}
-              width={80}
-              height={60}
-              className="rounded object-cover border"
-              onError={(e) => {
-                e.currentTarget.style.display = 'none';
-              }}
-            />
+        if (item.value && typeof item.value === 'string') {
+          return (
+            <div className="relative w-16 h-16 border border-gray-200 rounded overflow-hidden bg-gray-50">
+              <Image
+                src={item.value}
+                alt={item.label}
+                fill
+                className="object-cover"
+                sizes="64px"
+              />
+            </div>
+          );
+        }
+        return (
+          <div className="w-16 h-16 border border-gray-200 rounded flex items-center justify-center bg-gray-50 text-gray-400 text-xs">
+            No image
           </div>
-        ) : (
-          <span className="text-muted-foreground text-xs">No image</span>
         );
-      case 'number':
-        return typeof item.value === 'number' ? item.value.toFixed(2) : '0.00';
       case 'date':
-        return item.value ? format(new Date(item.value), "dd/MM/yyyy") : '';
+        return item.value ? formatDate(item.value as Date) : '';
+      case 'number':
+        return typeof item.value === 'number' ? item.value.toFixed(2) : item.value;
       default:
-        return item.value || '';
+        return item.value?.toString() || '';
     }
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-4xl mx-auto space-y-6 bg-white">
       {showHeader && (
-        <Card>
-          <CardHeader className="text-center pb-2">
-            <div className="flex items-center justify-between">
-              <div className="text-left">
-                <h1 className="text-2xl font-bold text-primary">QUOTATION</h1>
-                <p className="text-sm text-muted-foreground">#{quotation.quotationNumber}</p>
-              </div>
-              <Badge variant={quotation.status === 'accepted' ? 'default' : 'secondary'} className="capitalize">
-                {quotation.status}
-              </Badge>
-            </div>
-          </CardHeader>
-        </Card>
+        <div className="flex justify-between items-start">
+          <div>
+            <h1 className="text-3xl font-bold">Quotation</h1>
+            <p className="text-muted-foreground">#{quotation.quotationNumber}</p>
+          </div>
+          <Badge className={getStatusColor(quotation.status)}>
+            {quotation.status.charAt(0).toUpperCase() + quotation.status.slice(1)}
+          </Badge>
+        </div>
       )}
 
+      {/* Header Information */}
       <div className="grid md:grid-cols-2 gap-6">
         {/* Biller Info */}
         <Card>
@@ -74,11 +84,11 @@ export function QuotationPreview({ quotation, showHeader = true }: QuotationPrev
             <CardTitle className="text-lg">From</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            <h3 className="font-semibold">{quotation.billerInfo.businessName}</h3>
+            <div className="font-semibold text-lg">{quotation.billerInfo.businessName}</div>
             {quotation.billerInfo.gstin && (
-              <p className="text-sm">GSTIN: {quotation.billerInfo.gstin}</p>
+              <p className="text-sm text-muted-foreground">GSTIN: {quotation.billerInfo.gstin}</p>
             )}
-            <div className="text-sm text-muted-foreground">
+            <div className="text-sm">
               <p>{quotation.billerInfo.addressLine1}</p>
               {quotation.billerInfo.addressLine2 && <p>{quotation.billerInfo.addressLine2}</p>}
               <p>{quotation.billerInfo.city}, {quotation.billerInfo.state} {quotation.billerInfo.postalCode}</p>
@@ -99,22 +109,18 @@ export function QuotationPreview({ quotation, showHeader = true }: QuotationPrev
             <CardTitle className="text-lg">To</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            <h3 className="font-semibold">{quotation.client.name}</h3>
+            <div className="font-semibold text-lg">{quotation.client.name}</div>
             {quotation.client.gstin && (
-              <p className="text-sm">GSTIN: {quotation.client.gstin}</p>
+              <p className="text-sm text-muted-foreground">GSTIN: {quotation.client.gstin}</p>
             )}
-            <div className="text-sm text-muted-foreground">
+            <div className="text-sm">
               <p>{quotation.client.addressLine1}</p>
               {quotation.client.addressLine2 && <p>{quotation.client.addressLine2}</p>}
               <p>{quotation.client.city}, {quotation.client.state} {quotation.client.postalCode}</p>
               <p>{quotation.client.country}</p>
             </div>
-            {quotation.client.phone && (
-              <p className="text-sm">Phone: {quotation.client.phone}</p>
-            )}
-            {quotation.client.email && (
-              <p className="text-sm">Email: {quotation.client.email}</p>
-            )}
+            <p className="text-sm">Phone: {quotation.client.phone}</p>
+            <p className="text-sm">Email: {quotation.client.email}</p>
           </CardContent>
         </Card>
       </div>
@@ -170,7 +176,7 @@ export function QuotationPreview({ quotation, showHeader = true }: QuotationPrev
                   {row.items.map((item, itemIndex) => (
                     <div
                       key={`${item.id}-value`}
-                      className={`col-span-${Math.max(1, Math.floor(item.width / 8.33))}`}
+                      className={`col-span-${Math.max(1, Math.floor(item.width / 8.33))} flex items-center`}
                       style={{ gridColumn: `span ${Math.max(1, Math.floor(item.width / 8.33))}` }}
                     >
                       {renderItemValue(item)}
@@ -183,48 +189,52 @@ export function QuotationPreview({ quotation, showHeader = true }: QuotationPrev
         </CardContent>
       </Card>
 
-      {/* Totals */}
+      {/* Summary */}
       <Card>
         <CardHeader>
           <CardTitle>Summary</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            <div className="flex justify-between">
-              <span>Subtotal:</span>
-              <span>₹{quotation.subTotal.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Tax (18%):</span>
-              <span>₹{quotation.totalTax.toFixed(2)}</span>
-            </div>
-            <Separator />
-            <div className="flex justify-between text-lg font-bold">
-              <span>Grand Total:</span>
-              <span>₹{quotation.grandTotal.toFixed(2)}</span>
-            </div>
+        <CardContent className="space-y-2">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Subtotal:</span>
+            <span>{quotation.currency} {quotation.subTotal?.toFixed(2) || '0.00'}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Tax (18%):</span>
+            <span>{quotation.currency} {quotation.totalTax?.toFixed(2) || '0.00'}</span>
+          </div>
+          <Separator />
+          <div className="flex justify-between text-xl font-bold">
+            <span>Grand Total:</span>
+            <span>{quotation.currency} {quotation.grandTotal?.toFixed(2) || '0.00'}</span>
           </div>
         </CardContent>
       </Card>
 
       {/* Notes and Terms */}
       {(quotation.notes || quotation.termsAndConditions) && (
-        <Card>
-          <CardContent className="pt-6 space-y-4">
-            {quotation.notes && (
-              <div>
-                <h4 className="font-medium mb-2">Notes</h4>
-                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{quotation.notes}</p>
-              </div>
-            )}
-            {quotation.termsAndConditions && (
-              <div>
-                <h4 className="font-medium mb-2">Terms & Conditions</h4>
-                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{quotation.termsAndConditions}</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <div className="grid md:grid-cols-2 gap-6">
+          {quotation.notes && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Notes</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm whitespace-pre-wrap">{quotation.notes}</p>
+              </CardContent>
+            </Card>
+          )}
+          {quotation.termsAndConditions && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Terms & Conditions</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm whitespace-pre-wrap">{quotation.termsAndConditions}</p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
       )}
     </div>
   );

@@ -1,3 +1,4 @@
+
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -28,7 +29,7 @@ import { format, addDays } from "date-fns";
 import { CalendarIcon, PlusCircle, Trash2, GripVertical, Image, Type, Hash, Calendar as CalendarClock, Loader2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
-import { collection, getDocs, addDoc, doc, getDoc, serverTimestamp, Timestamp, query, where } from 'firebase/firestore';
+import { collection, getDocs, addDoc, doc, getDoc, serverTimestamp, Timestamp, query, where, updateDoc } from 'firebase/firestore';
 import { db, getFirebaseAuthInstance } from '@/lib/firebase'; 
 import { onAuthStateChanged, type User, type Auth } from "firebase/auth";
 
@@ -65,6 +66,7 @@ type QuotationFormValues = z.infer<typeof quotationFormSchema>;
 
 interface QuotationFormProps {
   initialData?: Quotation | null;
+  isEdit?: boolean;
 }
 
 const defaultBillerInfo: BillerInfo = {
@@ -79,7 +81,7 @@ const itemTypeIcons = {
   date: CalendarClock,
 };
 
-export function QuotationForm({ initialData }: QuotationFormProps) {
+export function QuotationForm({ initialData, isEdit = false }: QuotationFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
@@ -288,18 +290,30 @@ export function QuotationForm({ initialData }: QuotationFormProps) {
     };
 
     try {
-      const fullQuotationData = { ...quotationData, createdAt: serverTimestamp() as Timestamp };
-      const docRef = await addDoc(collection(db, "quotations"), fullQuotationData);
-      toast({
-        title: "Quotation Created",
-        description: `Quotation ${values.quotationNumber} has been successfully created.`,
-      });
-      router.push(`/dashboard/quotations/${docRef.id}`);
+      if (isEdit && initialData?.id) {
+        // Update existing quotation
+        const quotationRef = doc(db, "quotations", initialData.id);
+        await updateDoc(quotationRef, quotationData);
+        toast({
+          title: "Quotation Updated",
+          description: `Quotation ${values.quotationNumber} has been successfully updated.`,
+        });
+        router.push(`/dashboard/quotations/${initialData.id}`);
+      } else {
+        // Create new quotation
+        const fullQuotationData = { ...quotationData, createdAt: serverTimestamp() as Timestamp };
+        const docRef = await addDoc(collection(db, "quotations"), fullQuotationData);
+        toast({
+          title: "Quotation Created",
+          description: `Quotation ${values.quotationNumber} has been successfully created.`,
+        });
+        router.push(`/dashboard/quotations/${docRef.id}`);
+      }
     } catch (error) {
       console.error("Error saving quotation:", error);
       toast({
         title: "Error",
-        description: "Failed to save quotation. Please try again.",
+        description: `Failed to ${isEdit ? 'update' : 'save'} quotation. Please try again.`,
         variant: "destructive",
       });
     }
@@ -804,7 +818,7 @@ export function QuotationForm({ initialData }: QuotationFormProps) {
           </CardContent>
         </Card>
 
-        <div className="flex justify-end gap-3 pt-4"></div>
+        <div className="flex justify-end gap-3 pt-4">
           <Button type="button" variant="outline" onClick={() => router.back()} disabled={form.formState.isSubmitting}>
             Cancel
           </Button>
@@ -821,7 +835,7 @@ export function QuotationForm({ initialData }: QuotationFormProps) {
             {(form.formState.isSubmitting || loadingAuth || (loadingClients && !initialData)) && (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             )}
-            {form.formState.isSubmitting ? "Creating Quotation..." : "Create Quotation"}
+            {form.formState.isSubmitting ? (isEdit ? "Updating Quotation..." : "Creating Quotation...") : (isEdit ? "Update Quotation" : "Create Quotation")}
           </Button>
         </div>
       </form>
