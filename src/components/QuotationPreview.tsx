@@ -1,3 +1,4 @@
+
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,9 +26,11 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
   ({ quotation, showHeader = true }, ref) => {
   const contentRef = useRef<HTMLDivElement>(null);
 
-  const downloadPdf = async () => {
-    if (!contentRef.current) return;
+  useImperativeHandle(ref, () => ({
+    downloadPdf
+  }));
 
+  const downloadPdf = async () => {
     try {
       // Create PDF with proper A4 dimensions
       const pdf = new jsPDF({
@@ -37,79 +40,46 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
         compress: true
       });
 
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const margin = 10;
-      const availableWidth = pdfWidth - (margin * 2);
-      const availableHeight = pdfHeight - (margin * 2);
+      const pageWidth = 210; // A4 width in mm
+      const pageHeight = 297; // A4 height in mm
+      const margin = 15;
+      const contentWidth = pageWidth - (margin * 2);
+      const contentHeight = pageHeight - (margin * 2);
 
-      // Better pagination logic - more conservative estimates
-      const maxRowsFirstPage = 4; // More space for header
-      const maxRowsPerPage = 6; // Conservative estimate for subsequent pages
+      // Convert images to base64 using a different approach
+      const imagePromises = new Map();
+      const processedImages = new Map();
 
-      const totalRows = quotation.rows.length;
-      let totalPages = 1;
-
-      if (totalRows > maxRowsFirstPage) {
-        const remainingRows = totalRows - maxRowsFirstPage;
-        totalPages = 1 + Math.ceil(remainingRows / maxRowsPerPage);
-      }
-
-      // Pre-convert all images to base64 to avoid CORS issues
-      const convertImageToBase64 = async (imageUrl: string): Promise<string> => {
-        try {
-          // Handle Firebase Storage URLs
-          if (imageUrl.includes('firebasestorage.googleapis.com')) {
-            // Create a proxy fetch to avoid CORS
-            const response = await fetch(imageUrl, {
-              mode: 'cors',
-              credentials: 'omit',
-              headers: {
-                'Accept': 'image/*',
-              }
-            });
-
-            if (!response.ok) {
-              throw new Error(`Failed to fetch image: ${response.status}`);
-            }
-
-            const blob = await response.blob();
-            return new Promise((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve(reader.result as string);
-              reader.onerror = () => reject(new Error('Failed to convert to base64'));
-              reader.readAsDataURL(blob);
-            });
-          } else {
-            // For other URLs, try direct fetch
-            const response = await fetch(imageUrl);
-            const blob = await response.blob();
-            return new Promise((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve(reader.result as string);
-              reader.onerror = reject;
-              reader.readAsDataURL(blob);
-            });
-          }
-        } catch (error) {
-          console.error('Error converting image:', error);
-          // Return a placeholder data URL for missing images
-          return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0xMyAxM0gyN1YyN0gxM1YxM1oiIGZpbGw9IiM5Q0EzQUYiLz4KPC9zdmc+';
-        }
-      };
-
-      // Convert all images first
-      const imageConversions = new Map<string, string>();
+      // First pass: collect all image URLs
       for (const row of quotation.rows) {
         for (const item of row.items) {
           if (item.type === 'image' && item.value && typeof item.value === 'string') {
-            if (!imageConversions.has(item.value)) {
-              const base64Image = await convertImageToBase64(item.value);
-              imageConversions.set(item.value, base64Image);
+            if (!imagePromises.has(item.value)) {
+              imagePromises.set(item.value, convertImageToBase64Safe(item.value));
             }
           }
         }
       }
+
+      // Wait for all images to be processed
+      for (const [url, promise] of imagePromises) {
+        try {
+          const base64 = await promise;
+          processedImages.set(url, base64);
+        } catch (error) {
+          console.error('Failed to process image:', url, error);
+          // Use placeholder for failed images
+          processedImages.set(url, createPlaceholderImage());
+        }
+      }
+
+      // Calculate pagination
+      const headerHeight = 80; // mm
+      const footerHeight = 50; // mm
+      const rowHeight = 15; // mm per row
+      const availableRowSpace = contentHeight - headerHeight - footerHeight;
+      const maxRowsPerPage = Math.floor(availableRowSpace / rowHeight);
+      const totalPages = Math.ceil(quotation.rows.length / maxRowsPerPage);
 
       // Generate each page
       for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
@@ -117,110 +87,23 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
           pdf.addPage();
         }
 
-        // Calculate rows for this page with better logic
-        let startIndex, endIndex, pageRows;
+        const startIndex = pageIndex * maxRowsPerPage;
+        const endIndex = Math.min(startIndex + maxRowsPerPage, quotation.rows.length);
+        const pageRows = quotation.rows.slice(startIndex, endIndex);
+
+        // Generate page content
+        let yPosition = margin;
 
         if (pageIndex === 0) {
-          // First page
-          startIndex = 0;
-          endIndex = Math.min(maxRowsFirstPage, totalRows);
-          pageRows = quotation.rows.slice(startIndex, endIndex);
+          yPosition = addHeader(pdf, quotation, margin, contentWidth, yPosition);
         } else {
-          // Subsequent pages
-          startIndex = maxRowsFirstPage + (pageIndex - 1) * maxRowsPerPage;
-          endIndex = Math.min(startIndex + maxRowsPerPage, totalRows);
-          pageRows = quotation.rows.slice(startIndex, endIndex);
+          yPosition = addContinuationHeader(pdf, quotation, pageIndex + 1, margin, contentWidth, yPosition);
         }
 
-        // Create a temporary container for this page's content
-        const pageContainer = document.createElement('div');
-        pageContainer.style.cssText = `
-          background-color: #ffffff;
-          font-family: Arial, sans-serif;
-          font-size: 11px;
-          line-height: 1.3;
-          color: #000000;
-          width: 750px;
-          padding: 15px;
-          margin: 0;
-          box-sizing: border-box;
-          min-height: 1000px;
-        `;
+        yPosition = addRowsTable(pdf, pageRows, processedImages, margin, contentWidth, yPosition, startIndex);
 
-        // Use pre-converted images
-        const rowsWithConvertedImages = pageRows.map(row => ({
-          ...row,
-          items: row.items.map(item => ({
-            ...item,
-            value: item.type === 'image' && typeof item.value === 'string' 
-              ? imageConversions.get(item.value) || item.value
-              : item.value
-          }))
-        }));
-
-        // Add content to page container
-        pageContainer.innerHTML = generatePageHTML(quotation, rowsWithConvertedImages, pageIndex, totalPages, startIndex);
-
-        // Temporarily add to DOM for rendering
-        document.body.appendChild(pageContainer);
-
-        // Wait longer for images to render
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-        try {
-          // Create canvas for this page with better settings
-          const canvas = await html2canvas(pageContainer, {
-            scale: 1.5,
-            useCORS: true,
-            allowTaint: true,
-            logging: false,
-            backgroundColor: '#ffffff',
-            width: 750,
-            height: 1000,
-            imageTimeout: 15000,
-            onclone: (clonedDoc) => {
-              // Ensure all images are properly loaded
-              const images = clonedDoc.querySelectorAll('img');
-              images.forEach((img: HTMLImageElement) => {
-                img.style.display = 'block';
-                img.style.maxWidth = '100%';
-                img.style.height = 'auto';
-                img.style.objectFit = 'cover';
-                // Force image to load if it hasn't
-                if (!img.complete) {
-                  img.src = img.src;
-                }
-              });
-            }
-          });
-
-          // Convert to image and add to PDF
-          const imgData = canvas.toDataURL('image/jpeg', 0.9);
-
-          const canvasWidth = canvas.width;
-          const canvasHeight = canvas.height;
-
-          // Convert pixels to mm (assuming 96 DPI)
-          const pxToMm = 25.4 / 96;
-          const imgWidthMm = (canvasWidth * pxToMm) / 1.5; // Divide by scale factor
-          const imgHeightMm = (canvasHeight * pxToMm) / 1.5;
-
-          // Scale to fit page
-          const scaleX = availableWidth / imgWidthMm;
-          const scaleY = availableHeight / imgHeightMm;
-          const scale = Math.min(scaleX, scaleY, 1);
-
-          const finalWidth = imgWidthMm * scale;
-          const finalHeight = imgHeightMm * scale;
-
-          const x = (pdfWidth - finalWidth) / 2;
-          const y = margin;
-
-          pdf.addImage(imgData, 'JPEG', x, y, finalWidth, finalHeight, undefined, 'FAST');
-
-        } finally {
-          // Clean up temporary element
-          document.body.removeChild(pageContainer);
+        if (pageIndex === totalPages - 1) {
+          addFooter(pdf, quotation, margin, contentWidth, pageHeight - margin - footerHeight);
         }
       }
 
@@ -233,215 +116,304 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
     }
   };
 
-  // Helper function to generate complete page HTML
-  const generatePageHTML = (quotation: Quotation, pageRows: QuotationRow[], pageIndex: number, totalPages: number, startIndex: number): string => {
-    const isFirstPage = pageIndex === 0;
-    const isLastPage = pageIndex === totalPages - 1;
+  // Safe image conversion that handles CORS issues
+  const convertImageToBase64Safe = async (imageUrl: string): Promise<string> => {
+    try {
+      // Create a temporary image element
+      const img = new window.Image();
+      img.crossOrigin = 'anonymous';
+      
+      return new Promise((resolve, reject) => {
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            canvas.width = img.width;
+            canvas.height = img.height;
+            
+            if (ctx) {
+              ctx.drawImage(img, 0, 0);
+              const dataURL = canvas.toDataURL('image/jpeg', 0.8);
+              resolve(dataURL);
+            } else {
+              reject(new Error('Canvas context not available'));
+            }
+          } catch (error) {
+            reject(error);
+          }
+        };
+        
+        img.onerror = () => {
+          reject(new Error('Failed to load image'));
+        };
 
-    return `
-      <div style="min-height: 950px; position: relative;">
-        ${isFirstPage ? generateHeaderHTML(quotation) : generateContinuationHeaderHTML(quotation, pageIndex + 1)}
-        ${pageRows.length > 0 ? generateRowsTableHTML(pageRows, startIndex, quotation.currency) : ''}
-        ${isLastPage ? generateFooterHTML(quotation) : generateContinuationFooterHTML(pageIndex + 1, totalPages)}
-      </div>
-    `;
+        // For Firebase Storage URLs, try to get a direct download URL
+        if (imageUrl.includes('firebasestorage.googleapis.com')) {
+          // Extract the token or use the URL directly
+          img.src = imageUrl;
+        } else {
+          img.src = imageUrl;
+        }
+        
+        // Timeout after 10 seconds
+        setTimeout(() => {
+          reject(new Error('Image load timeout'));
+        }, 10000);
+      });
+    } catch (error) {
+      console.error('Error converting image:', error);
+      throw error;
+    }
   };
 
-// Helper function to generate header HTML
-  const generateHeaderHTML = (quotation: Quotation): string => {
-    return `
-      <div style="margin-bottom: 25mm;">
-        <!-- Header Section -->
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 5mm;">
-          <div>
-            <h1 style="font-size: 24px; font-weight: bold; margin: 0 0 2mm 0; color: #1f2937;">Quotation</h1>
-            <p style="color: #6b7280; margin: 0; font-size: 12px;">#${quotation.quotationNumber}</p>
-          </div>
-          <div style="text-align: right;">
-            <div style="background: #f3f4f6; color: #374151; padding: 2mm; border-radius: 2mm; font-size: 10px; font-weight: 500;">
-              ${quotation.status.charAt(0).toUpperCase() + quotation.status.slice(1)}
-            </div>
-          </div>
-        </div>
-
-        <!-- Biller and Client Info -->
-        <table style="width: 100%; margin-bottom: 5mm; border-collapse: collapse;">
-          <tr>
-            <!-- Biller Info -->
-            <td style="width: 50%; padding-right: 3mm; vertical-align: top;">
-              <div style="border: 1px solid #e5e7eb; border-radius: 2mm; padding: 3mm;">
-                <h3 style="font-size: 12px; font-weight: 600; margin: 0 0 2mm 0; color: #1f2937;">From</h3>
-                <div style="font-weight: 600; font-size: 11px; margin-bottom: 1mm;">${quotation.billerInfo.businessName}</div>
-                ${quotation.billerInfo.gstin ? `<p style="font-size: 9px; color: #6b7280; margin: 0 0 1mm 0;">GSTIN: ${quotation.billerInfo.gstin}</p>` : ''}
-                <div style="font-size: 9px; line-height: 1.3;">
-                  <p style="margin: 0 0 0.5mm 0;">${quotation.billerInfo.addressLine1}</p>
-                  ${quotation.billerInfo.addressLine2 ? `<p style="margin: 0 0 0.5mm 0;">${quotation.billerInfo.addressLine2}</p>` : ''}
-                  <p style="margin: 0 0 0.5mm 0;">${quotation.billerInfo.city}, ${quotation.billerInfo.state} ${quotation.billerInfo.postalCode}</p>
-                  <p style="margin: 0 0 0.5mm 0;">${quotation.billerInfo.country}</p>
-                </div>
-                ${quotation.billerInfo.phone ? `<p style="font-size: 9px; margin: 1mm 0 0 0;">Phone: ${quotation.billerInfo.phone}</p>` : ''}
-                ${quotation.billerInfo.email ? `<p style="font-size: 9px; margin: 0.5mm 0 0 0;">Email: ${quotation.billerInfo.email}</p>` : ''}
-              </div>
-            </td>
-
-            <!-- Client Info -->
-            <td style="width: 50%; padding-left: 3mm; vertical-align: top;">
-              <div style="border: 1px solid #e5e7eb; border-radius: 2mm; padding: 3mm;">
-                <h3 style="font-size: 12px; font-weight: 600; margin: 0 0 2mm 0; color: #1f2937;">To</h3>
-                <div style="font-weight: 600; font-size: 11px; margin-bottom: 1mm;">${quotation.client.name}</div>
-                ${quotation.client.gstin ? `<p style="font-size: 9px; color: #6b7280; margin: 0 0 1mm 0;">GSTIN: ${quotation.client.gstin}</p>` : ''}
-                <div style="font-size: 9px; line-height: 1.3;">
-                  <p style="margin: 0 0 0.5mm 0;">${quotation.client.addressLine1}</p>
-                  ${quotation.client.addressLine2 ? `<p style="margin: 0 0 0.5mm 0;">${quotation.client.addressLine2}</p>` : ''}
-                  <p style="margin: 0 0 0.5mm 0;">${quotation.client.city}, ${quotation.client.state} ${quotation.client.postalCode}</p>
-                  <p style="margin: 0 0 0.5mm 0;">${quotation.client.country}</p>
-                </div>
-                <p style="font-size: 9px; margin: 1mm 0 0 0;">Phone: ${quotation.client.phone}</p>
-                <p style="font-size: 9px; margin: 0.5mm 0 0 0;">Email: ${quotation.client.email}</p>
-              </div>
-            </td>
-          </tr>
-        </table>
-
-        <!-- Quotation Details -->
-        <div style="border: 1px solid #e5e7eb; border-radius: 2mm; padding: 3mm; margin-bottom: 4mm;">
-          <table style="width: 100%; margin-bottom: 3mm; border-collapse: collapse;">
-            <tr>
-              <td style="width: 33.33%; padding-right: 2mm;">
-                <p style="font-size: 10px; font-weight: 500; margin: 0 0 0.5mm 0;">Quotation Date</p>
-                <p style="font-size: 9px; color: #6b7280; margin: 0;">${formatDate(quotation.quotationDate)}</p>
-              </td>
-              <td style="width: 33.33%; padding: 0 1mm;">
-                <p style="font-size: 10px; font-weight: 500; margin: 0 0 0.5mm 0;">Valid Until</p>
-                <p style="font-size: 9px; color: #6b7280; margin: 0;">${formatDate(quotation.validUntil)}</p>
-              </td>
-              <td style="width: 33.33%; padding-left: 2mm;">
-                <p style="font-size: 10px; font-weight: 500; margin: 0 0 0.5mm 0;">Currency</p>
-                <p style="font-size: 9px; color: #6b7280; margin: 0;">${quotation.currency}</p>
-              </td>
-            </tr>
-          </table>
-          <div>
-            <h3 style="font-size: 12px; font-weight: 600; margin: 0 0 1mm 0;">${quotation.title}</h3>
-            ${quotation.description ? `<p style="font-size: 9px; color: #6b7280; margin: 0; word-wrap: break-word;">${quotation.description}</p>` : ''}
-          </div>
-        </div>
-      </div>
-    `;
+  // Create a placeholder image as base64
+  const createPlaceholderImage = (): string => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 100;
+    canvas.height = 100;
+    const ctx = canvas.getContext('2d');
+    
+    if (ctx) {
+      ctx.fillStyle = '#f3f4f6';
+      ctx.fillRect(0, 0, 100, 100);
+      ctx.strokeStyle = '#d1d5db';
+      ctx.strokeRect(0, 0, 100, 100);
+      ctx.fillStyle = '#6b7280';
+      ctx.font = '12px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('No Image', 50, 50);
+    }
+    
+    return canvas.toDataURL('image/jpeg', 0.8);
   };
 
-  // Helper function to generate continuation header HTML
-  const generateContinuationHeaderHTML = (quotation: Quotation, pageNumber: number): string => {
-    return `
-      <div style="padding: 24px; background: white;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; border-bottom: 2px solid #e5e7eb; padding-bottom: 16px;">
-          <div>
-            <h1 style="font-size: 24px; font-weight: bold; margin: 0; color: #1f2937;">Quotation #${quotation.quotationNumber}</h1>
-            <p style="color: #6b7280; margin: 4px 0 0 0; font-size: 14px;">Continued - Page ${pageNumber}</p>
-          </div>
-          <div style="text-align: right;">
-            <p style="font-size: 14px; margin: 0; color: #6b7280;">Client: ${quotation.client.name}</p>
-          </div>
-        </div>
-      </div>
-    `;
+  // Helper functions for PDF generation
+  const addHeader = (pdf: jsPDF, quotation: Quotation, x: number, width: number, y: number): number => {
+    let currentY = y;
+
+    // Title and quotation number
+    pdf.setFontSize(24);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Quotation', x, currentY);
+    
+    pdf.setFontSize(12);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`#${quotation.quotationNumber}`, x, currentY + 8);
+    
+    // Status badge
+    pdf.setFontSize(10);
+    pdf.text(`Status: ${quotation.status.toUpperCase()}`, x + width - 40, currentY + 5);
+    
+    currentY += 20;
+
+    // Biller and Client info side by side
+    const colWidth = width / 2 - 5;
+    
+    // Biller info
+    pdf.setFontSize(12);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('From:', x, currentY);
+    currentY += 6;
+    
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(quotation.billerInfo.businessName, x, currentY);
+    currentY += 4;
+    if (quotation.billerInfo.gstin) {
+      pdf.text(`GSTIN: ${quotation.billerInfo.gstin}`, x, currentY);
+      currentY += 4;
+    }
+    pdf.text(quotation.billerInfo.addressLine1, x, currentY);
+    currentY += 4;
+    if (quotation.billerInfo.addressLine2) {
+      pdf.text(quotation.billerInfo.addressLine2, x, currentY);
+      currentY += 4;
+    }
+    pdf.text(`${quotation.billerInfo.city}, ${quotation.billerInfo.state} ${quotation.billerInfo.postalCode}`, x, currentY);
+    currentY += 4;
+    pdf.text(quotation.billerInfo.country, x, currentY);
+    if (quotation.billerInfo.phone) {
+      currentY += 4;
+      pdf.text(`Phone: ${quotation.billerInfo.phone}`, x, currentY);
+    }
+    if (quotation.billerInfo.email) {
+      currentY += 4;
+      pdf.text(`Email: ${quotation.billerInfo.email}`, x, currentY);
+    }
+
+    // Client info
+    let clientY = y + 26;
+    pdf.setFontSize(12);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('To:', x + colWidth + 10, clientY);
+    clientY += 6;
+    
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(quotation.client.name, x + colWidth + 10, clientY);
+    clientY += 4;
+    if (quotation.client.gstin) {
+      pdf.text(`GSTIN: ${quotation.client.gstin}`, x + colWidth + 10, clientY);
+      clientY += 4;
+    }
+    pdf.text(quotation.client.addressLine1, x + colWidth + 10, clientY);
+    clientY += 4;
+    if (quotation.client.addressLine2) {
+      pdf.text(quotation.client.addressLine2, x + colWidth + 10, clientY);
+      clientY += 4;
+    }
+    pdf.text(`${quotation.client.city}, ${quotation.client.state} ${quotation.client.postalCode}`, x + colWidth + 10, clientY);
+    clientY += 4;
+    pdf.text(quotation.client.country, x + colWidth + 10, clientY);
+    clientY += 4;
+    pdf.text(`Phone: ${quotation.client.phone}`, x + colWidth + 10, clientY);
+    clientY += 4;
+    pdf.text(`Email: ${quotation.client.email}`, x + colWidth + 10, clientY);
+
+    currentY = Math.max(currentY, clientY) + 10;
+
+    // Quotation details
+    pdf.setFontSize(10);
+    pdf.text(`Quotation Date: ${formatDate(quotation.quotationDate)}`, x, currentY);
+    pdf.text(`Valid Until: ${formatDate(quotation.validUntil)}`, x + 60, currentY);
+    pdf.text(`Currency: ${quotation.currency}`, x + 120, currentY);
+    currentY += 8;
+
+    pdf.setFontSize(12);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(quotation.title, x, currentY);
+    currentY += 6;
+    
+    if (quotation.description) {
+      pdf.setFontSize(9);
+      pdf.setFont('helvetica', 'normal');
+      const lines = pdf.splitTextToSize(quotation.description, width);
+      pdf.text(lines, x, currentY);
+      currentY += lines.length * 4;
+    }
+
+    return currentY + 10;
   };
 
-  // Helper function to generate rows table HTML
-  const generateRowsTableHTML = (rows: QuotationRow[], startIndex: number, currency: string): string => {
-    if (!rows.length) return '';
-
-    return `
-      <div style="margin-bottom: 16px;">
-        <div style="border: 1px solid #e5e7eb; border-radius: 6px; overflow: hidden;">
-          <h3 style="font-size: 14px; font-weight: 600; margin: 0; padding: 10px; background: #f9fafb; border-bottom: 1px solid #e5e7eb;">Items (${startIndex + 1}-${startIndex + rows.length})</h3>
-          <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
-            <thead>
-              <tr style="background: #f9fafb;">
-                ${rows[0]?.items.map(item => `
-                  <th style="padding: 6px; border-bottom: 1px solid #e5e7eb; text-align: left; font-weight: 500; width: ${item.width || 15}%; font-size: 10px;">
-                    ${item.label}
-                  </th>
-                `).join('')}
-              </tr>
-            </thead>
-            <tbody>
-              ${rows.map((row, index) => `
-                <tr style="${index % 2 === 0 ? 'background: #ffffff' : 'background: #f9fafb'}; page-break-inside: avoid;">
-                  ${row.items.map(item => `
-                    <td style="padding: 6px; border-bottom: ${index < rows.length - 1 ? '1px solid #f3f4f6' : 'none'}; vertical-align: top; width: ${item.width || 15}%; max-width: 120px; word-wrap: break-word;">
-                      ${item.type === 'image' && item.value ? 
-                        `<div style="width: 35px; height: 35px; border: 1px solid #e5e7eb; border-radius: 3px; overflow: hidden; background: #f9fafb; display: inline-block; margin: 0 auto;">
-                          <img src="${item.value}" alt="${item.label}" style="width: 100%; height: 100%; object-fit: cover; display: block;" onload="this.style.opacity=1" style="opacity: 0; transition: opacity 0.3s;" />
-                        </div>` :
-                        item.type === 'date' && item.value ? 
-                          formatDate(item.value as Date) :
-                          item.type === 'number' && typeof item.value === 'number' ?
-                            item.value.toFixed(2) :
-                            `<div style="max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${item.value?.toString() || ''}">${(item.value?.toString() || '').substring(0, 30)}${(item.value?.toString() || '').length > 30 ? '...' : ''}</div>`
-                      }
-                    </td>
-                  `).join('')}
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    `;
+  const addContinuationHeader = (pdf: jsPDF, quotation: Quotation, pageNumber: number, x: number, width: number, y: number): number => {
+    pdf.setFontSize(18);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(`Quotation #${quotation.quotationNumber} (Continued)`, x, y);
+    
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`Page ${pageNumber} - Client: ${quotation.client.name}`, x, y + 8);
+    
+    return y + 20;
   };
 
-  // Helper function to generate footer HTML
-  const generateFooterHTML = (quotation: Quotation): string => {
-    return `
-      <div style="padding: 0 24px;">
-        <!-- Summary -->
-        <div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 24px;">
-          <h3 style="font-size: 18px; font-weight: 600; margin: 0 0 16px 0;">Summary</h3>
-          <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-            <span style="color: #6b7280;">Subtotal:</span>
-            <span>${quotation.currency} ${quotation.subTotal?.toFixed(2) || '0.00'}</span>
-          </div>
-          <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
-            <span style="color: #6b7280;">Tax (18%):</span>
-            <span>${quotation.currency} ${quotation.totalTax?.toFixed(2) || '0.00'}</span>
-          </div>
-          <div style="border-top: 1px solid #e5e7eb; padding-top: 12px;">
-            <div style="display: flex; justify-content: space-between; font-size: 20px; font-weight: bold;">
-              <span>Grand Total:</span>
-              <span>${quotation.currency} ${quotation.grandTotal?.toFixed(2) || '0.00'}</span>
-            </div>
-          </div>
-        </div>
+  const addRowsTable = (pdf: jsPDF, rows: QuotationRow[], processedImages: Map<string, string>, x: number, width: number, y: number, startIndex: number): number => {
+    if (!rows.length) return y;
 
-        <!-- Notes and Terms -->
-        ${(quotation.notes || quotation.termsAndConditions) ? `
-          <div style="display: grid; grid-template-columns: ${quotation.notes && quotation.termsAndConditions ? '1fr 1fr' : '1fr'}; gap: 24px;">
-            ${quotation.notes ? `
-              <div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px;">
-                <h3 style="font-size: 18px; font-weight: 600; margin: 0 0 12px 0;">Notes</h3>
-                <p style="font-size: 14px; white-space: pre-wrap; margin: 0; line-height: 1.6;">${quotation.notes}</p>
-              </div>
-            ` : ''}
-            ${quotation.termsAndConditions ? `
-              <div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px;">
-                <h3 style="font-size: 18px; font-weight: 600; margin: 0 0 12px 0;">Terms & Conditions</h3>
-                <p style="font-size: 14px; white-space: pre-wrap; margin: 0; line-height: 1.6;">${quotation.termsAndConditions}</p>
-              </div>
-            ` : ''}
-          </div>
-        ` : ''}
-      </div>
-    `;
+    let currentY = y;
+
+    // Table header
+    pdf.setFontSize(12);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(`Items (${startIndex + 1}-${startIndex + rows.length})`, x, currentY);
+    currentY += 8;
+
+    // Column headers
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica', 'bold');
+    
+    const colWidths = rows[0]?.items.map(item => (item.width || 15) * width / 100) || [];
+    let colX = x;
+    
+    rows[0]?.items.forEach((item, index) => {
+      pdf.text(item.label, colX, currentY);
+      colX += colWidths[index];
+    });
+    
+    currentY += 6;
+
+    // Table rows
+    pdf.setFont('helvetica', 'normal');
+    
+    rows.forEach((row, rowIndex) => {
+      colX = x;
+      let rowHeight = 12;
+      
+      row.items.forEach((item, itemIndex) => {
+        const colWidth = colWidths[itemIndex];
+        
+        if (item.type === 'image' && item.value && typeof item.value === 'string') {
+          const base64Image = processedImages.get(item.value);
+          if (base64Image) {
+            try {
+              pdf.addImage(base64Image, 'JPEG', colX, currentY - 8, 8, 8);
+            } catch (error) {
+              console.error('Error adding image to PDF:', error);
+              pdf.text('Image Error', colX, currentY);
+            }
+          } else {
+            pdf.text('No Image', colX, currentY);
+          }
+        } else if (item.type === 'date' && item.value) {
+          pdf.text(formatDate(item.value as Date), colX, currentY);
+        } else if (item.type === 'number' && typeof item.value === 'number') {
+          pdf.text(item.value.toFixed(2), colX, currentY);
+        } else {
+          const text = item.value?.toString() || '';
+          const lines = pdf.splitTextToSize(text, colWidth - 2);
+          pdf.text(lines.slice(0, 2), colX, currentY); // Limit to 2 lines
+          rowHeight = Math.max(rowHeight, lines.length * 4);
+        }
+        
+        colX += colWidth;
+      });
+      
+      currentY += rowHeight;
+    });
+
+    return currentY + 10;
   };
 
-  // Helper function to generate continuation footer HTML
-  const generateContinuationFooterHTML = (pageNumber: number, totalPages: number): string => {
-    return `
-      <div style="padding: 16px 24px; border-top: 1px solid #e5e7eb; margin-top: 24px; text-align: center;">
-        <p style="font-size: 12px; color: #6b7280; margin: 0;">Page ${pageNumber} of ${totalPages} - Continued on next page...</p>
-      </div>
-    `;
+  const addFooter = (pdf: jsPDF, quotation: Quotation, x: number, width: number, y: number): void => {
+    let currentY = y;
+
+    // Summary
+    pdf.setFontSize(12);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Summary', x, currentY);
+    currentY += 8;
+
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`Subtotal: ${quotation.currency} ${quotation.subTotal?.toFixed(2) || '0.00'}`, x, currentY);
+    currentY += 5;
+    pdf.text(`Tax (18%): ${quotation.currency} ${quotation.totalTax?.toFixed(2) || '0.00'}`, x, currentY);
+    currentY += 5;
+    
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(`Grand Total: ${quotation.currency} ${quotation.grandTotal?.toFixed(2) || '0.00'}`, x, currentY);
+    currentY += 10;
+
+    // Notes and Terms
+    if (quotation.notes) {
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Notes:', x, currentY);
+      currentY += 5;
+      pdf.setFont('helvetica', 'normal');
+      const noteLines = pdf.splitTextToSize(quotation.notes, width / 2 - 10);
+      pdf.text(noteLines, x, currentY);
+    }
+
+    if (quotation.termsAndConditions) {
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Terms & Conditions:', x + width / 2, currentY - (quotation.notes ? noteLines.length * 4 : 0));
+      pdf.setFont('helvetica', 'normal');
+      const termLines = pdf.splitTextToSize(quotation.termsAndConditions, width / 2 - 10);
+      pdf.text(termLines, x + width / 2, currentY - (quotation.notes ? noteLines.length * 4 : 0) + 5);
+    }
   };
 
   const formatDate = (date: Date | string): string => {
