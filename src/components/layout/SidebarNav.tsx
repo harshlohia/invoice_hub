@@ -11,6 +11,7 @@ import {
   Settings,
   Briefcase,
   Palette,
+  FilePenLine,
 } from 'lucide-react';
 
 interface NavItem {
@@ -23,6 +24,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/dashboard/invoices', label: 'Invoices', icon: FileText },
+  { href: '/dashboard/quotations', label: 'Quotations', icon: FilePenLine },
   { href: '/dashboard/clients', label: 'Clients', icon: Users },
   { href: '/dashboard/services', label: 'Products/Services', icon: Briefcase, disabled: true }, // Placeholder for future
   { href: '/dashboard/templates', label: 'Templates', icon: Palette },

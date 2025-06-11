@@ -315,6 +315,45 @@ export const DEFAULT_TEMPLATE_STYLE: TemplateStyle = {
   spacing: 'normal'
 };
 
+// Quotation Types
+export interface QuotationItem {
+  id: string;
+  type: 'text' | 'image' | 'number' | 'date';
+  label: string;
+  value: string | number | Date;
+  width?: number; // Column width percentage
+  order: number; // Display order
+}
+
+export interface QuotationRow {
+  id: string;
+  items: QuotationItem[];
+  order: number;
+}
+
+export interface Quotation {
+  id?: string;
+  userId: string;
+  quotationNumber: string;
+  quotationDate: Date | Timestamp;
+  validUntil: Date | Timestamp;
+  billerInfo: BillerInfo;
+  client: Client;
+  title: string;
+  description?: string;
+  rows: QuotationRow[];
+  notes?: string;
+  termsAndConditions?: string;
+  subTotal: number;
+  totalTax: number;
+  grandTotal: number;
+  status: 'draft' | 'sent' | 'accepted' | 'declined' | 'expired';
+  currency?: string;
+  templateId?: string;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
 // Mock data for Biller (used as a fallback if settings not found, or for structure reference)
 // Ideally, InvoiceForm should always fetch this from user settings.
 export const mockBiller: BillerInfo = {
