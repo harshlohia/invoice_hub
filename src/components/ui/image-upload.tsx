@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Upload, X, Image as ImageIcon, Loader2 } from "lucide-react";
 import { storage } from "@/lib/firebase";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
 
@@ -19,6 +19,7 @@ interface ImageUploadProps {
 
 export function ImageUpload({ value, onChange, disabled }: ImageUploadProps) {
   const [uploading, setUploading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const { toast } = useToast();
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -53,8 +54,12 @@ export function ImageUpload({ value, onChange, disabled }: ImageUploadProps) {
       const storageRef = ref(storage, filename);
 
       // Upload the file
+      console.log("Uploading file to:", filename);
       const snapshot = await uploadBytes(storageRef, file);
+      console.log("Upload successful:", snapshot);
+      
       const downloadURL = await getDownloadURL(snapshot.ref);
+      console.log("Download URL:", downloadURL);
 
       onChange(downloadURL);
       toast({
@@ -70,47 +75,95 @@ export function ImageUpload({ value, onChange, disabled }: ImageUploadProps) {
       });
     } finally {
       setUploading(false);
+      // Clear the input
+      e.target.value = '';
     }
   };
 
-  const removeImage = () => {
-    onChange("");
+  const removeImage = async () => {
+    if (!value) return;
+    
+    setDeleting(true);
+    try {
+      // Extract the file path from the URL
+      const url = new URL(value);
+      const pathMatch = url.pathname.match(/\/o\/(.+)\?/);
+      if (pathMatch) {
+        const filePath = decodeURIComponent(pathMatch[1]);
+        const storageRef = ref(storage, filePath);
+        await deleteObject(storageRef);
+        console.log("File deleted from storage:", filePath);
+      }
+      
+      onChange("");
+      toast({
+        title: "Image Removed",
+        description: "Image has been removed successfully.",
+      });
+    } catch (error) {
+      console.error("Error deleting image:", error);
+      // Still remove from form even if deletion fails
+      onChange("");
+      toast({
+        title: "Image Removed",
+        description: "Image removed from form (deletion from storage may have failed).",
+      });
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {value ? (
-        <div className="relative inline-block">
-          <Image
-            src={value}
-            alt="Uploaded image"
-            width={120}
-            height={80}
-            className="rounded-md border object-cover"
-          />
-          <Button
-            type="button"
-            variant="destructive"
-            size="sm"
-            className="absolute -top-2 -right-2 h-6 w-6 rounded-full p-0"
-            onClick={removeImage}
-            disabled={disabled}
-          >
-            <X className="h-3 w-3" />
-          </Button>
+        <div className="space-y-2">
+          <div className="relative inline-block">
+            <Image
+              src={value}
+              alt="Uploaded image"
+              width={150}
+              height={100}
+              className="rounded-md border object-cover bg-gray-100"
+              onError={(e) => {
+                console.error("Image failed to load:", value);
+                e.currentTarget.style.display = 'none';
+              }}
+            />
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              className="absolute -top-2 -right-2 h-6 w-6 rounded-full p-0"
+              onClick={removeImage}
+              disabled={disabled || deleting}
+            >
+              {deleting ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <X className="h-3 w-3" />
+              )}
+            </Button>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-green-600">
+            <ImageIcon className="h-4 w-4" />
+            <span>Image uploaded successfully</span>
+          </div>
         </div>
       ) : (
-        <div className="flex items-center gap-2">
+        <div className="space-y-2">
           <Label htmlFor="image-upload" className="cursor-pointer">
-            <div className="flex items-center gap-2 px-3 py-2 border border-dashed border-gray-300 rounded-md hover:bg-gray-50">
+            <div className="flex items-center justify-center gap-2 px-4 py-8 border-2 border-dashed border-gray-300 rounded-md hover:bg-gray-50 transition-colors">
               {uploading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span className="text-sm">Uploading...</span>
+                </>
               ) : (
-                <Upload className="h-4 w-4" />
+                <>
+                  <Upload className="h-5 w-5" />
+                  <span className="text-sm">Click to upload image</span>
+                </>
               )}
-              <span className="text-sm">
-                {uploading ? "Uploading..." : "Upload Image"}
-              </span>
             </div>
           </Label>
           <Input

@@ -8,7 +8,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyA7X0lfZbW6LoPZixfRHsxx1AdmtImM4MA",
   authDomain: "invoice-hub-80f7e.firebaseapp.com",
   projectId: "invoice-hub-80f7e",
-  storageBucket: "invoice-hub-80f7e.appspot.com", // Corrected from .firebasestorage.app to .appspot.com as per standard Firebase config
+  storageBucket: "invoice-hub-80f7e.firebasestorage.app",
   messagingSenderId: "1047418322494",
   appId: "1:1047418322494:web:f50e3d6c76325da9f15b6f"
 };

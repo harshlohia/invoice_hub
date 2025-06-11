@@ -21,8 +21,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import type { Quotation, Client, BillerInfo, QuotationRow, QuotationItem } from "@/lib/types";
+import { QuotationPreview } from "@/components/QuotationPreview";
 import { cn } from "@/lib/utils";
-import { ImageUpload } from "@/components/ImageUpload";
+import { ImageUpload } from "@/components/ui/image-upload";
 import { format, addDays } from "date-fns";
 import { CalendarIcon, PlusCircle, Trash2, GripVertical, Image, Type, Hash, Calendar as CalendarClock, Loader2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -764,7 +765,46 @@ export function QuotationForm({ initialData }: QuotationFormProps) {
           </CardContent>
         </Card>
 
-        <div className="flex justify-end gap-3 pt-4">
+        {/* Live Preview */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="font-headline">Preview</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {selectedClientData && billerInfo.businessName ? (
+              <QuotationPreview
+                quotation={{
+                  id: 'preview',
+                  userId: currentUser?.uid || '',
+                  quotationNumber: form.watch('quotationNumber'),
+                  quotationDate: form.watch('quotationDate'),
+                  validUntil: form.watch('validUntil'),
+                  billerInfo: billerInfo,
+                  client: selectedClientData,
+                  title: form.watch('title'),
+                  description: form.watch('description'),
+                  rows: form.watch('rows'),
+                  notes: form.watch('notes'),
+                  termsAndConditions: form.watch('termsAndConditions'),
+                  status: form.watch('status'),
+                  currency: form.watch('currency'),
+                  subTotal: totals.subTotal,
+                  totalTax: totals.totalTax,
+                  grandTotal: totals.grandTotal,
+                  createdAt: new Date(),
+                  updatedAt: new Date(),
+                } as Quotation}
+                showHeader={false}
+              />
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <p>Complete the form to see preview</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <div className="flex justify-end gap-3 pt-4"></div>
           <Button type="button" variant="outline" onClick={() => router.back()} disabled={form.formState.isSubmitting}>
             Cancel
           </Button>
