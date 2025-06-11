@@ -1,28 +1,10 @@
-
 import type {NextConfig} from 'next';
 
-const nextConfig: NextConfig = {
-  /* config options here */
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   images: {
+    domains: ['firebasestorage.googleapis.com'],
     remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'placehold.co',
-        port: '',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: '5.imimg.com',
-        port: '',
-        pathname: '/**',
-      },
       {
         protocol: 'https',
         hostname: 'firebasestorage.googleapis.com',
@@ -30,7 +12,11 @@ const nextConfig: NextConfig = {
         pathname: '/**',
       },
     ],
+    unoptimized: true,
   },
-};
+  experimental: {
+    esmExternals: 'loose',
+  },
+}
 
-export default nextConfig;
+export default nextConfig
