@@ -146,46 +146,15 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
       }
     };
 
-    const generateQuotationHTML = async (quotation: Quotation): Promise<string> => {
+    const generateQuotationHTML = (quotation: Quotation): string => {
       const { billerInfo, client } = quotation;
-
-      // Pre-process rows to handle image loading
-      const processedRows = await Promise.all(quotation.rows.map(async row => ({
-        ...row,
-        items: await Promise.all(row.items.map(async item => {
-          if (item.type === 'image' && item.value) {
-            try {
-              // Load the image and convert it to base64
-              const img = new Image();
-              img.crossOrigin = "anonymous"; // Enable CORS if the image is from a different origin
-              img.src = item.value as string;
-              await new Promise((resolve, reject) => {
-                img.onload = resolve;
-                img.onerror = reject;
-              });
-
-              const canvas = document.createElement('canvas');
-              canvas.width = img.width;
-              canvas.height = img.height;
-              const ctx = canvas.getContext('2d');
-              ctx?.drawImage(img, 0, 0);
-              const base64Image = canvas.toDataURL('image/png'); // You can change the format if needed
-              return { ...item, value: base64Image };
-            } catch (error) {
-              console.error("Error loading image:", error);
-              return item; // Return the original item if there's an error
-            }
-          }
-          return item;
-        }))
-      })));
 
       return `
         <div style="max-width: 100%; margin: 0 auto; background: white;">
           <!-- Header -->
           <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px;">
             <div>
-              ${billerInfo.logoUrl ? `<img src="${billerInfo.logoUrl}" alt="Logo" style="max-height: 80px; margin-bottom: 10px;" crossorigin="anonymous" />` : ''}
+              ${billerInfo.logoUrl ? `<img src="${billerInfo.logoUrl}" alt="Logo" style="max-height: 80px; margin-bottom: 10px; object-fit: contain;" crossorigin="anonymous" />` : ''}
               <h1 style="font-size: 32px; font-weight: bold; color: #3F51B5; margin: 0;">QUOTATION</h1>
             </div>
             <div style="text-align: right;">
@@ -233,15 +202,16 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
 
           <!-- Items Table -->
           <div style="margin-bottom: 30px;">
-            ${processedRows.map((row, rowIndex) => `
+            ${quotation.rows.map(row => `
               <div style="display: grid; grid-template-columns: ${row.items.map(item => `${item.width}%`).join(' ')}; gap: 10px; padding: 10px 0; border-bottom: 1px solid #e0e0e0;">
                 ${row.items.map(item => `
                   <div>
                     <div style="font-weight: bold; font-size: 12px; color: #666; margin-bottom: 5px;">${item.label}</div>
                     <div style="font-size: 14px;">
-                      ${item.type === 'date' ? format(new Date(item.value as string), 'MMM dd, yyyy') : 
+                      ${item.type === 'image' && item.value ? 
+                        `<img src="${item.value}" alt="${item.label}" style="max-width: 100px; max-height: 60px; object-fit: contain;" crossorigin="anonymous" />` :
+                        item.type === 'date' ? format(new Date(item.value as string), 'MMM dd, yyyy') : 
                         item.type === 'number' ? (typeof item.value === 'number' ? item.value.toLocaleString('en-IN') : item.value) : 
-                        item.type === 'image' && item.value ? `<img src="${item.value}" alt="Image" style="max-width: 100px; max-height: 60px; object-fit: cover;" crossorigin="anonymous" />` : 
                         item.value}
                     </div>
                   </div>
@@ -418,20 +388,19 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
                         <div className="text-xs font-bold text-primary mb-2">{item.label}</div>
                       )}
                       <div className={rowIndex === 0 ? 'sr-only' : 'text-sm'}>
-                        {item.type === 'date'
+                        {item.type === 'image' && item.value ? (
+                          <Image
+                            src={item.value as string}
+                            alt={item.label}
+                            width={100}
+                            height={60}
+                            className="object-contain max-w-[100px] max-h-[60px]"
+                          />
+                        ) : item.type === 'date'
                           ? format(new Date(item.value as string), 'MMM dd, yyyy')
                           : item.type === 'number'
                             ? (typeof item.value === 'number' ? item.value.toLocaleString('en-IN') : item.value)
-                            : item.type === 'image' && item.value ? (
-                              <img
-                                src={item.value as string}
-                                alt="Image"
-                                className="max-w-[100px] max-h-[60px] object-cover rounded"
-                                crossOrigin="anonymous"
-                              />
-                            ) : (
-                              String(item.value)
-                            )}
+                            : String(item.value)}
                       </div>
                     </div>
                   ))}

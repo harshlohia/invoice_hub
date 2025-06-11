@@ -1,4 +1,3 @@
-
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -178,13 +177,24 @@ export function QuotationForm({ initialData }: QuotationFormProps) {
       setLoadingClients(false);
       setLoadingBillerInfo(false);
     }
-  }, [form, searchParams, toast]);
+  }, [form, searchParams, toast, initialData?.client?.id]);
 
   useEffect(() => {
     if (currentUser) {
       fetchClientsAndBillerInfo(currentUser.uid);
     }
   }, [currentUser, fetchClientsAndBillerInfo]);
+
+  // Set initial client data when editing
+  useEffect(() => {
+    if (initialData && clients.length > 0) {
+      const client = clients.find(c => c.id === initialData.client.id);
+      if (client) {
+        setSelectedClientData(client);
+        form.setValue("clientId", client.id);
+      }
+    }
+  }, [initialData, clients, form]);
 
   const { fields: rowFields, append: appendRow, remove: removeRow } = useFieldArray({
     control: form.control,
@@ -228,17 +238,17 @@ export function QuotationForm({ initialData }: QuotationFormProps) {
   const calculateTotals = () => {
     const rows = form.watch("rows");
     let subTotal = 0;
-    
+
     rows.forEach(row => {
       const amountItem = row.items.find(item => item.label.toLowerCase().includes('amount') || item.label.toLowerCase().includes('total'));
       if (amountItem && typeof amountItem.value === 'number') {
         subTotal += amountItem.value;
       }
     });
-    
+
     const totalTax = subTotal * 0.18; // 18% GST
     const grandTotal = subTotal + totalTax;
-    
+
     return { subTotal, totalTax, grandTotal };
   };
 
