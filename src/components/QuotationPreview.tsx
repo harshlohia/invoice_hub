@@ -29,16 +29,6 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
     if (!contentRef.current) return;
 
     try {
-      // Wait for all images to load
-      const images = contentRef.current.querySelectorAll('img');
-      await Promise.all(Array.from(images).map(img => {
-        if (img.complete) return Promise.resolve();
-        return new Promise(resolve => {
-          img.onload = resolve;
-          img.onerror = resolve;
-        });
-      }));
-
       // Create PDF with proper A4 dimensions
       const pdf = new jsPDF({
         orientation: 'portrait',
@@ -49,75 +39,98 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
 
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
-      const margin = 10; // 10mm margin
+      const margin = 10;
       const availableWidth = pdfWidth - (margin * 2);
       const availableHeight = pdfHeight - (margin * 2);
 
-      // Calculate how many rows can fit per page
-      const headerHeight = 120; // Approximate height for header section in mm
-      const footerHeight = 60; // Approximate height for totals and footer in mm
-      const rowHeight = 20; // Height per quotation row in mm
-      const maxRowsPerPage = Math.floor((availableHeight - headerHeight - footerHeight) / rowHeight);
-
+      // More conservative row calculation
+      const firstPageRowLimit = 4; // Fewer rows on first page due to header
+      const otherPageRowLimit = 8; // More rows on subsequent pages
+      
       const totalRows = quotation.rows.length;
-      const totalPages = Math.max(1, Math.ceil(totalRows / maxRowsPerPage));
+      let totalPages = 1;
+      let remainingRows = totalRows - firstPageRowLimit;
+      
+      if (remainingRows > 0) {
+        totalPages += Math.ceil(remainingRows / otherPageRowLimit);
+      }
 
       // Generate each page
+      let currentRowIndex = 0;
+      
       for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
         if (pageIndex > 0) {
           pdf.addPage();
         }
 
         // Calculate rows for this page
-        const startIndex = pageIndex * maxRowsPerPage;
-        const endIndex = Math.min(startIndex + maxRowsPerPage, totalRows);
-        const pageRows = quotation.rows.slice(startIndex, endIndex);
-
+        const rowsForThisPage = pageIndex === 0 ? firstPageRowLimit : otherPageRowLimit;
+        const endIndex = Math.min(currentRowIndex + rowsForThisPage, totalRows);
+        const pageRows = quotation.rows.slice(currentRowIndex, endIndex);
+        
         // Create a temporary container for this page's content
         const pageContainer = document.createElement('div');
-        pageContainer.style.backgroundColor = '#ffffff';
-        pageContainer.style.fontFamily = 'Arial, sans-serif';
-        pageContainer.style.fontSize = '14px';
-        pageContainer.style.lineHeight = '1.5';
-        pageContainer.style.color = '#000000';
-        pageContainer.style.width = '900px';
-        pageContainer.style.padding = '0';
-        pageContainer.style.margin = '0';
+        pageContainer.style.cssText = `
+          background-color: #ffffff;
+          font-family: Arial, sans-serif;
+          font-size: 12px;
+          line-height: 1.4;
+          color: #000000;
+          width: 800px;
+          padding: 0;
+          margin: 0;
+          box-sizing: border-box;
+        `;
 
         // Add content to page container
-        pageContainer.innerHTML = `
-          ${pageIndex === 0 ? generateHeaderHTML(quotation) : generateContinuationHeaderHTML(quotation, pageIndex + 1)}
-          ${generateRowsTableHTML(pageRows, startIndex, quotation.currency)}
-          ${pageIndex === totalPages - 1 ? generateFooterHTML(quotation) : generateContinuationFooterHTML(pageIndex + 1, totalPages)}
-        `;
+        pageContainer.innerHTML = await generatePageHTML(quotation, pageRows, pageIndex, totalPages, currentRowIndex);
 
         // Temporarily add to DOM for rendering
         document.body.appendChild(pageContainer);
 
+        // Wait for all images in this page to load
+        const pageImages = pageContainer.querySelectorAll('img');
+        await Promise.all(Array.from(pageImages).map(img => {
+          return new Promise((resolve) => {
+            if (img.complete) {
+              resolve(null);
+            } else {
+              img.onload = () => resolve(null);
+              img.onerror = () => resolve(null);
+              // Fallback timeout
+              setTimeout(() => resolve(null), 3000);
+            }
+          });
+        }));
+
         try {
-          // Create canvas for this page
+          // Create canvas for this page with better settings
           const canvas = await html2canvas(pageContainer, {
-            scale: 2,
+            scale: 1.5,
             useCORS: true,
             allowTaint: true,
             logging: false,
             backgroundColor: '#ffffff',
-            width: 900,
-            height: Math.min(pageContainer.scrollHeight, 1200) // Limit height per page
+            width: 800,
+            height: pageContainer.scrollHeight,
+            foreignObjectRendering: true,
+            ignoreElements: (element) => {
+              // Skip elements that might cause issues
+              return element.tagName === 'SCRIPT' || element.tagName === 'STYLE';
+            }
           });
 
           // Convert to image and add to PDF
-          const imgData = canvas.toDataURL('image/png', 1.0);
+          const imgData = canvas.toDataURL('image/png', 0.95);
 
           const canvasWidth = canvas.width;
           const canvasHeight = canvas.height;
 
-          // Convert pixels to mm
-          const pxToMm = 25.4 / 96;
-          const imgWidthMm = canvasWidth * pxToMm / 2;
-          const imgHeightMm = canvasHeight * pxToMm / 2;
+          // Convert pixels to mm (more precise calculation)
+          const imgWidthMm = (canvasWidth * 25.4) / (96 * 1.5);
+          const imgHeightMm = (canvasHeight * 25.4) / (96 * 1.5);
 
-          // Scale to fit
+          // Scale to fit page
           const scaleX = availableWidth / imgWidthMm;
           const scaleY = availableHeight / imgHeightMm;
           const scale = Math.min(scaleX, scaleY, 1);
@@ -125,7 +138,7 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
           const finalWidth = imgWidthMm * scale;
           const finalHeight = imgHeightMm * scale;
 
-          const x = (pdfWidth - finalWidth) / 2;
+          const x = margin;
           const y = margin;
 
           pdf.addImage(imgData, 'PNG', x, y, finalWidth, finalHeight, undefined, 'FAST');
@@ -134,6 +147,8 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
           // Clean up temporary element
           document.body.removeChild(pageContainer);
         }
+        
+        currentRowIndex = endIndex;
       }
 
       // Save the PDF
@@ -141,78 +156,119 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
 
     } catch (error) {
       console.error('Error generating PDF:', error);
+      alert('Error generating PDF. Please try again.');
     }
+  };
+
+  // Helper function to generate complete page HTML
+  const generatePageHTML = async (quotation: Quotation, pageRows: QuotationRow[], pageIndex: number, totalPages: number, startRowIndex: number): Promise<string> => {
+    // Convert images to base64 for better PDF rendering
+    const convertImageToBase64 = async (imageUrl: string): Promise<string> => {
+      try {
+        const response = await fetch(imageUrl);
+        const blob = await response.blob();
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = () => resolve(''); // Return empty string on error
+          reader.readAsDataURL(blob);
+        });
+      } catch (error) {
+        console.error('Error converting image to base64:', error);
+        return '';
+      }
+    };
+
+    // Process images in rows
+    const processedRows = await Promise.all(pageRows.map(async (row) => {
+      const processedItems = await Promise.all(row.items.map(async (item) => {
+        if (item.type === 'image' && item.value && typeof item.value === 'string') {
+          const base64Image = await convertImageToBase64(item.value);
+          return { ...item, value: base64Image || item.value };
+        }
+        return item;
+      }));
+      return { ...row, items: processedItems };
+    }));
+
+    return `
+      <div style="padding: 16px; background: white; width: 100%; box-sizing: border-box;">
+        ${pageIndex === 0 ? generateHeaderHTML(quotation) : generateContinuationHeaderHTML(quotation, pageIndex + 1)}
+        ${generateRowsTableHTML(processedRows, startRowIndex, quotation.currency)}
+        ${pageIndex === totalPages - 1 ? generateFooterHTML(quotation) : generateContinuationFooterHTML(pageIndex + 1, totalPages)}
+      </div>
+    `;
   };
 
   // Helper function to generate header HTML
   const generateHeaderHTML = (quotation: Quotation): string => {
     return `
-      <div style="padding: 24px; background: white;">
+      <div style="margin-bottom: 16px;">
         <!-- Header Section -->
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
           <div>
-            <h1 style="font-size: 36px; font-weight: bold; margin: 0 0 8px 0; color: #1f2937;">Quotation</h1>
-            <p style="color: #6b7280; margin: 0; font-size: 16px;">#${quotation.quotationNumber}</p>
+            <h1 style="font-size: 24px; font-weight: bold; margin: 0 0 4px 0; color: #1f2937;">Quotation</h1>
+            <p style="color: #6b7280; margin: 0; font-size: 14px;">#${quotation.quotationNumber}</p>
           </div>
           <div style="text-align: right;">
-            <div style="background: #f3f4f6; color: #374151; padding: 6px 12px; border-radius: 6px; font-size: 14px; font-weight: 500;">
+            <div style="background: #f3f4f6; color: #374151; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500;">
               ${quotation.status.charAt(0).toUpperCase() + quotation.status.slice(1)}
             </div>
           </div>
         </div>
 
         <!-- Biller and Client Info -->
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-bottom: 32px;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
           <!-- Biller Info -->
-          <div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px;">
-            <h3 style="font-size: 18px; font-weight: 600; margin: 0 0 16px 0; color: #1f2937;">From</h3>
-            <div style="font-weight: 600; font-size: 18px; margin-bottom: 8px;">${quotation.billerInfo.businessName}</div>
-            ${quotation.billerInfo.gstin ? `<p style="font-size: 14px; color: #6b7280; margin: 0 0 8px 0;">GSTIN: ${quotation.billerInfo.gstin}</p>` : ''}
-            <div style="font-size: 14px; line-height: 1.6;">
+          <div style="border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px; background: white;">
+            <h3 style="font-size: 14px; font-weight: 600; margin: 0 0 8px 0; color: #1f2937;">From</h3>
+            <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">${quotation.billerInfo.businessName}</div>
+            ${quotation.billerInfo.gstin ? `<p style="font-size: 11px; color: #6b7280; margin: 0 0 4px 0;">GSTIN: ${quotation.billerInfo.gstin}</p>` : ''}
+            <div style="font-size: 11px; line-height: 1.4;">
               <p style="margin: 0;">${quotation.billerInfo.addressLine1}</p>
               ${quotation.billerInfo.addressLine2 ? `<p style="margin: 0;">${quotation.billerInfo.addressLine2}</p>` : ''}
               <p style="margin: 0;">${quotation.billerInfo.city}, ${quotation.billerInfo.state} ${quotation.billerInfo.postalCode}</p>
               <p style="margin: 0;">${quotation.billerInfo.country}</p>
             </div>
-            ${quotation.billerInfo.phone ? `<p style="font-size: 14px; margin: 8px 0 0 0;">Phone: ${quotation.billerInfo.phone}</p>` : ''}
-            ${quotation.billerInfo.email ? `<p style="font-size: 14px; margin: 4px 0 0 0;">Email: ${quotation.billerInfo.email}</p>` : ''}
+            ${quotation.billerInfo.phone ? `<p style="font-size: 11px; margin: 4px 0 0 0;">Phone: ${quotation.billerInfo.phone}</p>` : ''}
+            ${quotation.billerInfo.email ? `<p style="font-size: 11px; margin: 2px 0 0 0;">Email: ${quotation.billerInfo.email}</p>` : ''}
           </div>
 
           <!-- Client Info -->
-          <div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px;">
-            <h3 style="font-size: 18px; font-weight: 600; margin: 0 0 16px 0; color: #1f2937;">To</h3>
-            <div style="font-weight: 600; font-size: 18px; margin-bottom: 8px;">${quotation.client.name}</div>
-            ${quotation.client.gstin ? `<p style="font-size: 14px; color: #6b7280; margin: 0 0 8px 0;">GSTIN: ${quotation.client.gstin}</p>` : ''}
-            <div style="font-size: 14px; line-height: 1.6;">
+          <div style="border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px; background: white;">
+            <h3 style="font-size: 14px; font-weight: 600; margin: 0 0 8px 0; color: #1f2937;">To</h3>
+            <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">${quotation.client.name}</div>
+            ${quotation.client.gstin ? `<p style="font-size: 11px; color: #6b7280; margin: 0 0 4px 0;">GSTIN: ${quotation.client.gstin}</p>` : ''}
+            <div style="font-size: 11px; line-height: 1.4;">
               <p style="margin: 0;">${quotation.client.addressLine1}</p>
               ${quotation.client.addressLine2 ? `<p style="margin: 0;">${quotation.client.addressLine2}</p>` : ''}
               <p style="margin: 0;">${quotation.client.city}, ${quotation.client.state} ${quotation.client.postalCode}</p>
               <p style="margin: 0;">${quotation.client.country}</p>
             </div>
-            <p style="font-size: 14px; margin: 8px 0 0 0;">Phone: ${quotation.client.phone}</p>
-            <p style="font-size: 14px; margin: 4px 0 0 0;">Email: ${quotation.client.email}</p>
+            <p style="font-size: 11px; margin: 4px 0 0 0;">Phone: ${quotation.client.phone}</p>
+            <p style="font-size: 11px; margin: 2px 0 0 0;">Email: ${quotation.client.email}</p>
           </div>
         </div>
 
         <!-- Quotation Details -->
-        <div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 24px;">
-          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 24px;">
+        <div style="border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px; margin-bottom: 16px; background: white;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px;">
             <div>
-              <p style="font-size: 14px; font-weight: 500; margin: 0 0 4px 0;">Quotation Date</p>
-              <p style="font-size: 14px; color: #6b7280; margin: 0;">${formatDate(quotation.quotationDate)}</p>
+              <p style="font-size: 12px; font-weight: 500; margin: 0 0 2px 0;">Quotation Date</p>
+              <p style="font-size: 11px; color: #6b7280; margin: 0;">${formatDate(quotation.quotationDate)}</p>
             </div>
             <div>
-              <p style="font-size: 14px; font-weight: 500; margin: 0 0 4px 0;">Valid Until</p>
-              <p style="font-size: 14px; color: #6b7280; margin: 0;">${formatDate(quotation.validUntil)}</p>
+              <p style="font-size: 12px; font-weight: 500; margin: 0 0 2px 0;">Valid Until</p>
+              <p style="font-size: 11px; color: #6b7280; margin: 0;">${formatDate(quotation.validUntil)}</p>
             </div>
             <div>
-              <p style="font-size: 14px; font-weight: 500; margin: 0 0 4px 0;">Currency</p>
-              <p style="font-size: 14px; color: #6b7280; margin: 0;">${quotation.currency}</p>
+              <p style="font-size: 12px; font-weight: 500; margin: 0 0 2px 0;">Currency</p>
+              <p style="font-size: 11px; color: #6b7280; margin: 0;">${quotation.currency}</p>
             </div>
           </div>
           <div>
-            <h3 style="font-size: 18px; font-weight: 600; margin: 0 0 8px 0;">${quotation.title}</h3>
-            ${quotation.description ? `<p style="font-size: 14px; color: #6b7280; margin: 0;">${quotation.description}</p>` : ''}
+            <h3 style="font-size: 14px; font-weight: 600; margin: 0 0 4px 0;">${quotation.title}</h3>
+            ${quotation.description ? `<p style="font-size: 11px; color: #6b7280; margin: 0;">${quotation.description}</p>` : ''}
           </div>
         </div>
       </div>
@@ -241,38 +297,40 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
     if (!rows.length) return '';
 
     return `
-      <div style="padding: 0 24px; margin-bottom: 24px;">
-        <div style="border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
-          <h3 style="font-size: 18px; font-weight: 600; margin: 0; padding: 16px; background: #f9fafb; border-bottom: 1px solid #e5e7eb;">Items</h3>
-          ${rows.map((row, index) => `
-            <div style="border-bottom: ${index < rows.length - 1 ? '1px solid #f3f4f6' : 'none'};">
-              <!-- Header Row -->
-              <div style="display: grid; grid-template-columns: repeat(12, 1fr); gap: 8px; background: #f9fafb; padding: 12px; font-size: 14px; font-weight: 500;">
-                ${row.items.map(item => `
-                  <div style="grid-column: span ${Math.max(1, Math.floor(item.width / 8.33))};">
-                    ${item.label}
-                  </div>
-                `).join('')}
+      <div style="margin-bottom: 16px;">
+        <div style="border: 1px solid #e5e7eb; border-radius: 6px; overflow: hidden; background: white;">
+          <h3 style="font-size: 16px; font-weight: 600; margin: 0; padding: 12px; background: #f9fafb; border-bottom: 1px solid #e5e7eb;">Items (${startIndex + 1} - ${startIndex + rows.length})</h3>
+          <div style="padding: 8px;">
+            ${rows.map((row, index) => `
+              <div style="border: 1px solid #f3f4f6; border-radius: 4px; margin-bottom: 8px; overflow: hidden; background: white;">
+                <!-- Header Row -->
+                <div style="display: flex; flex-wrap: wrap; background: #f8f9fa; padding: 8px; font-size: 12px; font-weight: 500; border-bottom: 1px solid #e9ecef;">
+                  ${row.items.map(item => `
+                    <div style="flex: ${Math.max(1, Math.floor(item.width / 8.33))}; min-width: 80px; padding: 2px 4px;">
+                      ${item.label}
+                    </div>
+                  `).join('')}
+                </div>
+                <!-- Data Row -->
+                <div style="display: flex; flex-wrap: wrap; padding: 8px; font-size: 11px; align-items: center; min-height: 50px;">
+                  ${row.items.map(item => `
+                    <div style="flex: ${Math.max(1, Math.floor(item.width / 8.33))}; min-width: 80px; padding: 2px 4px; display: flex; align-items: center;">
+                      ${item.type === 'image' && item.value ? 
+                        `<div style="width: 40px; height: 40px; border: 1px solid #dee2e6; border-radius: 3px; overflow: hidden; background: #f8f9fa; flex-shrink: 0;">
+                          <img src="${item.value}" alt="${item.label}" style="width: 100%; height: 100%; object-fit: cover; display: block;" crossorigin="anonymous" />
+                        </div>` :
+                        item.type === 'date' && item.value ? 
+                          `<span>${formatDate(item.value as Date)}</span>` :
+                          item.type === 'number' && typeof item.value === 'number' ?
+                            `<span>${item.value.toFixed(2)}</span>` :
+                            `<span>${item.value?.toString() || ''}</span>`
+                      }
+                    </div>
+                  `).join('')}
+                </div>
               </div>
-              <!-- Data Row -->
-              <div style="display: grid; grid-template-columns: repeat(12, 1fr); gap: 8px; padding: 12px; font-size: 14px; align-items: center;">
-                ${row.items.map(item => `
-                  <div style="grid-column: span ${Math.max(1, Math.floor(item.width / 8.33))};">
-                    ${item.type === 'image' && item.value ? 
-                      `<div style="width: 48px; height: 48px; border: 1px solid #e5e7eb; border-radius: 4px; overflow: hidden; background: #f9fafb;">
-                        <img src="${item.value}" alt="${item.label}" style="width: 100%; height: 100%; object-fit: cover;" />
-                      </div>` :
-                      item.type === 'date' && item.value ? 
-                        formatDate(item.value as Date) :
-                        item.type === 'number' && typeof item.value === 'number' ?
-                          item.value.toFixed(2) :
-                          item.value?.toString() || ''
-                    }
-                  </div>
-                `).join('')}
-              </div>
-            </div>
-          `).join('')}
+            `).join('')}
+          </div>
         </div>
       </div>
     `;
