@@ -1,4 +1,3 @@
-
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +10,7 @@ import Image from "next/image";
 import { Download } from "lucide-react";
 import React, { forwardRef, useImperativeHandle, useRef } from "react";
 import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 
 interface QuotationPreviewProps {
   quotation: Quotation;
@@ -24,349 +24,82 @@ export interface QuotationPreviewHandle {
 export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPreviewProps>(
   ({ quotation, showHeader = true }, ref) => {
   const contentRef = useRef<HTMLDivElement>(null);
+  const printableRef = useRef<HTMLDivElement>(null);
 
   useImperativeHandle(ref, () => ({
     downloadPdf
   }));
 
-  const convertImageToBase64 = async (url: string): Promise<string> => {
-    try {
-      const response = await fetch(url);
-      const blob = await response.blob();
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
-    } catch (error) {
-      console.error('Failed to convert image to base64:', error);
-      throw error;
-    }
-  };
-
   const downloadPdf = async () => {
     try {
-      // Create a new jsPDF instance
+      if (!printableRef.current) return;
+
+      // Create a temporary element for PDF generation
+      const printElement = printableRef.current.cloneNode(true) as HTMLElement;
+
+      // Apply print styles
+      printElement.style.backgroundColor = 'white';
+      printElement.style.width = '210mm';
+      printElement.style.minHeight = '297mm';
+      printElement.style.padding = '20mm';
+      printElement.style.margin = '0';
+      printElement.style.boxSizing = 'border-box';
+      printElement.style.fontFamily = 'Arial, sans-serif';
+
+      // Hide the original content temporarily
+      const originalDisplay = printableRef.current.style.display;
+      printableRef.current.style.display = 'none';
+
+      // Add print element to body
+      document.body.appendChild(printElement);
+
+      // Generate PDF using html2canvas
+      const canvas = await html2canvas(printElement, {
+        scale: 2,
+        useCORS: false,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        width: 794, // A4 width in pixels at 96 DPI
+        height: 1123, // A4 height in pixels at 96 DPI
+        onclone: (clonedDoc) => {
+          // Handle images in the cloned document
+          const images = clonedDoc.querySelectorAll('img');
+          images.forEach((img) => {
+            img.style.maxWidth = '100%';
+            img.style.height = 'auto';
+            img.crossOrigin = 'anonymous';
+          });
+        }
+      });
+
+      const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
         format: 'a4'
       });
 
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const margin = 20;
-      const contentWidth = pageWidth - (2 * margin);
-      let yPos = margin;
+      const imgWidth = 210;
+      const pageHeight = 297;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 0;
 
-      // Set fonts
-      pdf.setFont('helvetica', 'bold');
-      
-      // Header
-      pdf.setFontSize(24);
-      pdf.text('QUOTATION', pageWidth / 2, yPos, { align: 'center' });
-      yPos += 15;
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
 
-      pdf.setFontSize(12);
-      pdf.setFont('helvetica', 'normal');
-      pdf.text(`#${quotation.quotationNumber}`, pageWidth / 2, yPos, { align: 'center' });
-      yPos += 10;
-
-      // Status badge
-      pdf.setFontSize(10);
-      pdf.text(`Status: ${quotation.status.toUpperCase()}`, pageWidth / 2, yPos, { align: 'center' });
-      yPos += 15;
-
-      // Company and Client Info - Two columns
-      const leftColumnX = margin;
-      const rightColumnX = pageWidth / 2 + 5;
-      
-      // FROM section
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(14);
-      pdf.text('FROM', leftColumnX, yPos);
-      yPos += 8;
-
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(10);
-      
-      if (quotation.billerInfo.businessName) {
-        pdf.setFont('helvetica', 'bold');
-        pdf.text(quotation.billerInfo.businessName, leftColumnX, yPos);
-        yPos += 5;
-        pdf.setFont('helvetica', 'normal');
-      }
-      
-      if (quotation.billerInfo.gstin) {
-        pdf.text(`GSTIN: ${quotation.billerInfo.gstin}`, leftColumnX, yPos);
-        yPos += 5;
-      }
-      
-      if (quotation.billerInfo.addressLine1) {
-        pdf.text(quotation.billerInfo.addressLine1, leftColumnX, yPos);
-        yPos += 5;
-      }
-      
-      if (quotation.billerInfo.addressLine2) {
-        pdf.text(quotation.billerInfo.addressLine2, leftColumnX, yPos);
-        yPos += 5;
-      }
-      
-      const cityStateZip = [
-        quotation.billerInfo.city,
-        quotation.billerInfo.state,
-        quotation.billerInfo.postalCode
-      ].filter(Boolean).join(', ');
-      
-      if (cityStateZip) {
-        pdf.text(cityStateZip, leftColumnX, yPos);
-        yPos += 5;
-      }
-      
-      if (quotation.billerInfo.country) {
-        pdf.text(quotation.billerInfo.country, leftColumnX, yPos);
-        yPos += 5;
-      }
-      
-      if (quotation.billerInfo.phone) {
-        pdf.text(`Phone: ${quotation.billerInfo.phone}`, leftColumnX, yPos);
-        yPos += 5;
-      }
-      
-      if (quotation.billerInfo.email) {
-        pdf.text(`Email: ${quotation.billerInfo.email}`, leftColumnX, yPos);
-        yPos += 5;
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
       }
 
-      // Reset yPos for TO section
-      let toYPos = margin + 23;
-
-      // TO section
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(14);
-      pdf.text('TO', rightColumnX, toYPos);
-      toYPos += 8;
-
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(10);
-      
-      if (quotation.client.name) {
-        pdf.setFont('helvetica', 'bold');
-        pdf.text(quotation.client.name, rightColumnX, toYPos);
-        toYPos += 5;
-        pdf.setFont('helvetica', 'normal');
-      }
-      
-      if (quotation.client.gstin) {
-        pdf.text(`GSTIN: ${quotation.client.gstin}`, rightColumnX, toYPos);
-        toYPos += 5;
-      }
-      
-      if (quotation.client.addressLine1) {
-        pdf.text(quotation.client.addressLine1, rightColumnX, toYPos);
-        toYPos += 5;
-      }
-      
-      if (quotation.client.addressLine2) {
-        pdf.text(quotation.client.addressLine2, rightColumnX, toYPos);
-        toYPos += 5;
-      }
-      
-      const clientCityStateZip = [
-        quotation.client.city,
-        quotation.client.state,
-        quotation.client.postalCode
-      ].filter(Boolean).join(', ');
-      
-      if (clientCityStateZip) {
-        pdf.text(clientCityStateZip, rightColumnX, toYPos);
-        toYPos += 5;
-      }
-      
-      if (quotation.client.country) {
-        pdf.text(quotation.client.country, rightColumnX, toYPos);
-        toYPos += 5;
-      }
-      
-      if (quotation.client.phone) {
-        pdf.text(`Phone: ${quotation.client.phone}`, rightColumnX, toYPos);
-        toYPos += 5;
-      }
-      
-      if (quotation.client.email) {
-        pdf.text(`Email: ${quotation.client.email}`, rightColumnX, toYPos);
-        toYPos += 5;
-      }
-
-      yPos = Math.max(yPos, toYPos) + 10;
-
-      // Quotation Details
-      pdf.setFillColor(245, 245, 245);
-      pdf.rect(margin, yPos, contentWidth, 25, 'F');
-      
-      yPos += 8;
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(12);
-      
-      const detailsY = yPos;
-      pdf.text('Quotation Date:', leftColumnX, detailsY);
-      pdf.text('Valid Until:', rightColumnX, detailsY);
-      
-      yPos += 6;
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(10);
-      pdf.text(formatDate(quotation.quotationDate), leftColumnX, yPos);
-      pdf.text(formatDate(quotation.validUntil), rightColumnX, yPos);
-      
-      yPos += 15;
-
-      // Title and Description
-      if (quotation.title) {
-        pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(16);
-        pdf.text(quotation.title, margin, yPos);
-        yPos += 8;
-      }
-
-      if (quotation.description) {
-        pdf.setFont('helvetica', 'normal');
-        pdf.setFontSize(10);
-        const lines = pdf.splitTextToSize(quotation.description, contentWidth);
-        pdf.text(lines, margin, yPos);
-        yPos += lines.length * 5 + 5;
-      }
-
-      yPos += 10;
-
-      // Items Table
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(14);
-      pdf.text('ITEMS', margin, yPos);
-      yPos += 10;
-
-      // Process each row
-      for (const row of quotation.rows) {
-        // Check if we need a new page
-        if (yPos > pageHeight - 50) {
-          pdf.addPage();
-          yPos = margin;
-        }
-
-        // Draw row header
-        pdf.setFillColor(240, 240, 240);
-        pdf.rect(margin, yPos, contentWidth, 8, 'F');
-        
-        yPos += 6;
-        pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(10);
-        
-        let xPos = margin + 5;
-        const columnWidth = contentWidth / row.items.length;
-        
-        // Headers
-        for (const item of row.items) {
-          pdf.text(item.label, xPos, yPos);
-          xPos += columnWidth;
-        }
-        
-        yPos += 5;
-        
-        // Values
-        xPos = margin + 5;
-        pdf.setFont('helvetica', 'normal');
-        
-        let maxRowHeight = 8;
-        
-        for (const item of row.items) {
-          if (item.type === 'image' && item.value && typeof item.value === 'string') {
-            try {
-              const base64Image = await convertImageToBase64(item.value);
-              const imgWidth = 20;
-              const imgHeight = 15;
-              pdf.addImage(base64Image, 'JPEG', xPos, yPos, imgWidth, imgHeight);
-              maxRowHeight = Math.max(maxRowHeight, imgHeight + 2);
-            } catch (error) {
-              pdf.text('Image Error', xPos, yPos + 4);
-            }
-          } else if (item.type === 'date' && item.value) {
-            pdf.text(formatDate(item.value as Date), xPos, yPos + 4);
-          } else if (item.type === 'number') {
-            pdf.text(String(item.value || 0), xPos, yPos + 4);
-          } else {
-            const text = String(item.value || '');
-            const lines = pdf.splitTextToSize(text, columnWidth - 5);
-            pdf.text(lines, xPos, yPos + 4);
-            maxRowHeight = Math.max(maxRowHeight, lines.length * 4 + 4);
-          }
-          xPos += columnWidth;
-        }
-        
-        yPos += maxRowHeight + 5;
-      }
-
-      yPos += 10;
-
-      // Summary
-      const summaryStartX = pageWidth - margin - 80;
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(12);
-      pdf.text('SUMMARY', summaryStartX, yPos);
-      yPos += 8;
-
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(10);
-      
-      pdf.text('Subtotal:', summaryStartX, yPos);
-      pdf.text(`${quotation.currency} ${quotation.subTotal?.toFixed(2) || '0.00'}`, summaryStartX + 40, yPos);
-      yPos += 6;
-      
-      pdf.text('Tax (18%):', summaryStartX, yPos);
-      pdf.text(`${quotation.currency} ${quotation.totalTax?.toFixed(2) || '0.00'}`, summaryStartX + 40, yPos);
-      yPos += 8;
-      
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('Grand Total:', summaryStartX, yPos);
-      pdf.text(`${quotation.currency} ${quotation.grandTotal?.toFixed(2) || '0.00'}`, summaryStartX + 40, yPos);
-      yPos += 15;
-
-      // Notes and Terms
-      if (quotation.notes || quotation.termsAndConditions) {
-        yPos += 10;
-        
-        if (quotation.notes) {
-          pdf.setFont('helvetica', 'bold');
-          pdf.setFontSize(12);
-          pdf.text('NOTES', margin, yPos);
-          yPos += 8;
-          
-          pdf.setFont('helvetica', 'normal');
-          pdf.setFontSize(10);
-          const noteLines = pdf.splitTextToSize(quotation.notes, contentWidth);
-          pdf.text(noteLines, margin, yPos);
-          yPos += noteLines.length * 5 + 10;
-        }
-        
-        if (quotation.termsAndConditions) {
-          if (yPos > pageHeight - 50) {
-            pdf.addPage();
-            yPos = margin;
-          }
-          
-          pdf.setFont('helvetica', 'bold');
-          pdf.setFontSize(12);
-          pdf.text('TERMS & CONDITIONS', margin, yPos);
-          yPos += 8;
-          
-          pdf.setFont('helvetica', 'normal');
-          pdf.setFontSize(10);
-          const termLines = pdf.splitTextToSize(quotation.termsAndConditions, contentWidth);
-          pdf.text(termLines, margin, yPos);
-        }
-      }
-
-      // Save the PDF
       pdf.save(`quotation-${quotation.quotationNumber}.pdf`);
+
+      // Clean up
+      document.body.removeChild(printElement);
+      printableRef.current.style.display = originalDisplay;
 
     } catch (error) {
       console.error('Error generating PDF:', error);
@@ -404,7 +137,7 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
                 fill
                 className="object-cover"
                 sizes="64px"
-                crossOrigin="anonymous"
+                unoptimized
                 onError={(e) => {
                   const target = e.target as HTMLImageElement;
                   target.style.display = 'none';
@@ -455,155 +188,167 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
         </div>
       )}
 
-      <div ref={contentRef} className="space-y-6 p-6">
-        {/* Header Information */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold mb-4">Quotation</h1>
-          <div className="flex justify-center items-center gap-8 text-sm">
-            <span>#{quotation.quotationNumber}</span>
-            <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(quotation.status)}`}>
+      {/* Printable content */}
+      <div ref={printableRef} className="bg-white">
+        <div className="p-8 space-y-8">
+          {/* Header */}
+          <div className="text-center border-b-2 border-blue-600 pb-6">
+            <h1 className="text-4xl font-bold text-blue-600 mb-2">QUOTATION</h1>
+            <div className="text-lg font-medium">#{quotation.quotationNumber}</div>
+            <div className={`inline-block px-3 py-1 rounded-full text-sm font-medium mt-2 ${getStatusColor(quotation.status)}`}>
               {quotation.status.charAt(0).toUpperCase() + quotation.status.slice(1)}
-            </span>
-          </div>
-        </div>
-
-        {/* Biller and Client Info */}
-        <div className="grid md:grid-cols-2 gap-8 mb-8">
-          {/* Biller Info */}
-          <div>
-            <h3 className="text-lg font-semibold mb-4 text-blue-600">From</h3>
-            <div className="space-y-2">
-              <div className="font-semibold text-lg">{quotation.billerInfo.businessName}</div>
-              {quotation.billerInfo.gstin && (
-                <p className="text-sm text-gray-600">GSTIN: {quotation.billerInfo.gstin}</p>
-              )}
-              <div className="text-sm">
-                <p>{quotation.billerInfo.addressLine1}</p>
-                {quotation.billerInfo.addressLine2 && <p>{quotation.billerInfo.addressLine2}</p>}
-                <p>{quotation.billerInfo.city}, {quotation.billerInfo.state} {quotation.billerInfo.postalCode}</p>
-                <p>{quotation.billerInfo.country}</p>
-              </div>
-              {quotation.billerInfo.phone && (
-                <p className="text-sm">Phone: {quotation.billerInfo.phone}</p>
-              )}
-              {quotation.billerInfo.email && (
-                <p className="text-sm">Email: {quotation.billerInfo.email}</p>
-              )}
             </div>
           </div>
 
-          {/* Client Info */}
-          <div>
-            <h3 className="text-lg font-semibold mb-4 text-green-600">To</h3>
-            <div className="space-y-2">
-              <div className="font-semibold text-lg">{quotation.client.name}</div>
-              {quotation.client.gstin && (
-                <p className="text-sm text-gray-600">GSTIN: {quotation.client.gstin}</p>
-              )}
-              <div className="text-sm">
-                <p>{quotation.client.addressLine1}</p>
-                {quotation.client.addressLine2 && <p>{quotation.client.addressLine2}</p>}
-                <p>{quotation.client.city}, {quotation.client.state} {quotation.client.postalCode}</p>
-                <p>{quotation.client.country}</p>
-              </div>
-              <p className="text-sm">Phone: {quotation.client.phone}</p>
-              <p className="text-sm">Email: {quotation.client.email}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Quotation Details */}
-        <div className="bg-gray-50 p-6 rounded-lg mb-8">
-          <div className="grid md:grid-cols-3 gap-4 mb-6">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Quotation Date</p>
-              <p className="text-lg">{formatDate(quotation.quotationDate)}</p>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-600">Valid Until</p>
-              <p className="text-lg">{formatDate(quotation.validUntil)}</p>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-600">Currency</p>
-              <p className="text-lg">{quotation.currency}</p>
-            </div>
-          </div>
-
-          <div className="mb-4">
-            <h3 className="text-xl font-bold mb-2">{quotation.title}</h3>
-            {quotation.description && (
-              <p className="text-gray-700">{quotation.description}</p>
-            )}
-          </div>
-        </div>
-
-        {/* Quotation Items */}
-        <div className="mb-8">
-          <h3 className="text-xl font-bold mb-6">Items</h3>
-          <div className="space-y-4">
-            {quotation.rows.map((row: QuotationRow, rowIndex: number) => (
-              <div key={row.id} className="border border-gray-200 rounded-lg overflow-hidden">
-                <div className="grid gap-4 bg-gray-100 p-4 text-sm font-medium" style={{ gridTemplateColumns: row.items.map(item => `${item.width || 25}%`).join(' ') }}>
-                  {row.items.map((item, itemIndex) => (
-                    <div key={item.id}>
-                      {item.label}
-                    </div>
-                  ))}
-                </div>
-                <div className="grid gap-4 p-4 text-sm" style={{ gridTemplateColumns: row.items.map(item => `${item.width || 25}%`).join(' ') }}>
-                  {row.items.map((item, itemIndex) => (
-                    <div key={`${item.id}-value`} className="flex items-center">
-                      {renderItemValue(item)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Summary */}
-        <div className="bg-blue-50 p-6 rounded-lg mb-8">
-          <h3 className="text-xl font-bold mb-4">Summary</h3>
-          <div className="space-y-3">
-            <div className="flex justify-between text-lg">
-              <span>Subtotal:</span>
-              <span>{quotation.currency} {quotation.subTotal?.toFixed(2) || '0.00'}</span>
-            </div>
-            <div className="flex justify-between text-lg">
-              <span>Tax (18%):</span>
-              <span>{quotation.currency} {quotation.totalTax?.toFixed(2) || '0.00'}</span>
-            </div>
-            <div className="border-t border-blue-200 pt-3">
-              <div className="flex justify-between text-2xl font-bold">
-                <span>Grand Total:</span>
-                <span>{quotation.currency} {quotation.grandTotal?.toFixed(2) || '0.00'}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Notes and Terms */}
-        {(quotation.notes || quotation.termsAndConditions) && (
+          {/* Company and Client Info */}
           <div className="grid md:grid-cols-2 gap-8">
-            {quotation.notes && (
-              <div>
-                <h3 className="text-lg font-bold mb-3">Notes</h3>
-                <div className="bg-yellow-50 p-4 rounded-lg">
-                  <p className="text-sm whitespace-pre-wrap">{quotation.notes}</p>
+            {/* From */}
+            <div>
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h3 className="text-lg font-bold text-blue-600 mb-3">FROM</h3>
+                <div className="space-y-1">
+                  <div className="font-bold text-lg">{quotation.billerInfo.businessName}</div>
+                  {quotation.billerInfo.gstin && (
+                    <div className="text-sm text-gray-600">GSTIN: {quotation.billerInfo.gstin}</div>
+                  )}
+                  <div className="text-sm">
+                    <div>{quotation.billerInfo.addressLine1}</div>
+                    {quotation.billerInfo.addressLine2 && <div>{quotation.billerInfo.addressLine2}</div>}
+                    <div>{quotation.billerInfo.city}, {quotation.billerInfo.state} {quotation.billerInfo.postalCode}</div>
+                    <div>{quotation.billerInfo.country}</div>
+                  </div>
+                  {quotation.billerInfo.phone && (
+                    <div className="text-sm">Phone: {quotation.billerInfo.phone}</div>
+                  )}
+                  {quotation.billerInfo.email && (
+                    <div className="text-sm">Email: {quotation.billerInfo.email}</div>
+                  )}
                 </div>
               </div>
-            )}
-            {quotation.termsAndConditions && (
-              <div>
-                <h3 className="text-lg font-bold mb-3">Terms & Conditions</h3>
-                <div className="bg-red-50 p-4 rounded-lg">
-                  <p className="text-sm whitespace-pre-wrap">{quotation.termsAndConditions}</p>
+            </div>
+
+            {/* To */}
+            <div>
+              <div className="bg-green-50 p-4 rounded-lg">
+                <h3 className="text-lg font-bold text-green-600 mb-3">TO</h3>
+                <div className="space-y-1">
+                  <div className="font-bold text-lg">{quotation.client.name}</div>
+                  {quotation.client.gstin && (
+                    <div className="text-sm text-gray-600">GSTIN: {quotation.client.gstin}</div>
+                  )}
+                  <div className="text-sm">
+                    <div>{quotation.client.addressLine1}</div>
+                    {quotation.client.addressLine2 && <div>{quotation.client.addressLine2}</div>}
+                    <div>{quotation.client.city}, {quotation.client.state} {quotation.client.postalCode}</div>
+                    <div>{quotation.client.country}</div>
+                  </div>
+                  <div className="text-sm">Phone: {quotation.client.phone}</div>
+                  <div className="text-sm">Email: {quotation.client.email}</div>
                 </div>
               </div>
-            )}
+            </div>
           </div>
-        )}
+
+          {/* Quotation Details */}
+          <div className="bg-gray-50 p-6 rounded-lg">
+            <div className="grid md:grid-cols-3 gap-6 mb-4">
+              <div>
+                <div className="text-sm font-medium text-gray-600">Quotation Date</div>
+                <div className="text-lg font-semibold">{formatDate(quotation.quotationDate)}</div>
+              </div>
+              <div>
+                <div className="text-sm font-medium text-gray-600">Valid Until</div>
+                <div className="text-lg font-semibold">{formatDate(quotation.validUntil)}</div>
+              </div>
+              <div>
+                <div className="text-sm font-medium text-gray-600">Currency</div>
+                <div className="text-lg font-semibold">{quotation.currency}</div>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-xl font-bold mb-2">{quotation.title}</h3>
+              {quotation.description && (
+                <p className="text-gray-700">{quotation.description}</p>
+              )}
+            </div>
+          </div>
+
+          {/* Items */}
+          <div>
+            <h3 className="text-xl font-bold mb-4 text-center bg-blue-600 text-white py-2 rounded">ITEMS</h3>
+            <div className="space-y-4">
+              {quotation.rows.map((row: QuotationRow, rowIndex: number) => (
+                <div key={row.id} className="border border-gray-300 rounded-lg overflow-hidden">
+                  {/* Headers */}
+                  <div className="bg-gray-100 p-3 border-b">
+                    <div className="grid gap-4" style={{ gridTemplateColumns: row.items.map(item => `${item.width || 25}%`).join(' ') }}>
+                      {row.items.map((item, itemIndex) => (
+                        <div key={item.id} className="font-semibold text-sm">
+                          {item.label}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Values */}
+                  <div className="p-3">
+                    <div className="grid gap-4" style={{ gridTemplateColumns: row.items.map(item => `${item.width || 25}%`).join(' ') }}>
+                      {row.items.map((item, itemIndex) => (
+                        <div key={`${item.id}-value`} className="flex items-center text-sm">
+                          {renderItemValue(item)}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Summary */}
+          <div className="bg-blue-50 p-6 rounded-lg">
+            <h3 className="text-xl font-bold mb-4 text-center">SUMMARY</h3>
+            <div className="space-y-3 max-w-md ml-auto">
+              <div className="flex justify-between items-center text-lg">
+                <span>Subtotal:</span>
+                <span className="font-semibold">{quotation.currency} {quotation.subTotal?.toFixed(2) || '0.00'}</span>
+              </div>
+              <div className="flex justify-between items-center text-lg">
+                <span>Tax (18%):</span>
+                <span className="font-semibold">{quotation.currency} {quotation.totalTax?.toFixed(2) || '0.00'}</span>
+              </div>
+              <div className="border-t-2 border-blue-600 pt-3">
+                <div className="flex justify-between items-center text-2xl font-bold text-blue-600">
+                  <span>Grand Total:</span>
+                  <span>{quotation.currency} {quotation.grandTotal?.toFixed(2) || '0.00'}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Notes and Terms */}
+          {(quotation.notes || quotation.termsAndConditions) && (
+            <div className="grid md:grid-cols-2 gap-8">
+              {quotation.notes && (
+                <div>
+                  <h3 className="text-lg font-bold mb-3 text-yellow-600">NOTES</h3>
+                  <div className="bg-yellow-50 p-4 rounded-lg border-l-4 border-yellow-400">
+                    <p className="text-sm whitespace-pre-wrap">{quotation.notes}</p>
+                  </div>
+                </div>
+              )}
+              {quotation.termsAndConditions && (
+                <div>
+                  <h3 className="text-lg font-bold mb-3 text-red-600">TERMS & CONDITIONS</h3>
+                  <div className="bg-red-50 p-4 rounded-lg border-l-4 border-red-400">
+                    <p className="text-sm whitespace-pre-wrap">{quotation.termsAndConditions}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
