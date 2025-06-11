@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { Quotation } from "@/lib/types";
@@ -64,7 +63,7 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
       setIsDownloading(true);
       try {
         const elementToCapture = quotationCardRef.current;
-        
+
         // Wait for all images to load
         const images = elementToCapture.querySelectorAll('img');
         await Promise.all(Array.from(images).map(img => {
@@ -98,7 +97,8 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
         pageContainer.style.padding = '20px';
         pageContainer.style.margin = '0';
 
-        pageContainer.innerHTML = generateQuotationHTML(quotation);
+        const htmlContent = await generateQuotationHTML(quotation);
+        pageContainer.innerHTML = htmlContent;
         document.body.appendChild(pageContainer);
 
         const canvas = await html2canvas(pageContainer, {
@@ -129,7 +129,7 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
         }
 
         pdf.save(`Quotation-${quotation.quotationNumber}.pdf`);
-        
+
         toast({
           title: "PDF Downloaded",
           description: "Quotation PDF has been downloaded successfully.",
@@ -146,15 +146,46 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
       }
     };
 
-    const generateQuotationHTML = (quotation: Quotation): string => {
+    const generateQuotationHTML = async (quotation: Quotation): Promise<string> => {
       const { billerInfo, client } = quotation;
-      
+
+      // Pre-process rows to handle image loading
+      const processedRows = await Promise.all(quotation.rows.map(async row => ({
+        ...row,
+        items: await Promise.all(row.items.map(async item => {
+          if (item.type === 'image' && item.value) {
+            try {
+              // Load the image and convert it to base64
+              const img = new Image();
+              img.crossOrigin = "anonymous"; // Enable CORS if the image is from a different origin
+              img.src = item.value as string;
+              await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = reject;
+              });
+
+              const canvas = document.createElement('canvas');
+              canvas.width = img.width;
+              canvas.height = img.height;
+              const ctx = canvas.getContext('2d');
+              ctx?.drawImage(img, 0, 0);
+              const base64Image = canvas.toDataURL('image/png'); // You can change the format if needed
+              return { ...item, value: base64Image };
+            } catch (error) {
+              console.error("Error loading image:", error);
+              return item; // Return the original item if there's an error
+            }
+          }
+          return item;
+        }))
+      })));
+
       return `
         <div style="max-width: 100%; margin: 0 auto; background: white;">
           <!-- Header -->
           <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px;">
             <div>
-              ${billerInfo.logoUrl ? `<img src="${billerInfo.logoUrl}" alt="Logo" style="max-height: 80px; margin-bottom: 10px;" />` : ''}
+              ${billerInfo.logoUrl ? `<img src="${billerInfo.logoUrl}" alt="Logo" style="max-height: 80px; margin-bottom: 10px;" crossorigin="anonymous" />` : ''}
               <h1 style="font-size: 32px; font-weight: bold; color: #3F51B5; margin: 0;">QUOTATION</h1>
             </div>
             <div style="text-align: right;">
@@ -196,13 +227,13 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
 
           <!-- Title and Description -->
           <div style="margin-bottom: 30px;">
-            <h2 style="font-size: 20px; font-weight: bold; margin-bottom: 10px;">${quotation.title}</h2>
+            <h2 style="font-size: 20px; font-weight: bold; color: #3F51B5; margin-bottom: 10px;">${quotation.title}</h2>
             ${quotation.description ? `<p style="color: #666; margin-bottom: 0;">${quotation.description}</p>` : ''}
           </div>
 
           <!-- Items Table -->
           <div style="margin-bottom: 30px;">
-            ${quotation.rows.map(row => `
+            ${processedRows.map((row, rowIndex) => `
               <div style="display: grid; grid-template-columns: ${row.items.map(item => `${item.width}%`).join(' ')}; gap: 10px; padding: 10px 0; border-bottom: 1px solid #e0e0e0;">
                 ${row.items.map(item => `
                   <div>
@@ -210,6 +241,7 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
                     <div style="font-size: 14px;">
                       ${item.type === 'date' ? format(new Date(item.value as string), 'MMM dd, yyyy') : 
                         item.type === 'number' ? (typeof item.value === 'number' ? item.value.toLocaleString('en-IN') : item.value) : 
+                        item.type === 'image' && item.value ? `<img src="${item.value}" alt="Image" style="max-width: 100px; max-height: 60px; object-fit: cover;" crossorigin="anonymous" />` : 
                         item.value}
                     </div>
                   </div>
@@ -241,7 +273,7 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
               <p style="font-size: 14px; color: #666;">${quotation.notes}</p>
             </div>
           ` : ''}
-          
+
           ${quotation.termsAndConditions ? `
             <div style="margin-bottom: 20px;">
               <h4 style="font-weight: bold; margin-bottom: 10px;">Terms & Conditions:</h4>
@@ -381,17 +413,25 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
                   }}
                 >
                   {row.items.map((item) => (
-                    <div key={item.id}>
+                    <div key={item.id} className="flex items-center justify-between p-3 border-r last:border-r-0" style={{ width: `${item.width}%` }}>
                       {rowIndex === 0 && (
                         <div className="text-xs font-bold text-primary mb-2">{item.label}</div>
                       )}
                       <div className={rowIndex === 0 ? 'sr-only' : 'text-sm'}>
-                        {item.type === 'date' 
+                        {item.type === 'date'
                           ? format(new Date(item.value as string), 'MMM dd, yyyy')
-                          : item.type === 'number' 
-                          ? (typeof item.value === 'number' ? item.value.toLocaleString('en-IN') : item.value)
-                          : item.value
-                        }
+                          : item.type === 'number'
+                            ? (typeof item.value === 'number' ? item.value.toLocaleString('en-IN') : item.value)
+                            : item.type === 'image' && item.value ? (
+                              <img
+                                src={item.value as string}
+                                alt="Image"
+                                className="max-w-[100px] max-h-[60px] object-cover rounded"
+                                crossOrigin="anonymous"
+                              />
+                            ) : (
+                              String(item.value)
+                            )}
                       </div>
                     </div>
                   ))}
@@ -404,15 +444,15 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
               <div className="w-80 space-y-2">
                 <div className="flex justify-between py-2 border-b">
                   <span>Subtotal:</span>
-                  <span>Rs. {quotation.subTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
+                  <span>Rs. {quotation.subTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex justify-between py-2 border-b">
                   <span>Tax:</span>
-                  <span>Rs. {quotation.totalTax.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
+                  <span>Rs. {quotation.totalTax.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex justify-between py-3 text-xl font-bold border-t-2 border-primary">
                   <span>Total:</span>
-                  <span>Rs. {quotation.grandTotal.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
+                  <span>Rs. {quotation.grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                 </div>
               </div>
             </div>
@@ -454,7 +494,7 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
               Edit
             </Link>
           </Button>
-          
+
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => window.print()} disabled={isDownloading}>
               <Printer className="mr-2 h-4 w-4" />

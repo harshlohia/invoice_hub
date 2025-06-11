@@ -23,6 +23,7 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import type { Quotation, Client, BillerInfo, QuotationRow, QuotationItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { ImageUpload } from "@/components/ImageUpload";
 import { format, addDays } from "date-fns";
 import { CalendarIcon, PlusCircle, Trash2, GripVertical, Image, Type, Hash, Calendar as CalendarClock, Loader2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -137,12 +138,19 @@ export function QuotationForm({ initialData }: QuotationFormProps) {
       const clientsData = clientsQuerySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client));
       setClients(clientsData);
 
-      const preselectedClientId = searchParams.get('clientId');
+      // Handle preselected client from URL or initial data
+      const preselectedClientId = searchParams.get('clientId') || initialData?.client?.id;
       if (preselectedClientId && clientsData.length > 0) {
         const client = clientsData.find(c => c.id === preselectedClientId);
         if (client) {
           setSelectedClientData(client);
           form.setValue("clientId", client.id);
+        }
+      } else if (initialData && clientsData.length > 0) {
+        // If editing, set the client from initial data
+        const client = clientsData.find(c => c.id === initialData.client.id);
+        if (client) {
+          setSelectedClientData(client);
         }
       }
 
@@ -173,10 +181,10 @@ export function QuotationForm({ initialData }: QuotationFormProps) {
   }, [form, searchParams, toast]);
 
   useEffect(() => {
-    if (currentUser && !initialData) {
+    if (currentUser) {
       fetchClientsAndBillerInfo(currentUser.uid);
     }
-  }, [currentUser, initialData, fetchClientsAndBillerInfo]);
+  }, [currentUser, fetchClientsAndBillerInfo]);
 
   const { fields: rowFields, append: appendRow, remove: removeRow } = useFieldArray({
     control: form.control,
@@ -616,6 +624,12 @@ export function QuotationForm({ initialData }: QuotationFormProps) {
                                         />
                                       </PopoverContent>
                                     </Popover>
+                                  ) : item.type === 'image' ? (
+                                    <ImageUpload
+                                      value={field.value as string}
+                                      onChange={field.onChange}
+                                      disabled={form.formState.isSubmitting}
+                                    />
                                   ) : (
                                     <Input
                                       placeholder="Enter value"
