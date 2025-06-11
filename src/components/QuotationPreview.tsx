@@ -34,72 +34,183 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
     try {
       if (!printableRef.current) return;
 
-      // Create a temporary element for PDF generation
-      const printElement = printableRef.current.cloneNode(true) as HTMLElement;
+      // Wait for all images to load
+      const images = printableRef.current.querySelectorAll('img');
+      await Promise.all(Array.from(images).map(img => {
+        if (img.complete) return Promise.resolve();
+        return new Promise(resolve => {
+          img.onload = resolve;
+          img.onerror = resolve;
+        });
+      }));
 
-      // Apply print styles
-      printElement.style.backgroundColor = 'white';
-      printElement.style.width = '210mm';
-      printElement.style.minHeight = '297mm';
-      printElement.style.padding = '20mm';
-      printElement.style.margin = '0';
-      printElement.style.boxSizing = 'border-box';
-      printElement.style.fontFamily = 'Arial, sans-serif';
-
-      // Hide the original content temporarily
-      const originalDisplay = printableRef.current.style.display;
-      printableRef.current.style.display = 'none';
-
-      // Add print element to body
-      document.body.appendChild(printElement);
-
-      // Generate PDF using html2canvas
-      const canvas = await html2canvas(printElement, {
-        scale: 2,
-        useCORS: false,
-        allowTaint: true,
-        backgroundColor: '#ffffff',
-        width: 794, // A4 width in pixels at 96 DPI
-        height: 1123, // A4 height in pixels at 96 DPI
-        onclone: (clonedDoc) => {
-          // Handle images in the cloned document
-          const images = clonedDoc.querySelectorAll('img');
-          images.forEach((img) => {
-            img.style.maxWidth = '100%';
-            img.style.height = 'auto';
-            img.crossOrigin = 'anonymous';
-          });
-        }
-      });
-
-      const imgData = canvas.toDataURL('image/png');
+      // Create PDF with proper A4 dimensions
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
-        format: 'a4'
+        format: 'a4',
+        compress: true
       });
 
-      const imgWidth = 210;
-      const pageHeight = 297;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let heightLeft = imgHeight;
-      let position = 0;
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const margin = 15;
+      const availableWidth = pdfWidth - (margin * 2);
+      const availableHeight = pdfHeight - (margin * 2);
 
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
+      // Clone the element for PDF generation
+      const printElement = printableRef.current.cloneNode(true) as HTMLElement;
+      
+      // Apply modern print styles
+      printElement.style.backgroundColor = '#ffffff';
+      printElement.style.fontFamily = '"Segoe UI", system-ui, -apple-system, sans-serif';
+      printElement.style.fontSize = '12px';
+      printElement.style.lineHeight = '1.5';
+      printElement.style.color = '#1f2937';
+      printElement.style.width = '210mm';
+      printElement.style.padding = '15mm';
+      printElement.style.margin = '0';
+      printElement.style.boxSizing = 'border-box';
+      printElement.style.pageBreakInside = 'avoid';
 
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
+      // Style all images for better PDF rendering
+      const printImages = printElement.querySelectorAll('img');
+      printImages.forEach((img) => {
+        img.style.maxWidth = '100%';
+        img.style.height = 'auto';
+        img.style.display = 'block';
+        img.crossOrigin = 'anonymous';
+      });
+
+      // Add to DOM temporarily
+      printElement.style.position = 'absolute';
+      printElement.style.left = '-9999px';
+      printElement.style.top = '0';
+      document.body.appendChild(printElement);
+
+      try {
+        // Calculate content height and determine if we need multiple pages
+        const contentHeight = printElement.scrollHeight;
+        const pixelsPerMM = 3.779527559; // 96 DPI to mm conversion
+        const contentHeightMM = contentHeight / pixelsPerMM;
+        const maxContentPerPage = availableHeight;
+        const totalPages = Math.ceil(contentHeightMM / maxContentPerPage);
+
+        if (totalPages === 1) {
+          // Single page - capture everything
+          const canvas = await html2canvas(printElement, {
+            scale: 2,
+            useCORS: true,
+            allowTaint: true,
+            backgroundColor: '#ffffff',
+            logging: false,
+            width: printElement.scrollWidth,
+            height: printElement.scrollHeight,
+            onclone: (clonedDoc) => {
+              const clonedImages = clonedDoc.querySelectorAll('img');
+              clonedImages.forEach((img) => {
+                img.crossOrigin = 'anonymous';
+                img.style.maxWidth = '100%';
+                img.style.height = 'auto';
+              });
+            }
+          });
+
+          const imgData = canvas.toDataURL('image/png', 1.0);
+          const imgWidthMM = (canvas.width * 25.4) / (96 * 2); // Convert to mm
+          const imgHeightMM = (canvas.height * 25.4) / (96 * 2);
+          
+          // Scale to fit within margins
+          const scaleX = availableWidth / imgWidthMM;
+          const scaleY = availableHeight / imgHeightMM;
+          const scale = Math.min(scaleX, scaleY, 1);
+          
+          const finalWidth = imgWidthMM * scale;
+          const finalHeight = imgHeightMM * scale;
+          
+          const x = (pdfWidth - finalWidth) / 2;
+          const y = margin;
+
+          pdf.addImage(imgData, 'PNG', x, y, finalWidth, finalHeight, undefined, 'FAST');
+        } else {
+          // Multi-page handling
+          for (let page = 0; page < totalPages; page++) {
+            if (page > 0) {
+              pdf.addPage();
+            }
+
+            // Calculate the portion of content for this page
+            const startY = page * maxContentPerPage * pixelsPerMM;
+            const endY = Math.min((page + 1) * maxContentPerPage * pixelsPerMM, contentHeight);
+            const pageHeight = endY - startY;
+
+            // Create a wrapper for this page's content
+            const pageWrapper = document.createElement('div');
+            pageWrapper.style.width = printElement.style.width;
+            pageWrapper.style.height = `${pageHeight}px`;
+            pageWrapper.style.overflow = 'hidden';
+            pageWrapper.style.position = 'relative';
+            pageWrapper.style.backgroundColor = '#ffffff';
+            pageWrapper.style.fontFamily = printElement.style.fontFamily;
+            pageWrapper.style.fontSize = printElement.style.fontSize;
+            pageWrapper.style.lineHeight = printElement.style.lineHeight;
+            pageWrapper.style.color = printElement.style.color;
+
+            // Clone and position content for this page
+            const pageContent = printElement.cloneNode(true) as HTMLElement;
+            pageContent.style.position = 'absolute';
+            pageContent.style.top = `-${startY}px`;
+            pageContent.style.left = '0';
+            pageContent.style.width = '100%';
+            
+            pageWrapper.appendChild(pageContent);
+            document.body.appendChild(pageWrapper);
+
+            try {
+              const canvas = await html2canvas(pageWrapper, {
+                scale: 2,
+                useCORS: true,
+                allowTaint: true,
+                backgroundColor: '#ffffff',
+                logging: false,
+                width: pageWrapper.scrollWidth,
+                height: pageWrapper.scrollHeight,
+                onclone: (clonedDoc) => {
+                  const clonedImages = clonedDoc.querySelectorAll('img');
+                  clonedImages.forEach((img) => {
+                    img.crossOrigin = 'anonymous';
+                    img.style.maxWidth = '100%';
+                    img.style.height = 'auto';
+                  });
+                }
+              });
+
+              const imgData = canvas.toDataURL('image/png', 1.0);
+              const imgWidthMM = (canvas.width * 25.4) / (96 * 2);
+              const imgHeightMM = (canvas.height * 25.4) / (96 * 2);
+              
+              const scaleX = availableWidth / imgWidthMM;
+              const scaleY = availableHeight / imgHeightMM;
+              const scale = Math.min(scaleX, scaleY, 1);
+              
+              const finalWidth = imgWidthMM * scale;
+              const finalHeight = imgHeightMM * scale;
+              
+              const x = (pdfWidth - finalWidth) / 2;
+              const y = margin;
+
+              pdf.addImage(imgData, 'PNG', x, y, finalWidth, finalHeight, undefined, 'FAST');
+            } finally {
+              document.body.removeChild(pageWrapper);
+            }
+          }
+        }
+
+        pdf.save(`quotation-${quotation.quotationNumber}.pdf`);
+      } finally {
+        // Clean up
+        document.body.removeChild(printElement);
       }
-
-      pdf.save(`quotation-${quotation.quotationNumber}.pdf`);
-
-      // Clean up
-      document.body.removeChild(printElement);
-      printableRef.current.style.display = originalDisplay;
 
     } catch (error) {
       console.error('Error generating PDF:', error);
@@ -192,10 +303,12 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
       <div ref={printableRef} className="bg-white">
         <div className="p-8 space-y-8">
           {/* Header */}
-          <div className="text-center border-b-2 border-blue-600 pb-6">
-            <h1 className="text-4xl font-bold text-blue-600 mb-2">QUOTATION</h1>
-            <div className="text-lg font-medium">#{quotation.quotationNumber}</div>
-            <div className={`inline-block px-3 py-1 rounded-full text-sm font-medium mt-2 ${getStatusColor(quotation.status)}`}>
+          <div className="text-center pb-6 mb-6 border-b-2 border-gradient-to-r from-blue-600 to-purple-600">
+            <div className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              <h1 className="text-5xl font-bold mb-3">QUOTATION</h1>
+            </div>
+            <div className="text-xl font-semibold text-gray-700 mb-2">#{quotation.quotationNumber}</div>
+            <div className={`inline-block px-4 py-2 rounded-full text-sm font-medium shadow-md ${getStatusColor(quotation.status)}`}>
               {quotation.status.charAt(0).toUpperCase() + quotation.status.slice(1)}
             </div>
           </div>
@@ -204,24 +317,27 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
           <div className="grid md:grid-cols-2 gap-8">
             {/* From */}
             <div>
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <h3 className="text-lg font-bold text-blue-600 mb-3">FROM</h3>
-                <div className="space-y-1">
-                  <div className="font-bold text-lg">{quotation.billerInfo.businessName}</div>
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-xl border border-blue-200 shadow-sm">
+                <h3 className="text-xl font-bold text-blue-700 mb-4 flex items-center">
+                  <div className="w-3 h-3 bg-blue-600 rounded-full mr-2"></div>
+                  FROM
+                </h3>
+                <div className="space-y-2">
+                  <div className="font-bold text-xl text-gray-800">{quotation.billerInfo.businessName}</div>
                   {quotation.billerInfo.gstin && (
-                    <div className="text-sm text-gray-600">GSTIN: {quotation.billerInfo.gstin}</div>
+                    <div className="text-sm text-gray-600 font-medium">GSTIN: {quotation.billerInfo.gstin}</div>
                   )}
-                  <div className="text-sm">
+                  <div className="text-sm text-gray-700 leading-relaxed">
                     <div>{quotation.billerInfo.addressLine1}</div>
                     {quotation.billerInfo.addressLine2 && <div>{quotation.billerInfo.addressLine2}</div>}
                     <div>{quotation.billerInfo.city}, {quotation.billerInfo.state} {quotation.billerInfo.postalCode}</div>
                     <div>{quotation.billerInfo.country}</div>
                   </div>
                   {quotation.billerInfo.phone && (
-                    <div className="text-sm">Phone: {quotation.billerInfo.phone}</div>
+                    <div className="text-sm text-gray-700"><span className="font-medium">Phone:</span> {quotation.billerInfo.phone}</div>
                   )}
                   {quotation.billerInfo.email && (
-                    <div className="text-sm">Email: {quotation.billerInfo.email}</div>
+                    <div className="text-sm text-gray-700"><span className="font-medium">Email:</span> {quotation.billerInfo.email}</div>
                   )}
                 </div>
               </div>
@@ -229,62 +345,67 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
 
             {/* To */}
             <div>
-              <div className="bg-green-50 p-4 rounded-lg">
-                <h3 className="text-lg font-bold text-green-600 mb-3">TO</h3>
-                <div className="space-y-1">
-                  <div className="font-bold text-lg">{quotation.client.name}</div>
+              <div className="bg-gradient-to-br from-green-50 to-green-100 p-6 rounded-xl border border-green-200 shadow-sm">
+                <h3 className="text-xl font-bold text-green-700 mb-4 flex items-center">
+                  <div className="w-3 h-3 bg-green-600 rounded-full mr-2"></div>
+                  TO
+                </h3>
+                <div className="space-y-2">
+                  <div className="font-bold text-xl text-gray-800">{quotation.client.name}</div>
                   {quotation.client.gstin && (
-                    <div className="text-sm text-gray-600">GSTIN: {quotation.client.gstin}</div>
+                    <div className="text-sm text-gray-600 font-medium">GSTIN: {quotation.client.gstin}</div>
                   )}
-                  <div className="text-sm">
+                  <div className="text-sm text-gray-700 leading-relaxed">
                     <div>{quotation.client.addressLine1}</div>
                     {quotation.client.addressLine2 && <div>{quotation.client.addressLine2}</div>}
                     <div>{quotation.client.city}, {quotation.client.state} {quotation.client.postalCode}</div>
                     <div>{quotation.client.country}</div>
                   </div>
-                  <div className="text-sm">Phone: {quotation.client.phone}</div>
-                  <div className="text-sm">Email: {quotation.client.email}</div>
+                  <div className="text-sm text-gray-700"><span className="font-medium">Phone:</span> {quotation.client.phone}</div>
+                  <div className="text-sm text-gray-700"><span className="font-medium">Email:</span> {quotation.client.email}</div>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Quotation Details */}
-          <div className="bg-gray-50 p-6 rounded-lg">
-            <div className="grid md:grid-cols-3 gap-6 mb-4">
-              <div>
-                <div className="text-sm font-medium text-gray-600">Quotation Date</div>
-                <div className="text-lg font-semibold">{formatDate(quotation.quotationDate)}</div>
+          <div className="bg-gradient-to-r from-gray-50 to-gray-100 p-6 rounded-xl border border-gray-200 shadow-sm">
+            <div className="grid md:grid-cols-3 gap-6 mb-6">
+              <div className="text-center p-4 bg-white rounded-lg shadow-sm">
+                <div className="text-sm font-medium text-gray-500 uppercase tracking-wide">Quotation Date</div>
+                <div className="text-lg font-bold text-gray-800 mt-1">{formatDate(quotation.quotationDate)}</div>
               </div>
-              <div>
-                <div className="text-sm font-medium text-gray-600">Valid Until</div>
-                <div className="text-lg font-semibold">{formatDate(quotation.validUntil)}</div>
+              <div className="text-center p-4 bg-white rounded-lg shadow-sm">
+                <div className="text-sm font-medium text-gray-500 uppercase tracking-wide">Valid Until</div>
+                <div className="text-lg font-bold text-gray-800 mt-1">{formatDate(quotation.validUntil)}</div>
               </div>
-              <div>
-                <div className="text-sm font-medium text-gray-600">Currency</div>
-                <div className="text-lg font-semibold">{quotation.currency}</div>
+              <div className="text-center p-4 bg-white rounded-lg shadow-sm">
+                <div className="text-sm font-medium text-gray-500 uppercase tracking-wide">Currency</div>
+                <div className="text-lg font-bold text-gray-800 mt-1">{quotation.currency}</div>
               </div>
             </div>
 
-            <div>
-              <h3 className="text-xl font-bold mb-2">{quotation.title}</h3>
+            <div className="border-t border-gray-200 pt-4">
+              <h3 className="text-2xl font-bold mb-3 text-gray-800">{quotation.title}</h3>
               {quotation.description && (
-                <p className="text-gray-700">{quotation.description}</p>
+                <p className="text-gray-700 leading-relaxed">{quotation.description}</p>
               )}
             </div>
           </div>
 
           {/* Items */}
           <div>
-            <h3 className="text-xl font-bold mb-4 text-center bg-blue-600 text-white py-2 rounded">ITEMS</h3>
-            <div className="space-y-4">
+            <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 px-6 rounded-t-xl mb-6">
+              <h3 className="text-2xl font-bold text-center">ITEMS</h3>
+            </div>
+            <div className="space-y-6">
               {quotation.rows.map((row: QuotationRow, rowIndex: number) => (
-                <div key={row.id} className="border border-gray-300 rounded-lg overflow-hidden">
+                <div key={row.id} className="border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
                   {/* Headers */}
-                  <div className="bg-gray-100 p-3 border-b">
+                  <div className="bg-gradient-to-r from-gray-100 to-gray-200 p-4 border-b border-gray-300">
                     <div className="grid gap-4" style={{ gridTemplateColumns: row.items.map(item => `${item.width || 25}%`).join(' ') }}>
                       {row.items.map((item, itemIndex) => (
-                        <div key={item.id} className="font-semibold text-sm">
+                        <div key={item.id} className="font-bold text-sm text-gray-700 uppercase tracking-wide">
                           {item.label}
                         </div>
                       ))}
@@ -292,10 +413,10 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
                   </div>
 
                   {/* Values */}
-                  <div className="p-3">
+                  <div className="p-4 bg-white">
                     <div className="grid gap-4" style={{ gridTemplateColumns: row.items.map(item => `${item.width || 25}%`).join(' ') }}>
                       {row.items.map((item, itemIndex) => (
-                        <div key={`${item.id}-value`} className="flex items-center text-sm">
+                        <div key={`${item.id}-value`} className="flex items-center text-sm text-gray-800">
                           {renderItemValue(item)}
                         </div>
                       ))}
@@ -307,19 +428,19 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
           </div>
 
           {/* Summary */}
-          <div className="bg-blue-50 p-6 rounded-lg">
-            <h3 className="text-xl font-bold mb-4 text-center">SUMMARY</h3>
-            <div className="space-y-3 max-w-md ml-auto">
-              <div className="flex justify-between items-center text-lg">
-                <span>Subtotal:</span>
-                <span className="font-semibold">{quotation.currency} {quotation.subTotal?.toFixed(2) || '0.00'}</span>
+          <div className="bg-gradient-to-br from-blue-50 to-indigo-100 p-8 rounded-xl border border-blue-200 shadow-lg">
+            <h3 className="text-2xl font-bold mb-6 text-center text-blue-800">SUMMARY</h3>
+            <div className="space-y-4 max-w-md ml-auto">
+              <div className="flex justify-between items-center text-lg bg-white p-3 rounded-lg shadow-sm">
+                <span className="font-medium text-gray-700">Subtotal:</span>
+                <span className="font-bold text-gray-800">{quotation.currency} {quotation.subTotal?.toFixed(2) || '0.00'}</span>
               </div>
-              <div className="flex justify-between items-center text-lg">
-                <span>Tax (18%):</span>
-                <span className="font-semibold">{quotation.currency} {quotation.totalTax?.toFixed(2) || '0.00'}</span>
+              <div className="flex justify-between items-center text-lg bg-white p-3 rounded-lg shadow-sm">
+                <span className="font-medium text-gray-700">Tax (18%):</span>
+                <span className="font-bold text-gray-800">{quotation.currency} {quotation.totalTax?.toFixed(2) || '0.00'}</span>
               </div>
-              <div className="border-t-2 border-blue-600 pt-3">
-                <div className="flex justify-between items-center text-2xl font-bold text-blue-600">
+              <div className="border-t-2 border-blue-600 pt-4">
+                <div className="flex justify-between items-center text-2xl font-bold text-blue-700 bg-white p-4 rounded-lg shadow-md">
                   <span>Grand Total:</span>
                   <span>{quotation.currency} {quotation.grandTotal?.toFixed(2) || '0.00'}</span>
                 </div>

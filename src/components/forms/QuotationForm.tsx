@@ -662,12 +662,12 @@ export function QuotationForm({ initialData, isEdit = false }: QuotationFormProp
                               <label className="text-xs font-medium">Value</label>
                               {item.type === 'image' ? (
                                 <ImageUpload
-                                  onImageUpload={(url) => {
+                                  value={item.value as string}
+                                  onChange={(url) => {
                                     const currentRows = form.getValues('rows');
                                     currentRows[rowIndex].items[itemIndex].value = url;
                                     form.setValue('rows', currentRows);
                                   }}
-                                  currentImageUrl={item.value as string}
                                 />
                               ) : item.type === 'number' ? (
                                 <Input
