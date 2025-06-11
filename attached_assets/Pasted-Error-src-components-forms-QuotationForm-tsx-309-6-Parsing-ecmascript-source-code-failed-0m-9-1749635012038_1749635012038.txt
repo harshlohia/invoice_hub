@@ -1,0 +1,24 @@
+Error: ./src/components/forms/QuotationForm.tsx:309:6
+Parsing ecmascript source code failed
+[0m [90m 307 |[39m[0m
+[0m [90m 308 |[39m   [36mreturn[39m ([0m
+[0m[31m[1m>[22m[39m[90m 309 |[39m     [33m<[39m[33mForm[39m {[33m...[39mform}[33m>[39m[0m
+[0m [90m     |[39m      [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[0m
+[0m [90m 310 |[39m       [33m<[39m[33mform[39m onSubmit[33m=[39m{form[33m.[39mhandleSubmit(onSubmit)} className[33m=[39m[32m"space-y-8"[39m[33m>[39m[0m
+[0m [90m 311 |[39m         [33m<[39m[33mCard[39m[33m>[39m[0m
+[0m [90m 312 |[39m           [33m<[39m[33mCardHeader[39m[33m>[39m[0m
+
+Unexpected token `Form`. Expected jsx identifier
+    at BuildError (https://78274cc5-35ad-4626-a142-50b6d9c207f0-00-3tj52vmiwnpbf.sisko.replit.dev/_next/static/chunks/node_modules_next_dist_client_8f19e6fb._.js:11144:41)
+    at react-stack-bottom-frame (https://78274cc5-35ad-4626-a142-50b6d9c207f0-00-3tj52vmiwnpbf.sisko.replit.dev/_next/static/chunks/node_modules_next_dist_compiled_2ce9398a._.js:14911:24)
+    at renderWithHooksAgain (https://78274cc5-35ad-4626-a142-50b6d9c207f0-00-3tj52vmiwnpbf.sisko.replit.dev/_next/static/chunks/node_modules_next_dist_compiled_2ce9398a._.js:6256:24)
+    at renderWithHooks (https://78274cc5-35ad-4626-a142-50b6d9c207f0-00-3tj52vmiwnpbf.sisko.replit.dev/_next/static/chunks/node_modules_next_dist_compiled_2ce9398a._.js:6207:28)
+    at updateFunctionComponent (https://78274cc5-35ad-4626-a142-50b6d9c207f0-00-3tj52vmiwnpbf.sisko.replit.dev/_next/static/chunks/node_modules_next_dist_compiled_2ce9398a._.js:7543:21)
+    at beginWork (https://78274cc5-35ad-4626-a142-50b6d9c207f0-00-3tj52vmiwnpbf.sisko.replit.dev/_next/static/chunks/node_modules_next_dist_compiled_2ce9398a._.js:8142:24)
+    at runWithFiberInDEV (https://78274cc5-35ad-4626-a142-50b6d9c207f0-00-3tj52vmiwnpbf.sisko.replit.dev/_next/static/chunks/node_modules_next_dist_compiled_2ce9398a._.js:3073:74)
+    at performUnitOfWork (https://78274cc5-35ad-4626-a142-50b6d9c207f0-00-3tj52vmiwnpbf.sisko.replit.dev/_next/static/chunks/node_modules_next_dist_compiled_2ce9398a._.js:10243:97)
+    at workLoopSync (https://78274cc5-35ad-4626-a142-50b6d9c207f0-00-3tj52vmiwnpbf.sisko.replit.dev/_next/static/chunks/node_modules_next_dist_compiled_2ce9398a._.js:10135:40)
+    at renderRootSync (https://78274cc5-35ad-4626-a142-50b6d9c207f0-00-3tj52vmiwnpbf.sisko.replit.dev/_next/static/chunks/node_modules_next_dist_compiled_2ce9398a._.js:10118:13)
+    at performWorkOnRoot (https://78274cc5-35ad-4626-a142-50b6d9c207f0-00-3tj52vmiwnpbf.sisko.replit.dev/_next/static/chunks/node_modules_next_dist_compiled_2ce9398a._.js:9853:212)
+    at performWorkOnRootViaSchedulerTask (https://78274cc5-35ad-4626-a142-50b6d9c207f0-00-3tj52vmiwnpbf.sisko.replit.dev/_next/static/chunks/node_modules_next_dist_compiled_2ce9398a._.js:10826:9)
+    at MessagePort.performWorkUntilDeadline (https://78274cc5-35ad-4626-a142-50b6d9c207f0-00-3tj52vmiwnpbf.sisko.replit.dev/_next/static/chunks/node_modules_next_dist_compiled_2ce9398a._.js:1982:64)
