@@ -14,9 +14,7 @@ const nextConfig = {
     ],
     unoptimized: true,
   },
-  experimental: {
-    esmExternals: 'loose',
-  },
+  
 }
 
 export default nextConfig
