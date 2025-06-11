@@ -1,7 +1,4 @@
-` tags. I will pay close attention to the identified issues, especially the parsing error and export issues, and make sure the final code is runnable and includes all necessary parts from both original and edited snippets.
 
-```
-<replit_final_file>
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -19,10 +16,10 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { CalendarIcon, Plus, Trash2, GripVertical, Type, Hash, CalendarClock, Image } from 'lucide-react';
+import { CalendarIcon, Plus, Trash2, GripVertical, Type, Hash, CalendarClock, Image, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { auth, db } from '@/lib/firebase';
+import { getFirebaseAuthInstance, db } from '@/lib/firebase';
 import { collection, addDoc, updateDoc, doc, getDocs, query, where, getDoc } from 'firebase/firestore';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
@@ -132,6 +129,7 @@ export function QuotationForm({ initialData, isEdit = false }: QuotationFormProp
   });
 
   useEffect(() => {
+    const auth = getFirebaseAuthInstance();
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       setLoadingAuth(false);
@@ -163,7 +161,7 @@ export function QuotationForm({ initialData, isEdit = false }: QuotationFormProp
           }
         } else if (initialData && clientsData.length > 0) {
           // If editing, set the client from initial data
-          const client = clientsData.find(c => c.id === initialData.client.id);
+          const client = clientsData.find(c => c.id === initialData.client?.id);
           if (client) {
             setSelectedClientData(client);
           }
@@ -196,17 +194,6 @@ export function QuotationForm({ initialData, isEdit = false }: QuotationFormProp
     };
     fetchClientsAndBillerInfo();
   }, [currentUser, form, searchParams, toast, initialData?.client?.id]);
-
-    // Set initial client data when editing
-    useEffect(() => {
-      if (initialData && clients.length > 0) {
-        const client = clients.find(c => c.id === initialData.client.id);
-        if (client) {
-          setSelectedClientData(client);
-          form.setValue("clientId", client.id);
-        }
-      }
-    }, [initialData, clients, form]);
 
   const calculateTotals = () => {
     const rows = form.watch('rows');
@@ -331,7 +318,7 @@ export function QuotationForm({ initialData, isEdit = false }: QuotationFormProp
           title: 'Success',
           description: 'Quotation updated successfully.',
         });
-          router.push(`/dashboard/quotations/${initialData.id}`);
+        router.push(`/dashboard/quotations/${initialData.id}`);
       } else {
         await addDoc(collection(db, 'quotations'), quotationData);
         toast({
@@ -359,74 +346,6 @@ export function QuotationForm({ initialData, isEdit = false }: QuotationFormProp
     router.push('/login');
     return null;
   }
-
-  const fetchClients = async () => {
-    if (!currentUser) return;
-
-    setLoadingClients(true);
-    try {
-      const clientsRef = collection(db, 'clients');
-      const q = query(clientsRef, where('userId', '==', currentUser.uid));
-      const querySnapshot = await getDocs(q);
-      const clientsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client));
-      setClients(clientsData);
-
-      // Set selected client if available in initial data
-      if (initialData?.client?.id) {
-        const selectedClient = clientsData.find(client => client.id === initialData.client.id);
-        setSelectedClientData(selectedClient || null);
-        form.setValue('clientId', selectedClient?.id || '');
-      }
-    } catch (error) {
-      console.error('Error fetching clients:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load clients. Please try again.',
-        variant: 'destructive',
-      });
-    } finally {
-      setLoadingClients(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchClients();
-  }, [currentUser, initialData?.client?.id, form]);
-
-  const fetchBillerInfo = async () => {
-    if (!currentUser) return;
-
-    setLoadingBillerInfo(true);
-    try {
-      const userDocRef = doc(db, 'users', currentUser.uid);
-      const userDocSnap = await getDoc(userDocRef);
-
-      if (userDocSnap.exists() && userDocSnap.data()?.billerInfo) {
-        setBillerInfo(userDocSnap.data()?.billerInfo as BillerInfo);
-      } else {
-        toast({
-          title: 'Biller Info Recommended',
-          description: 'Your business information isn\'t fully set up. Please update it in Settings.',
-          variant: 'default',
-          duration: 5000,
-        });
-        setBillerInfo(defaultBillerInfo);
-      }
-    } catch (error) {
-      console.error('Error fetching biller info:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load biller information. Please try again.',
-        variant: 'destructive',
-      });
-    } finally {
-      setLoadingBillerInfo(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchBillerInfo();
-  }, [currentUser]);
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">

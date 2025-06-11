@@ -1,3 +1,4 @@
+
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +10,6 @@ import { format } from "date-fns";
 import Image from "next/image";
 import { Download } from "lucide-react";
 import React, { forwardRef, useImperativeHandle, useRef } from "react";
-import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 
 interface QuotationPreviewProps {
@@ -29,99 +29,340 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
     downloadPdf
   }));
 
-  const downloadPdf = async () => {
-    if (!contentRef.current) {
-      alert('Content not ready for PDF generation');
-      return;
-    }
-
+  const convertImageToBase64 = async (url: string): Promise<string> => {
     try {
-      // Hide the download button temporarily
-      const downloadButton = document.querySelector('[data-download-button]') as HTMLElement;
-      if (downloadButton) {
-        downloadButton.style.display = 'none';
-      }
-
-      // Use html2canvas to capture the content
-      const canvas = await html2canvas(contentRef.current, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-        onclone: (clonedDoc) => {
-          // Handle images in the cloned document
-          const images = clonedDoc.querySelectorAll('img');
-          images.forEach((img) => {
-            if (img.src.includes('firebasestorage.googleapis.com')) {
-              // For Firebase images, we'll let html2canvas handle them as best as possible
-              img.crossOrigin = 'anonymous';
-            }
-          });
-        }
+      const response = await fetch(url);
+      const blob = await response.blob();
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
       });
+    } catch (error) {
+      console.error('Failed to convert image to base64:', error);
+      throw error;
+    }
+  };
 
-      // Calculate PDF dimensions
-      const imgData = canvas.toDataURL('image/png');
+  const downloadPdf = async () => {
+    try {
+      // Create a new jsPDF instance
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
         format: 'a4'
       });
 
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = canvas.width;
-      const imgHeight = canvas.height;
-      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
-      const imgX = (pdfWidth - imgWidth * ratio) / 2;
-      const imgY = 10;
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 20;
+      const contentWidth = pageWidth - (2 * margin);
+      let yPos = margin;
 
-      // Check if content fits on one page
-      const scaledHeight = imgHeight * ratio;
+      // Set fonts
+      pdf.setFont('helvetica', 'bold');
+      
+      // Header
+      pdf.setFontSize(24);
+      pdf.text('QUOTATION', pageWidth / 2, yPos, { align: 'center' });
+      yPos += 15;
 
-      if (scaledHeight <= pdfHeight - 20) {
-        // Content fits on one page
-        pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, scaledHeight);
-      } else {
-        // Content needs multiple pages
-        const pageHeight = pdfHeight - 20;
-        let position = 0;
-        let pageNumber = 1;
+      pdf.setFontSize(12);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(`#${quotation.quotationNumber}`, pageWidth / 2, yPos, { align: 'center' });
+      yPos += 10;
 
-        while (position < scaledHeight) {
-          if (pageNumber > 1) {
-            pdf.addPage();
-          }
+      // Status badge
+      pdf.setFontSize(10);
+      pdf.text(`Status: ${quotation.status.toUpperCase()}`, pageWidth / 2, yPos, { align: 'center' });
+      yPos += 15;
 
-          const remainingHeight = scaledHeight - position;
-          const currentPageHeight = Math.min(pageHeight, remainingHeight);
+      // Company and Client Info - Two columns
+      const leftColumnX = margin;
+      const rightColumnX = pageWidth / 2 + 5;
+      
+      // FROM section
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(14);
+      pdf.text('FROM', leftColumnX, yPos);
+      yPos += 8;
 
-          // Create a cropped version of the image for this page
-          const cropCanvas = document.createElement('canvas');
-          const cropCtx = cropCanvas.getContext('2d');
-
-          if (cropCtx) {
-            const sourceY = position / ratio;
-            const sourceHeight = currentPageHeight / ratio;
-
-            cropCanvas.width = imgWidth;
-            cropCanvas.height = sourceHeight;
-
-            cropCtx.drawImage(canvas, 0, sourceY, imgWidth, sourceHeight, 0, 0, imgWidth, sourceHeight);
-
-            const croppedImgData = cropCanvas.toDataURL('image/png');
-            pdf.addImage(croppedImgData, 'PNG', imgX, imgY, imgWidth * ratio, currentPageHeight);
-          }
-
-          position += pageHeight;
-          pageNumber++;
-        }
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(10);
+      
+      if (quotation.billerInfo.businessName) {
+        pdf.setFont('helvetica', 'bold');
+        pdf.text(quotation.billerInfo.businessName, leftColumnX, yPos);
+        yPos += 5;
+        pdf.setFont('helvetica', 'normal');
+      }
+      
+      if (quotation.billerInfo.gstin) {
+        pdf.text(`GSTIN: ${quotation.billerInfo.gstin}`, leftColumnX, yPos);
+        yPos += 5;
+      }
+      
+      if (quotation.billerInfo.addressLine1) {
+        pdf.text(quotation.billerInfo.addressLine1, leftColumnX, yPos);
+        yPos += 5;
+      }
+      
+      if (quotation.billerInfo.addressLine2) {
+        pdf.text(quotation.billerInfo.addressLine2, leftColumnX, yPos);
+        yPos += 5;
+      }
+      
+      const cityStateZip = [
+        quotation.billerInfo.city,
+        quotation.billerInfo.state,
+        quotation.billerInfo.postalCode
+      ].filter(Boolean).join(', ');
+      
+      if (cityStateZip) {
+        pdf.text(cityStateZip, leftColumnX, yPos);
+        yPos += 5;
+      }
+      
+      if (quotation.billerInfo.country) {
+        pdf.text(quotation.billerInfo.country, leftColumnX, yPos);
+        yPos += 5;
+      }
+      
+      if (quotation.billerInfo.phone) {
+        pdf.text(`Phone: ${quotation.billerInfo.phone}`, leftColumnX, yPos);
+        yPos += 5;
+      }
+      
+      if (quotation.billerInfo.email) {
+        pdf.text(`Email: ${quotation.billerInfo.email}`, leftColumnX, yPos);
+        yPos += 5;
       }
 
-      // Show the download button again
-      if (downloadButton) {
-        downloadButton.style.display = '';
+      // Reset yPos for TO section
+      let toYPos = margin + 23;
+
+      // TO section
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(14);
+      pdf.text('TO', rightColumnX, toYPos);
+      toYPos += 8;
+
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(10);
+      
+      if (quotation.client.name) {
+        pdf.setFont('helvetica', 'bold');
+        pdf.text(quotation.client.name, rightColumnX, toYPos);
+        toYPos += 5;
+        pdf.setFont('helvetica', 'normal');
+      }
+      
+      if (quotation.client.gstin) {
+        pdf.text(`GSTIN: ${quotation.client.gstin}`, rightColumnX, toYPos);
+        toYPos += 5;
+      }
+      
+      if (quotation.client.addressLine1) {
+        pdf.text(quotation.client.addressLine1, rightColumnX, toYPos);
+        toYPos += 5;
+      }
+      
+      if (quotation.client.addressLine2) {
+        pdf.text(quotation.client.addressLine2, rightColumnX, toYPos);
+        toYPos += 5;
+      }
+      
+      const clientCityStateZip = [
+        quotation.client.city,
+        quotation.client.state,
+        quotation.client.postalCode
+      ].filter(Boolean).join(', ');
+      
+      if (clientCityStateZip) {
+        pdf.text(clientCityStateZip, rightColumnX, toYPos);
+        toYPos += 5;
+      }
+      
+      if (quotation.client.country) {
+        pdf.text(quotation.client.country, rightColumnX, toYPos);
+        toYPos += 5;
+      }
+      
+      if (quotation.client.phone) {
+        pdf.text(`Phone: ${quotation.client.phone}`, rightColumnX, toYPos);
+        toYPos += 5;
+      }
+      
+      if (quotation.client.email) {
+        pdf.text(`Email: ${quotation.client.email}`, rightColumnX, toYPos);
+        toYPos += 5;
+      }
+
+      yPos = Math.max(yPos, toYPos) + 10;
+
+      // Quotation Details
+      pdf.setFillColor(245, 245, 245);
+      pdf.rect(margin, yPos, contentWidth, 25, 'F');
+      
+      yPos += 8;
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(12);
+      
+      const detailsY = yPos;
+      pdf.text('Quotation Date:', leftColumnX, detailsY);
+      pdf.text('Valid Until:', rightColumnX, detailsY);
+      
+      yPos += 6;
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(10);
+      pdf.text(formatDate(quotation.quotationDate), leftColumnX, yPos);
+      pdf.text(formatDate(quotation.validUntil), rightColumnX, yPos);
+      
+      yPos += 15;
+
+      // Title and Description
+      if (quotation.title) {
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(16);
+        pdf.text(quotation.title, margin, yPos);
+        yPos += 8;
+      }
+
+      if (quotation.description) {
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(10);
+        const lines = pdf.splitTextToSize(quotation.description, contentWidth);
+        pdf.text(lines, margin, yPos);
+        yPos += lines.length * 5 + 5;
+      }
+
+      yPos += 10;
+
+      // Items Table
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(14);
+      pdf.text('ITEMS', margin, yPos);
+      yPos += 10;
+
+      // Process each row
+      for (const row of quotation.rows) {
+        // Check if we need a new page
+        if (yPos > pageHeight - 50) {
+          pdf.addPage();
+          yPos = margin;
+        }
+
+        // Draw row header
+        pdf.setFillColor(240, 240, 240);
+        pdf.rect(margin, yPos, contentWidth, 8, 'F');
+        
+        yPos += 6;
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(10);
+        
+        let xPos = margin + 5;
+        const columnWidth = contentWidth / row.items.length;
+        
+        // Headers
+        for (const item of row.items) {
+          pdf.text(item.label, xPos, yPos);
+          xPos += columnWidth;
+        }
+        
+        yPos += 5;
+        
+        // Values
+        xPos = margin + 5;
+        pdf.setFont('helvetica', 'normal');
+        
+        let maxRowHeight = 8;
+        
+        for (const item of row.items) {
+          if (item.type === 'image' && item.value && typeof item.value === 'string') {
+            try {
+              const base64Image = await convertImageToBase64(item.value);
+              const imgWidth = 20;
+              const imgHeight = 15;
+              pdf.addImage(base64Image, 'JPEG', xPos, yPos, imgWidth, imgHeight);
+              maxRowHeight = Math.max(maxRowHeight, imgHeight + 2);
+            } catch (error) {
+              pdf.text('Image Error', xPos, yPos + 4);
+            }
+          } else if (item.type === 'date' && item.value) {
+            pdf.text(formatDate(item.value as Date), xPos, yPos + 4);
+          } else if (item.type === 'number') {
+            pdf.text(String(item.value || 0), xPos, yPos + 4);
+          } else {
+            const text = String(item.value || '');
+            const lines = pdf.splitTextToSize(text, columnWidth - 5);
+            pdf.text(lines, xPos, yPos + 4);
+            maxRowHeight = Math.max(maxRowHeight, lines.length * 4 + 4);
+          }
+          xPos += columnWidth;
+        }
+        
+        yPos += maxRowHeight + 5;
+      }
+
+      yPos += 10;
+
+      // Summary
+      const summaryStartX = pageWidth - margin - 80;
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(12);
+      pdf.text('SUMMARY', summaryStartX, yPos);
+      yPos += 8;
+
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(10);
+      
+      pdf.text('Subtotal:', summaryStartX, yPos);
+      pdf.text(`${quotation.currency} ${quotation.subTotal?.toFixed(2) || '0.00'}`, summaryStartX + 40, yPos);
+      yPos += 6;
+      
+      pdf.text('Tax (18%):', summaryStartX, yPos);
+      pdf.text(`${quotation.currency} ${quotation.totalTax?.toFixed(2) || '0.00'}`, summaryStartX + 40, yPos);
+      yPos += 8;
+      
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Grand Total:', summaryStartX, yPos);
+      pdf.text(`${quotation.currency} ${quotation.grandTotal?.toFixed(2) || '0.00'}`, summaryStartX + 40, yPos);
+      yPos += 15;
+
+      // Notes and Terms
+      if (quotation.notes || quotation.termsAndConditions) {
+        yPos += 10;
+        
+        if (quotation.notes) {
+          pdf.setFont('helvetica', 'bold');
+          pdf.setFontSize(12);
+          pdf.text('NOTES', margin, yPos);
+          yPos += 8;
+          
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(10);
+          const noteLines = pdf.splitTextToSize(quotation.notes, contentWidth);
+          pdf.text(noteLines, margin, yPos);
+          yPos += noteLines.length * 5 + 10;
+        }
+        
+        if (quotation.termsAndConditions) {
+          if (yPos > pageHeight - 50) {
+            pdf.addPage();
+            yPos = margin;
+          }
+          
+          pdf.setFont('helvetica', 'bold');
+          pdf.setFontSize(12);
+          pdf.text('TERMS & CONDITIONS', margin, yPos);
+          yPos += 8;
+          
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(10);
+          const termLines = pdf.splitTextToSize(quotation.termsAndConditions, contentWidth);
+          pdf.text(termLines, margin, yPos);
+        }
       }
 
       // Save the PDF
@@ -129,13 +370,6 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
 
     } catch (error) {
       console.error('Error generating PDF:', error);
-
-      // Show the download button again in case of error
-      const downloadButton = document.querySelector('[data-download-button]') as HTMLElement;
-      if (downloadButton) {
-        downloadButton.style.display = '';
-      }
-
       alert('Error generating PDF. Please try again.');
     }
   };
@@ -309,24 +543,16 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
           <div className="space-y-4">
             {quotation.rows.map((row: QuotationRow, rowIndex: number) => (
               <div key={row.id} className="border border-gray-200 rounded-lg overflow-hidden">
-                <div className="grid grid-cols-12 gap-4 bg-gray-100 p-4 text-sm font-medium">
+                <div className="grid gap-4 bg-gray-100 p-4 text-sm font-medium" style={{ gridTemplateColumns: row.items.map(item => `${item.width || 25}%`).join(' ') }}>
                   {row.items.map((item, itemIndex) => (
-                    <div
-                      key={item.id}
-                      className={`col-span-${Math.max(1, Math.floor(item.width / 8.33))}`}
-                      style={{ gridColumn: `span ${Math.max(1, Math.floor(item.width / 8.33))}` }}
-                    >
+                    <div key={item.id}>
                       {item.label}
                     </div>
                   ))}
                 </div>
-                <div className="grid grid-cols-12 gap-4 p-4 text-sm">
+                <div className="grid gap-4 p-4 text-sm" style={{ gridTemplateColumns: row.items.map(item => `${item.width || 25}%`).join(' ') }}>
                   {row.items.map((item, itemIndex) => (
-                    <div
-                      key={`${item.id}-value`}
-                      className={`col-span-${Math.max(1, Math.floor(item.width / 8.33))} flex items-center`}
-                      style={{ gridColumn: `span ${Math.max(1, Math.floor(item.width / 8.33))}` }}
-                    >
+                    <div key={`${item.id}-value`} className="flex items-center">
                       {renderItemValue(item)}
                     </div>
                   ))}
