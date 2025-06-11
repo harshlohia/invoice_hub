@@ -27,37 +27,302 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
   const contentRef = useRef<HTMLDivElement>(null);
 
   const downloadPdf = async () => {
-    if (!contentRef.current) return;
-
     try {
-      const canvas = await html2canvas(contentRef.current, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff',
+      // Create PDF with proper A4 dimensions
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+        compress: true
       });
 
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = canvas.width;
-      const imgHeight = canvas.height;
-      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
-      const imgX = (pdfWidth - imgWidth * ratio) / 2;
-      const imgY = 30;
+      const margin = 10; // 10mm margin
+      const availableWidth = pdfWidth - (margin * 2);
+      const availableHeight = pdfHeight - (margin * 2);
 
-      pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
-      pdf.save(`quotation-${quotation.quotationNumber}.pdf`);
+      // Calculate how many quotation rows can fit per page
+      const headerHeight = 80; // Approximate height for header section in mm
+      const footerHeight = 60; // Approximate height for totals and footer in mm
+      const rowHeight = 12; // Height per quotation row in mm
+      const maxRowsPerPage = Math.floor((availableHeight - headerHeight - footerHeight) / rowHeight);
+      
+      const totalRows = quotation.rows.length;
+      const totalPages = Math.ceil(totalRows / maxRowsPerPage);
+
+      // Generate each page
+      for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
+        if (pageIndex > 0) {
+          pdf.addPage();
+        }
+
+        // Calculate rows for this page
+        const startIndex = pageIndex * maxRowsPerPage;
+        const endIndex = Math.min(startIndex + maxRowsPerPage, totalRows);
+        const pageRows = quotation.rows.slice(startIndex, endIndex);
+        
+        // Create a temporary container for this page's content
+        const pageContainer = document.createElement('div');
+        pageContainer.style.backgroundColor = '#ffffff';
+        pageContainer.style.fontFamily = 'Arial, sans-serif';
+        pageContainer.style.fontSize = '14px';
+        pageContainer.style.lineHeight = '1.5';
+        pageContainer.style.color = '#000000';
+        pageContainer.style.width = '900px';
+        pageContainer.style.padding = '0';
+        pageContainer.style.margin = '0';
+
+        // Add content to page container
+        pageContainer.innerHTML = `
+          ${pageIndex === 0 ? generateHeaderHTML(quotation) : generateContinuationHeaderHTML(quotation, pageIndex + 1)}
+          ${generateRowsTableHTML(pageRows, startIndex, quotation.currency)}
+          ${pageIndex === totalPages - 1 ? generateFooterHTML(quotation) : generateContinuationFooterHTML(pageIndex + 1, totalPages)}
+        `;
+
+        // Temporarily add to DOM for rendering
+        document.body.appendChild(pageContainer);
+
+        try {
+          // Create canvas for this page
+          const canvas = await html2canvas(pageContainer, {
+            scale: 2,
+            useCORS: true,
+            allowTaint: true,
+            logging: false,
+            backgroundColor: '#ffffff',
+            width: 900,
+            height: Math.min(pageContainer.scrollHeight, 1200) // Limit height per page
+          });
+
+          // Convert to image and add to PDF
+          const imgData = canvas.toDataURL('image/png', 1.0);
+          
+          const canvasWidth = canvas.width;
+          const canvasHeight = canvas.height;
+          
+          // Convert pixels to mm
+          const pxToMm = 25.4 / 96;
+          const imgWidthMm = canvasWidth * pxToMm / 2;
+          const imgHeightMm = canvasHeight * pxToMm / 2;
+          
+          // Scale to fit
+          const scaleX = availableWidth / imgWidthMm;
+          const scaleY = availableHeight / imgHeightMm;
+          const scale = Math.min(scaleX, scaleY, 1);
+          
+          const finalWidth = imgWidthMm * scale;
+          const finalHeight = imgHeightMm * scale;
+          
+          const x = (pdfWidth - finalWidth) / 2;
+          const y = margin;
+
+          pdf.addImage(imgData, 'PNG', x, y, finalWidth, finalHeight, undefined, 'FAST');
+          
+        } finally {
+          // Clean up temporary element
+          document.body.removeChild(pageContainer);
+        }
+      }
+      
+      // Save the PDF
+      pdf.save(`quotation-${quotation.quotationNumber || 'document'}.pdf`);
+
     } catch (error) {
-      console.error('Error generating PDF:', error);
+      console.error("Error generating PDF:", error);
     }
   };
 
   useImperativeHandle(ref, () => ({
     downloadPdf,
   }));
+
+  // Helper functions for PDF generation
+  const generateHeaderHTML = (quotation: Quotation): string => {
+    return `
+      <div style="background-color: #f8f9fa; padding: 24px; border-bottom: 2px solid #e5e7eb; margin-bottom: 24px;">
+        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 24px;">
+          <div>
+            <h1 style="font-size: 32px; font-weight: bold; color: #1f2937; margin: 0 0 8px 0;">Quotation</h1>
+            <p style="font-size: 16px; color: #6b7280; margin: 0;">#${quotation.quotationNumber}</p>
+          </div>
+          <div style="background-color: #3b82f6; color: white; padding: 8px 16px; border-radius: 6px; font-size: 14px; font-weight: 500;">
+            ${quotation.status.charAt(0).toUpperCase() + quotation.status.slice(1)}
+          </div>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 32px;">
+          <div>
+            <h3 style="font-size: 18px; font-weight: 600; margin: 0 0 16px 0; color: #374151;">From</h3>
+            <div style="font-weight: 600; font-size: 16px; margin-bottom: 8px;">${quotation.billerInfo.businessName}</div>
+            ${quotation.billerInfo.gstin ? `<p style="font-size: 14px; color: #6b7280; margin: 0 0 8px 0;">GSTIN: ${quotation.billerInfo.gstin}</p>` : ''}
+            <div style="font-size: 14px; line-height: 1.5;">
+              <p style="margin: 0;">${quotation.billerInfo.addressLine1}</p>
+              ${quotation.billerInfo.addressLine2 ? `<p style="margin: 0;">${quotation.billerInfo.addressLine2}</p>` : ''}
+              <p style="margin: 0;">${quotation.billerInfo.city}, ${quotation.billerInfo.state} ${quotation.billerInfo.postalCode}</p>
+              <p style="margin: 0;">${quotation.billerInfo.country}</p>
+              ${quotation.billerInfo.phone ? `<p style="margin: 4px 0 0 0;">Phone: ${quotation.billerInfo.phone}</p>` : ''}
+              ${quotation.billerInfo.email ? `<p style="margin: 4px 0 0 0;">Email: ${quotation.billerInfo.email}</p>` : ''}
+            </div>
+          </div>
+          
+          <div>
+            <h3 style="font-size: 18px; font-weight: 600; margin: 0 0 16px 0; color: #374151;">To</h3>
+            <div style="font-weight: 600; font-size: 16px; margin-bottom: 8px;">${quotation.client.name}</div>
+            ${quotation.client.gstin ? `<p style="font-size: 14px; color: #6b7280; margin: 0 0 8px 0;">GSTIN: ${quotation.client.gstin}</p>` : ''}
+            <div style="font-size: 14px; line-height: 1.5;">
+              <p style="margin: 0;">${quotation.client.addressLine1}</p>
+              ${quotation.client.addressLine2 ? `<p style="margin: 0;">${quotation.client.addressLine2}</p>` : ''}
+              <p style="margin: 0;">${quotation.client.city}, ${quotation.client.state} ${quotation.client.postalCode}</p>
+              <p style="margin: 0;">${quotation.client.country}</p>
+              <p style="margin: 4px 0 0 0;">Phone: ${quotation.client.phone}</p>
+              <p style="margin: 4px 0 0 0;">Email: ${quotation.client.email}</p>
+            </div>
+          </div>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; margin-top: 24px; padding-top: 24px; border-top: 1px solid #e5e7eb;">
+          <div>
+            <p style="font-size: 14px; font-weight: 500; margin: 0 0 4px 0;">Quotation Date</p>
+            <p style="font-size: 14px; color: #6b7280; margin: 0;">${formatDate(quotation.quotationDate)}</p>
+          </div>
+          <div>
+            <p style="font-size: 14px; font-weight: 500; margin: 0 0 4px 0;">Valid Until</p>
+            <p style="font-size: 14px; color: #6b7280; margin: 0;">${formatDate(quotation.validUntil)}</p>
+          </div>
+          <div>
+            <p style="font-size: 14px; font-weight: 500; margin: 0 0 4px 0;">Currency</p>
+            <p style="font-size: 14px; color: #6b7280; margin: 0;">${quotation.currency}</p>
+          </div>
+        </div>
+        
+        <div style="margin-top: 24px;">
+          <h3 style="font-size: 18px; font-weight: 600; margin: 0 0 8px 0;">${quotation.title}</h3>
+          ${quotation.description ? `<p style="font-size: 14px; color: #6b7280; margin: 0;">${quotation.description}</p>` : ''}
+        </div>
+      </div>
+    `;
+  };
+
+  const generateContinuationHeaderHTML = (quotation: Quotation, pageNumber: number): string => {
+    return `
+      <div style="background-color: #f8f9fa; padding: 16px 24px; border-bottom: 1px solid #e5e7eb; margin-bottom: 24px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <h2 style="font-size: 18px; font-weight: bold; color: #3f51b5; margin: 0;">${quotation.billerInfo.businessName}</h2>
+            <p style="font-size: 14px; color: #6b7280; margin: 0;">Quotation #${quotation.quotationNumber}</p>
+          </div>
+          <div style="text-align: right;">
+            <p style="font-size: 14px; color: #6b7280; margin: 0;">Page ${pageNumber}</p>
+            <p style="font-size: 12px; color: #9ca3af; margin: 0;">Continued...</p>
+          </div>
+        </div>
+      </div>
+    `;
+  };
+
+  const generateRowsTableHTML = (rows: QuotationRow[], startIndex: number, currency: string): string => {
+    if (!rows.length) return '';
+    
+    // Get headers from first row
+    const headers = rows[0].items.map(item => ({
+      label: item.label,
+      width: Math.max(1, Math.floor(item.width / 8.33))
+    }));
+    
+    return `
+      <div style="margin-bottom: 24px;">
+        <h3 style="font-size: 18px; font-weight: 600; margin: 0 0 16px 0;">Items</h3>
+        <table style="width: 100%; border-collapse: collapse; border: 1px solid #e5e7eb;">
+          <thead>
+            <tr style="background-color: #f9fafb;">
+              ${headers.map(header => `
+                <th style="padding: 12px; text-align: left; font-weight: 600; font-size: 14px; border-bottom: 1px solid #e5e7eb; width: ${header.width * 8.33}%;">
+                  ${header.label}
+                </th>
+              `).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(row => `
+              <tr style="border-bottom: 1px solid #f3f4f6;">
+                ${row.items.map((item, index) => `
+                  <td style="padding: 12px; font-size: 14px; vertical-align: top; width: ${Math.max(1, Math.floor(item.width / 8.33)) * 8.33}%;">
+                    ${renderItemValueForPDF(item)}
+                  </td>
+                `).join('')}
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  };
+
+  const renderItemValueForPDF = (item: QuotationItem): string => {
+    switch (item.type) {
+      case 'image':
+        if (item.value && typeof item.value === 'string') {
+          return `<img src="${item.value}" alt="${item.label}" style="width: 64px; height: 64px; object-fit: cover; border: 1px solid #e5e7eb; border-radius: 4px;" />`;
+        }
+        return '<div style="width: 64px; height: 64px; border: 1px solid #e5e7eb; border-radius: 4px; display: flex; align-items: center; justify-content: center; background-color: #f9fafb; color: #9ca3af; font-size: 12px;">No image</div>';
+      case 'date':
+        return item.value ? formatDate(item.value as Date) : '';
+      case 'number':
+        return typeof item.value === 'number' ? item.value.toFixed(2) : (item.value?.toString() || '');
+      default:
+        return item.value?.toString() || '';
+    }
+  };
+
+  const generateFooterHTML = (quotation: Quotation): string => {
+    return `
+      <div style="margin-top: 32px;">
+        <div style="background-color: #f8f9fa; padding: 24px; border-radius: 8px; margin-bottom: 24px;">
+          <h3 style="font-size: 18px; font-weight: 600; margin: 0 0 16px 0;">Summary</h3>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+            <span style="color: #6b7280;">Subtotal:</span>
+            <span>${quotation.currency} ${quotation.subTotal?.toFixed(2) || '0.00'}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 16px;">
+            <span style="color: #6b7280;">Tax (18%):</span>
+            <span>${quotation.currency} ${quotation.totalTax?.toFixed(2) || '0.00'}</span>
+          </div>
+          <div style="border-top: 1px solid #e5e7eb; padding-top: 16px;">
+            <div style="display: flex; justify-content: space-between; font-size: 20px; font-weight: bold;">
+              <span>Grand Total:</span>
+              <span>${quotation.currency} ${quotation.grandTotal?.toFixed(2) || '0.00'}</span>
+            </div>
+          </div>
+        </div>
+        
+        ${(quotation.notes || quotation.termsAndConditions) ? `
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+            ${quotation.notes ? `
+              <div>
+                <h3 style="font-size: 16px; font-weight: 600; margin: 0 0 12px 0;">Notes</h3>
+                <p style="font-size: 14px; white-space: pre-wrap; line-height: 1.5; margin: 0;">${quotation.notes}</p>
+              </div>
+            ` : ''}
+            ${quotation.termsAndConditions ? `
+              <div>
+                <h3 style="font-size: 16px; font-weight: 600; margin: 0 0 12px 0;">Terms & Conditions</h3>
+                <p style="font-size: 14px; white-space: pre-wrap; line-height: 1.5; margin: 0;">${quotation.termsAndConditions}</p>
+              </div>
+            ` : ''}
+          </div>
+        ` : ''}
+      </div>
+    `;
+  };
+
+  const generateContinuationFooterHTML = (pageNumber: number, totalPages: number): string => {
+    return `
+      <div style="padding: 16px 24px; border-top: 1px solid #e5e7eb; margin-top: 24px; text-align: center;">
+        <p style="font-size: 12px; color: #6b7280; margin: 0;">Page ${pageNumber} of ${totalPages} - Continued on next page...</p>
+      </div>
+    `;
+  };
   const formatDate = (date: Date | string): string => {
     if (typeof date === 'string') {
       return format(new Date(date), 'dd/MM/yyyy');
