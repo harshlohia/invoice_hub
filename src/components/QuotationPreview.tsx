@@ -43,9 +43,9 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
       const availableWidth = pdfWidth - (margin * 2);
       const availableHeight = pdfHeight - (margin * 2);
 
-      // Better calculation for rows per page
-      const maxRowsFirstPage = 4; // First page has less space due to header
-      const maxRowsPerPage = 10; // Subsequent pages can fit more rows
+      // Better pagination logic - more conservative estimates
+      const maxRowsFirstPage = 4; // More space for header
+      const maxRowsPerPage = 6; // Conservative estimate for subsequent pages
 
       const totalRows = quotation.rows.length;
       let totalPages = 1;
@@ -55,56 +55,61 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
         totalPages = 1 + Math.ceil(remainingRows / maxRowsPerPage);
       }
 
-      // Improved image conversion function with better error handling
+      // Pre-convert all images to base64 to avoid CORS issues
       const convertImageToBase64 = async (imageUrl: string): Promise<string> => {
         try {
-          // Handle Firebase Storage URLs with proper CORS handling
-          const corsProxyUrl = imageUrl.includes('firebasestorage.googleapis.com') 
-            ? imageUrl + '&cors=true'
-            : imageUrl;
-
-          const img = new Image();
-          img.crossOrigin = 'anonymous';
-          
-          return new Promise((resolve, reject) => {
-            img.onload = () => {
-              try {
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                if (!ctx) {
-                  resolve('');
-                  return;
-                }
-                
-                canvas.width = img.width;
-                canvas.height = img.height;
-                ctx.drawImage(img, 0, 0);
-                
-                const base64 = canvas.toDataURL('image/jpeg', 0.8);
-                resolve(base64);
-              } catch (error) {
-                console.error('Canvas conversion error:', error);
-                resolve('');
+          // Handle Firebase Storage URLs
+          if (imageUrl.includes('firebasestorage.googleapis.com')) {
+            // Create a proxy fetch to avoid CORS
+            const response = await fetch(imageUrl, {
+              mode: 'cors',
+              credentials: 'omit',
+              headers: {
+                'Accept': 'image/*',
               }
-            };
-            
-            img.onerror = () => {
-              console.error('Image load error for:', imageUrl);
-              resolve('');
-            };
-            
-            img.src = corsProxyUrl;
-            
-            // Timeout after 5 seconds
-            setTimeout(() => {
-              resolve('');
-            }, 5000);
-          });
+            });
+
+            if (!response.ok) {
+              throw new Error(`Failed to fetch image: ${response.status}`);
+            }
+
+            const blob = await response.blob();
+            return new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result as string);
+              reader.onerror = () => reject(new Error('Failed to convert to base64'));
+              reader.readAsDataURL(blob);
+            });
+          } else {
+            // For other URLs, try direct fetch
+            const response = await fetch(imageUrl);
+            const blob = await response.blob();
+            return new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result as string);
+              reader.onerror = reject;
+              reader.readAsDataURL(blob);
+            });
+          }
         } catch (error) {
           console.error('Error converting image:', error);
-          return '';
+          // Return a placeholder data URL for missing images
+          return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0xMyAxM0gyN1YyN0gxM1YxM1oiIGZpbGw9IiM5Q0EzQUYiLz4KPC9zdmc+';
         }
       };
+
+      // Convert all images first
+      const imageConversions = new Map<string, string>();
+      for (const row of quotation.rows) {
+        for (const item of row.items) {
+          if (item.type === 'image' && item.value && typeof item.value === 'string') {
+            if (!imageConversions.has(item.value)) {
+              const base64Image = await convertImageToBase64(item.value);
+              imageConversions.set(item.value, base64Image);
+            }
+          }
+        }
+      }
 
       // Generate each page
       for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
@@ -112,7 +117,7 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
           pdf.addPage();
         }
 
-        // Calculate rows for this page
+        // Calculate rows for this page with better logic
         let startIndex, endIndex, pageRows;
 
         if (pageIndex === 0) {
@@ -127,46 +132,39 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
           pageRows = quotation.rows.slice(startIndex, endIndex);
         }
 
-        // Convert all images in pageRows to base64
-        for (const row of pageRows) {
-          for (const item of row.items) {
-            if (item.type === 'image' && item.value && typeof item.value === 'string') {
-              try {
-                const base64Image = await convertImageToBase64(item.value);
-                if (base64Image) {
-                  item.value = base64Image;
-                }
-              } catch (error) {
-                console.error('Failed to convert image for PDF:', error);
-                item.value = '';
-              }
-            }
-          }
-        }
-
         // Create a temporary container for this page's content
         const pageContainer = document.createElement('div');
         pageContainer.style.cssText = `
           background-color: #ffffff;
-          font-family: 'Arial', sans-serif;
+          font-family: Arial, sans-serif;
           font-size: 11px;
           line-height: 1.3;
           color: #000000;
-          width: 210mm;
-          min-height: 297mm;
-          padding: 15mm;
+          width: 750px;
+          padding: 15px;
           margin: 0;
           box-sizing: border-box;
-          position: relative;
+          min-height: 1000px;
         `;
 
+        // Use pre-converted images
+        const rowsWithConvertedImages = pageRows.map(row => ({
+          ...row,
+          items: row.items.map(item => ({
+            ...item,
+            value: item.type === 'image' && typeof item.value === 'string' 
+              ? imageConversions.get(item.value) || item.value
+              : item.value
+          }))
+        }));
+
         // Add content to page container
-        pageContainer.innerHTML = generatePageHTML(quotation, pageRows, pageIndex, totalPages, startIndex);
+        pageContainer.innerHTML = generatePageHTML(quotation, rowsWithConvertedImages, pageIndex, totalPages, startIndex);
 
         // Temporarily add to DOM for rendering
         document.body.appendChild(pageContainer);
 
-        // Wait for content to render and images to load
+        // Wait longer for images to render
         await new Promise(resolve => setTimeout(resolve, 1000));
 
         try {
@@ -177,25 +175,21 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
             allowTaint: true,
             logging: false,
             backgroundColor: '#ffffff',
-            width: pageContainer.offsetWidth,
-            height: Math.max(pageContainer.offsetHeight, 842), // Minimum A4 height in pixels
-            foreignObjectRendering: true,
-            imageTimeout: 10000,
+            width: 750,
+            height: 1000,
+            imageTimeout: 15000,
             onclone: (clonedDoc) => {
-              // Ensure all images are properly loaded and styled in the cloned document
+              // Ensure all images are properly loaded
               const images = clonedDoc.querySelectorAll('img');
               images.forEach((img: HTMLImageElement) => {
                 img.style.display = 'block';
                 img.style.maxWidth = '100%';
                 img.style.height = 'auto';
                 img.style.objectFit = 'cover';
-              });
-              
-              // Ensure text doesn't get cut off
-              const textElements = clonedDoc.querySelectorAll('p, div, span');
-              textElements.forEach((el: HTMLElement) => {
-                el.style.wordWrap = 'break-word';
-                el.style.overflowWrap = 'break-word';
+                // Force image to load if it hasn't
+                if (!img.complete) {
+                  img.src = img.src;
+                }
               });
             }
           });
@@ -245,7 +239,7 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
     const isLastPage = pageIndex === totalPages - 1;
 
     return `
-      <div style="min-height: 280mm; position: relative;">
+      <div style="min-height: 950px; position: relative;">
         ${isFirstPage ? generateHeaderHTML(quotation) : generateContinuationHeaderHTML(quotation, pageIndex + 1)}
         ${pageRows.length > 0 ? generateRowsTableHTML(pageRows, startIndex, quotation.currency) : ''}
         ${isLastPage ? generateFooterHTML(quotation) : generateContinuationFooterHTML(pageIndex + 1, totalPages)}
@@ -358,14 +352,14 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
     if (!rows.length) return '';
 
     return `
-      <div style="margin-bottom: 5mm;">
-        <div style="border: 1px solid #e5e7eb; border-radius: 2mm; overflow: hidden;">
-          <h3 style="font-size: 14px; font-weight: 600; margin: 0; padding: 3mm; background: #f9fafb; border-bottom: 1px solid #e5e7eb;">Items</h3>
-          <table style="width: 100%; border-collapse: collapse; font-size: 9px;">
+      <div style="margin-bottom: 16px;">
+        <div style="border: 1px solid #e5e7eb; border-radius: 6px; overflow: hidden;">
+          <h3 style="font-size: 14px; font-weight: 600; margin: 0; padding: 10px; background: #f9fafb; border-bottom: 1px solid #e5e7eb;">Items (${startIndex + 1}-${startIndex + rows.length})</h3>
+          <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
             <thead>
               <tr style="background: #f9fafb;">
                 ${rows[0]?.items.map(item => `
-                  <th style="padding: 2mm; border-bottom: 1px solid #e5e7eb; text-align: left; font-weight: 500; width: ${item.width}%; word-wrap: break-word;">
+                  <th style="padding: 6px; border-bottom: 1px solid #e5e7eb; text-align: left; font-weight: 500; width: ${item.width || 15}%; font-size: 10px;">
                     ${item.label}
                   </th>
                 `).join('')}
@@ -373,18 +367,18 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
             </thead>
             <tbody>
               ${rows.map((row, index) => `
-                <tr style="${index % 2 === 0 ? 'background: #ffffff' : 'background: #f9fafb'};">
+                <tr style="${index % 2 === 0 ? 'background: #ffffff' : 'background: #f9fafb'}; page-break-inside: avoid;">
                   ${row.items.map(item => `
-                    <td style="padding: 2mm; border-bottom: ${index < rows.length - 1 ? '1px solid #f3f4f6' : 'none'}; vertical-align: top; width: ${item.width}%; word-wrap: break-word; overflow-wrap: break-word;">
+                    <td style="padding: 6px; border-bottom: ${index < rows.length - 1 ? '1px solid #f3f4f6' : 'none'}; vertical-align: top; width: ${item.width || 15}%; max-width: 120px; word-wrap: break-word;">
                       ${item.type === 'image' && item.value ? 
-                        `<div style="width: 12mm; height: 12mm; border: 1px solid #e5e7eb; border-radius: 1mm; overflow: hidden; background: #f9fafb; display: inline-block;">
-                          <img src="${item.value}" alt="${item.label}" style="width: 100%; height: 100%; object-fit: cover; display: block;" crossorigin="anonymous" loading="eager" />
+                        `<div style="width: 35px; height: 35px; border: 1px solid #e5e7eb; border-radius: 3px; overflow: hidden; background: #f9fafb; display: inline-block; margin: 0 auto;">
+                          <img src="${item.value}" alt="${item.label}" style="width: 100%; height: 100%; object-fit: cover; display: block;" onload="this.style.opacity=1" style="opacity: 0; transition: opacity 0.3s;" />
                         </div>` :
                         item.type === 'date' && item.value ? 
                           formatDate(item.value as Date) :
                           item.type === 'number' && typeof item.value === 'number' ?
                             item.value.toFixed(2) :
-                            `<div style="word-wrap: break-word; overflow-wrap: break-word; max-width: 100%;">${(item.value?.toString() || '')}</div>`
+                            `<div style="max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${item.value?.toString() || ''}">${(item.value?.toString() || '').substring(0, 30)}${(item.value?.toString() || '').length > 30 ? '...' : ''}</div>`
                       }
                     </td>
                   `).join('')}
@@ -612,7 +606,7 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
                       className={`col-span-${Math.max(1, Math.floor(item.width / 8.33))}`}
                       style={{ gridColumn: `span ${Math.max(1, Math.floor(item.width / 8.33))}` }}
                     >
-                      {item.label}
+{item.label}
                     </div>
                   ))}
                 </div>
