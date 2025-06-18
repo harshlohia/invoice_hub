@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { doc, getDoc, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { Invoice } from '@/lib/types';
+import type { Invoice, LineItem } from '@/lib/types';
 import { InvoiceForm } from "@/components/forms/InvoiceForm";
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardHeader, CardContent } from '@/components/ui/card'; // Added Card, CardHeader, CardContent
@@ -43,11 +43,13 @@ export default function EditInvoicePage() {
               billerInfo: data.billerInfo,
               client: data.client,
               shippingAddress: data.shippingAddress,
-              lineItems: data.lineItems.map(item => ({
+              lineItems: data.lineItems.map((item: any) => ({
                 ...item,
                 // Ensure line items have IDs for form's field array if they might be missing
                 // from older data, though our current types.ts includes it.
-                id: item.id || crypto.randomUUID(), 
+                id: item.id || crypto.randomUUID(),
+                // Convert Firestore Timestamp to Date for the date field
+                date: item.date ? (item.date as Timestamp).toDate() : new Date(),
               })),
               notes: data.notes,
               termsAndConditions: data.termsAndConditions,
