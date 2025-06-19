@@ -5,9 +5,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import Link from 'next/link';
-import { PlusCircle, Search, Eye, Edit, Download, Trash2, Filter, Loader2, AlertTriangle } from "lucide-react";
+import { PlusCircle, Search, Loader2, AlertTriangle } from "lucide-react";
 import { db, getFirebaseAuthInstance } from '@/lib/firebase';
 import { collection, query, where, getDocs, orderBy, Timestamp } from 'firebase/firestore';
 import type { User as FirebaseAuthUser, Auth } from 'firebase/auth';
@@ -16,14 +15,7 @@ import type { Quotation } from '@/lib/types';
 import { format } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-
-const statusColors: Record<Quotation['status'], string> = {
-  draft: 'bg-gray-100 text-gray-800',
-  sent: 'bg-blue-100 text-blue-800',
-  accepted: 'bg-green-100 text-green-800',
-  declined: 'bg-red-100 text-red-800',
-  expired: 'bg-orange-100 text-orange-800',
-};
+import { QuotationCard } from '@/components/QuotationCard';
 
 export default function QuotationsPage() {
   const [quotations, setQuotations] = useState<Quotation[]>([]);
@@ -100,6 +92,14 @@ export default function QuotationsPage() {
     
     setFilteredQuotations(filtered);
   }, [quotations, searchTerm, statusFilter]);
+
+  const handleStatusUpdate = (quotationId: string, newStatus: Quotation['status']) => {
+    setQuotations(prevQuotations => 
+      prevQuotations.map(quotation => 
+        quotation.id === quotationId ? { ...quotation, status: newStatus } : quotation
+      )
+    );
+  };
 
   if (!currentUser && !loading) {
     return (
@@ -212,59 +212,11 @@ export default function QuotationsPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filteredQuotations.map((quotation) => (
-            <Card key={quotation.id} className="hover:shadow-lg transition-shadow duration-200">
-              <CardHeader>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <CardTitle className="text-lg font-semibold">
-                      {quotation.quotationNumber}
-                    </CardTitle>
-                    <CardDescription className="text-sm text-muted-foreground">
-                      {quotation.client.name}
-                    </CardDescription>
-                  </div>
-                  <Badge className={statusColors[quotation.status]}>
-                    {quotation.status.charAt(0).toUpperCase() + quotation.status.slice(1)}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <h4 className="font-medium">{quotation.title}</h4>
-                  {quotation.description && (
-                    <p className="text-sm text-muted-foreground line-clamp-2">
-                      {quotation.description}
-                    </p>
-                  )}
-                </div>
-                <div className="flex justify-between text-sm text-muted-foreground">
-                  <span>Date: {format(quotation.quotationDate, 'MMM dd, yyyy')}</span>
-                  <span>Valid: {format(quotation.validUntil, 'MMM dd, yyyy')}</span>
-                </div>
-                <div className="text-right">
-                  <p className="text-lg font-bold">
-                    Rs. {quotation.grandTotal.toLocaleString('en-IN', {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2
-                    })}
-                  </p>
-                </div>
-                <div className="flex gap-2 pt-2">
-                  <Button variant="outline" size="sm" asChild className="flex-1">
-                    <Link href={`/dashboard/quotations/${quotation.id}`}>
-                      <Eye className="mr-1 h-3 w-3" />
-                      View
-                    </Link>
-                  </Button>
-                  <Button variant="outline" size="sm" asChild className="flex-1">
-                    <Link href={`/dashboard/quotations/${quotation.id}/edit`}>
-                      <Edit className="mr-1 h-3 w-3" />
-                      Edit
-                    </Link>
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+            <QuotationCard 
+              key={quotation.id} 
+              quotation={quotation} 
+              onStatusUpdate={handleStatusUpdate}
+            />
           ))}
         </div>
       )}
