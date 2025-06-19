@@ -4,13 +4,14 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import Link from 'next/link';
-import { IndianRupee, FileText, Users, AlertTriangle, CheckCircle2, TrendingUp, PieChart as PieChartIcon, BarChartHorizontalBig, ExternalLink, Loader2 } from "lucide-react";
+import { IndianRupee, FileText, Users, AlertTriangle, CheckCircle2, TrendingUp, PieChart as PieChartIcon, BarChartHorizontalBig, ExternalLink, Loader2, Quote, FileCheck } from "lucide-react";
 import { db, getFirebaseAuthInstance } from '@/lib/firebase';
 import { collection, query, where, getDocs, Timestamp, orderBy, limit } from 'firebase/firestore';
 import type { User as FirebaseAuthUser, Auth } from 'firebase/auth';
 import { onAuthStateChanged } from 'firebase/auth';
-import type { Invoice, Client } from '@/lib/types';
+import type { Invoice, Client, Quotation } from '@/lib/types';
 import { format, startOfMonth, endOfMonth, subMonths, getMonth, getYear } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -45,6 +46,16 @@ interface DashboardStats {
   averageInvoiceValue: number | null;
 }
 
+interface QuotationStats {
+  totalQuotationValue: number;
+  quotationsCreatedCount: number;
+  acceptedQuotationsCount: number;
+  pendingQuotationsCount: number;
+  expiredQuotationsCount: number;
+  conversionRate: number | null;
+  averageQuotationValue: number | null;
+}
+
 const initialDashboardStats: DashboardStats = {
   totalRevenue: 0,
   invoicesCreatedCount: 0,
@@ -55,9 +66,24 @@ const initialDashboardStats: DashboardStats = {
   averageInvoiceValue: null,
 };
 
+const initialQuotationStats: QuotationStats = {
+  totalQuotationValue: 0,
+  quotationsCreatedCount: 0,
+  acceptedQuotationsCount: 0,
+  pendingQuotationsCount: 0,
+  expiredQuotationsCount: 0,
+  conversionRate: null,
+  averageQuotationValue: null,
+};
+
 interface MonthlyRevenueChartData {
   month: string;
   revenue: number;
+}
+
+interface MonthlyQuotationChartData {
+  month: string;
+  quotationValue: number;
 }
 
 interface InvoiceStatusChartData {
@@ -66,9 +92,15 @@ interface InvoiceStatusChartData {
   fill: string;
 }
 
+interface QuotationStatusChartData {
+  name: string;
+  value: number;
+  fill: string;
+}
+
 interface RecentActivityItem {
   id: string;
-  type: 'invoice' | 'client';
+  type: 'invoice' | 'client' | 'quotation';
   action: string;
   time: string;
   timestamp: Date;
@@ -78,6 +110,7 @@ interface RecentActivityItem {
 }
 
 type DateFilterOption = "thisMonth" | "lastMonth" | "allTime";
+type AnalyticsType = "invoices" | "quotations";
 
 const PIE_CHART_COLORS: Record<Invoice['status'], string> = {
   paid: "hsl(var(--chart-2))", 
@@ -87,18 +120,30 @@ const PIE_CHART_COLORS: Record<Invoice['status'], string> = {
   cancelled: "hsl(var(--chart-5))", 
 };
 
+const QUOTATION_PIE_CHART_COLORS: Record<Quotation['status'], string> = {
+  accepted: "hsl(var(--chart-2))",
+  sent: "hsl(var(--chart-1))",
+  declined: "hsl(var(--destructive))",
+  draft: "hsl(var(--muted-foreground))",
+  expired: "hsl(var(--chart-5))",
+};
+
 export default function DashboardPage() {
   const [currentUser, setCurrentUser] = useState<FirebaseAuthUser | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [stats, setStats] = useState<DashboardStats>(initialDashboardStats);
+  const [quotationStats, setQuotationStats] = useState<QuotationStats>(initialQuotationStats);
   const [recentActivities, setRecentActivities] = useState<RecentActivityItem[]>([]);
   const [monthlyRevenueData, setMonthlyRevenueData] = useState<MonthlyRevenueChartData[]>([]);
+  const [monthlyQuotationData, setMonthlyQuotationData] = useState<MonthlyQuotationChartData[]>([]);
   const [invoiceStatusData, setInvoiceStatusData] = useState<InvoiceStatusChartData[]>([]);
+  const [quotationStatusData, setQuotationStatusData] = useState<QuotationStatusChartData[]>([]);
   const [loadingStats, setLoadingStats] = useState(true);
   const [loadingActivities, setLoadingActivities] = useState(true);
   const [loadingCharts, setLoadingCharts] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dateFilter, setDateFilter] = useState<DateFilterOption>("thisMonth");
+  const [analyticsType, setAnalyticsType] = useState<AnalyticsType>("invoices");
 
   const calculateDateRange = useCallback((filter: DateFilterOption): { startDateTs: Timestamp | null, endDateTs: Timestamp | null } => {
     const now = new Date();
@@ -189,6 +234,69 @@ export default function DashboardPage() {
     }
   }, [calculateDateRange]);
 
+  const fetchQuotationData = useCallback(async (userId: string, currentFilter: DateFilterOption) => {
+    setLoadingStats(true);
+    setError(null);
+    try {
+      const { startDateTs, endDateTs } = calculateDateRange(currentFilter);
+
+      const quotationsRef = collection(db, "quotations");
+      let quotationsQuery = query(quotationsRef, where("userId", "==", userId));
+      if (startDateTs) quotationsQuery = query(quotationsQuery, where("quotationDate", ">=", startDateTs));
+      if (endDateTs) quotationsQuery = query(quotationsQuery, where("quotationDate", "<=", endDateTs));
+
+      const quotationDocsSnap = await getDocs(quotationsQuery);
+      const fetchedQuotations = quotationDocsSnap.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          quotationDate: data.quotationDate instanceof Timestamp ? data.quotationDate.toDate() : new Date(data.quotationDate),
+          validUntil: data.validUntil instanceof Timestamp ? data.validUntil.toDate() : new Date(data.validUntil),
+        } as Quotation;
+      });
+
+      let totalQuotationValue = 0;
+      let quotationsCreatedCount = fetchedQuotations.length;
+      let acceptedQuotationsCount = 0;
+      let pendingQuotationsCount = 0;
+      let expiredQuotationsCount = 0;
+
+      fetchedQuotations.forEach(quot => {
+        totalQuotationValue += quot.grandTotal;
+        if (quot.status === 'accepted') {
+          acceptedQuotationsCount++;
+        }
+        if (quot.status === 'sent') {
+          pendingQuotationsCount++;
+        }
+        if (quot.status === 'expired' || (quot.status !== 'accepted' && quot.status !== 'declined' && quot.validUntil < new Date())) {
+          expiredQuotationsCount++;
+        }
+      });
+      
+      const averageQuotationValue = quotationsCreatedCount > 0 ? totalQuotationValue / quotationsCreatedCount : 0;
+      const conversionRate = quotationsCreatedCount > 0 ? (acceptedQuotationsCount / quotationsCreatedCount) * 100 : 0;
+
+      setQuotationStats({
+        totalQuotationValue,
+        quotationsCreatedCount,
+        acceptedQuotationsCount,
+        pendingQuotationsCount,
+        expiredQuotationsCount,
+        conversionRate,
+        averageQuotationValue,
+      });
+
+    } catch (err) {
+      console.error("Error fetching quotation stats:", err);
+      setError("Failed to load quotation statistics.");
+      setQuotationStats(initialQuotationStats);
+    } finally {
+      setLoadingStats(false);
+    }
+  }, [calculateDateRange]);
+
   const fetchChartAndAdvancedAnalytics = useCallback(async (userId: string) => {
     setLoadingCharts(true);
     try {
@@ -219,7 +327,7 @@ export default function DashboardPage() {
 
       chartFetchedInvoices.forEach(inv => {
         if (inv.status === 'paid') {
-          const monthKey = format(inv.invoiceDate, "MMM yyyy");
+          const monthKey = format(inv.invoiceDate instanceof Date ? inv.invoiceDate : inv.invoiceDate.toDate(), "MMM yyyy");
           if (monthlyRevenue[monthKey] !== undefined) {
             monthlyRevenue[monthKey] += inv.grandTotal;
           }
@@ -275,11 +383,79 @@ export default function DashboardPage() {
     }
   }, []);
 
+  const fetchQuotationChartAnalytics = useCallback(async (userId: string) => {
+    setLoadingCharts(true);
+    try {
+      const sevenMonthsAgo = startOfMonth(subMonths(new Date(), 6)); 
+      const quotationsRef = collection(db, "quotations");
+      const chartQuotationsQuery = query(
+        quotationsRef,
+        where("userId", "==", userId),
+        where("quotationDate", ">=", Timestamp.fromDate(sevenMonthsAgo)),
+        orderBy("quotationDate", "asc")
+      );
+      const chartQuotationDocsSnap = await getDocs(chartQuotationsQuery);
+      const chartFetchedQuotations = chartQuotationDocsSnap.docs.map(docSnap => {
+        const data = docSnap.data();
+        return {
+          ...data,
+          id: docSnap.id,
+          quotationDate: data.quotationDate instanceof Timestamp ? data.quotationDate.toDate() : new Date(data.quotationDate),
+        } as Quotation;
+      });
+
+      const monthlyQuotationValue: { [key: string]: number } = {};
+      for (let i = 0; i < 7; i++) { 
+        const monthDate = startOfMonth(subMonths(new Date(), i));
+        const monthKey = format(monthDate, "MMM yyyy");
+        monthlyQuotationValue[monthKey] = 0;
+      }
+
+      chartFetchedQuotations.forEach(quot => {
+        const monthKey = format(quot.quotationDate instanceof Date ? quot.quotationDate : quot.quotationDate.toDate(), "MMM yyyy");
+        if (monthlyQuotationValue[monthKey] !== undefined) {
+          monthlyQuotationValue[monthKey] += quot.grandTotal;
+        }
+      });
+      
+      const processedMonthlyQuotationData = Object.entries(monthlyQuotationValue)
+        .map(([month, quotationValue]) => ({ month, quotationValue }))
+        .sort((a,b) => new Date(a.month).getTime() - new Date(b.month).getTime()) 
+        .slice(-6); 
+      setMonthlyQuotationData(processedMonthlyQuotationData);
+
+      const allQuotationsQuery = query(quotationsRef, where("userId", "==", userId));
+      const allQuotationDocsSnap = await getDocs(allQuotationsQuery);
+      const allFetchedQuotations = allQuotationDocsSnap.docs.map(docSnap => docSnap.data() as Quotation);
+
+      const statusCounts: Record<Quotation['status'], number> = {
+        draft: 0, sent: 0, accepted: 0, declined: 0, expired: 0,
+      };
+      allFetchedQuotations.forEach(quot => {
+        statusCounts[quot.status]++;
+      });
+      const processedQuotationStatusData = (Object.keys(statusCounts) as Array<Quotation['status']>)
+        .map(status => ({
+          name: status.charAt(0).toUpperCase() + status.slice(1),
+          value: statusCounts[status],
+          fill: QUOTATION_PIE_CHART_COLORS[status],
+        }))
+        .filter(item => item.value > 0); 
+      setQuotationStatusData(processedQuotationStatusData);
+
+    } catch (err) {
+      console.error("Error fetching quotation chart analytics:", err);
+      setError(prev => prev ? prev + " Failed to load quotation chart data." : "Failed to load quotation chart data.");
+    } finally {
+      setLoadingCharts(false);
+    }
+  }, []);
+
   const fetchRecentActivities = useCallback(async (userId: string) => {
     setLoadingActivities(true);
     try {
       const activities: RecentActivityItem[] = [];
-      const recentInvoicesQuery = query(collection(db, "invoices"), where("userId", "==", userId), orderBy("createdAt", "desc"), limit(3));
+      const recentInvoicesQuery = query(collection(db, "invoices"), where("userId", "==", userId), orderBy("createdAt", "desc"), limit(2));
       const recentInvoicesSnap = await getDocs(recentInvoicesQuery);
       recentInvoicesSnap.forEach(doc => {
         const invoice = { id: doc.id, ...doc.data() } as Invoice;
@@ -290,7 +466,18 @@ export default function DashboardPage() {
         });
       });
 
-      const recentClientsQuery = query(collection(db, "clients"), where("userId", "==", userId), orderBy("createdAt", "desc"), limit(2));
+      const recentQuotationsQuery = query(collection(db, "quotations"), where("userId", "==", userId), orderBy("createdAt", "desc"), limit(2));
+      const recentQuotationsSnap = await getDocs(recentQuotationsQuery);
+      recentQuotationsSnap.forEach(doc => {
+        const quotation = { id: doc.id, ...doc.data() } as Quotation;
+        const createdAt = quotation.createdAt instanceof Timestamp ? quotation.createdAt.toDate() : new Date(quotation.createdAt || Date.now());
+        activities.push({
+          id: quotation.id!, type: 'quotation', action: `Quotation #${quotation.quotationNumber} to ${quotation.client.name}`,
+          time: format(createdAt, "PPp"), timestamp: createdAt, icon: Quote, link: `/dashboard/quotations/${quotation.id}`
+        });
+      });
+
+      const recentClientsQuery = query(collection(db, "clients"), where("userId", "==", userId), orderBy("createdAt", "desc"), limit(1));
       const recentClientsSnap = await getDocs(recentClientsQuery);
       recentClientsSnap.forEach(doc => {
         const client = { id: doc.id, ...doc.data() } as Client & { createdAt?: Timestamp | Date };
@@ -325,24 +512,34 @@ export default function DashboardPage() {
       setLoadingActivities(true); 
       setLoadingCharts(true);
       setError(null);
-      setStats(initialDashboardStats); // Reset stats before fetching
+      setStats(initialDashboardStats);
+      setQuotationStats(initialQuotationStats);
 
-      fetchDashboardData(currentUser.uid, dateFilter);
+      if (analyticsType === 'invoices') {
+        fetchDashboardData(currentUser.uid, dateFilter);
+        fetchChartAndAdvancedAnalytics(currentUser.uid);
+      } else {
+        fetchQuotationData(currentUser.uid, dateFilter);
+        fetchQuotationChartAnalytics(currentUser.uid);
+      }
       fetchRecentActivities(currentUser.uid);
-      fetchChartAndAdvancedAnalytics(currentUser.uid);
     } else if (!loadingAuth) {
       setStats(initialDashboardStats); 
+      setQuotationStats(initialQuotationStats);
       setRecentActivities([]); 
       setMonthlyRevenueData([]); 
+      setMonthlyQuotationData([]);
       setInvoiceStatusData([]);
+      setQuotationStatusData([]);
       setLoadingStats(false); 
       setLoadingActivities(false); 
       setLoadingCharts(false);
     }
-  }, [currentUser, dateFilter, fetchDashboardData, fetchRecentActivities, fetchChartAndAdvancedAnalytics, loadingAuth]);
+  }, [currentUser, dateFilter, analyticsType, fetchDashboardData, fetchQuotationData, fetchRecentActivities, fetchChartAndAdvancedAnalytics, fetchQuotationChartAnalytics, loadingAuth]);
 
   const dateFilterLabel = dateFilter === "thisMonth" ? "MTD" : dateFilter === "lastMonth" ? "Last Month" : "All Time";
-  const statCards = [
+  
+  const invoiceStatCards = [
     { title: `Total Revenue (${dateFilterLabel})`, value: `Rs. ${stats.totalRevenue.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`, icon: IndianRupee, color: "text-green-500", description: "" },
     { title: `Invoices Created (${dateFilterLabel})`, value: stats.invoicesCreatedCount.toString(), icon: FileText, color: "text-blue-500", description: "" },
     { title: "Total Active Clients", value: stats.activeClientsCount.toString(), icon: Users, color: "text-purple-500", description: "" },
@@ -351,15 +548,38 @@ export default function DashboardPage() {
     { title: `Avg. Invoice Value (${dateFilterLabel})`, value: `Rs. ${stats.averageInvoiceValue !== null ? stats.averageInvoiceValue.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '0.00'}`, icon: BarChartHorizontalBig, color: "text-indigo-500", description: "Based on paid invoices" },
   ];
 
+  const quotationStatCards = [
+    { title: `Total Quotation Value (${dateFilterLabel})`, value: `Rs. ${quotationStats.totalQuotationValue.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`, icon: IndianRupee, color: "text-green-500", description: "Total value of all quotations" },
+    { title: `Quotations Created (${dateFilterLabel})`, value: quotationStats.quotationsCreatedCount.toString(), icon: Quote, color: "text-blue-500", description: "New quotations generated" },
+    { title: "Accepted Quotations", value: quotationStats.acceptedQuotationsCount.toString(), icon: CheckCircle2, color: "text-green-500", description: "Successfully converted" },
+    { title: "Pending Quotations", value: quotationStats.pendingQuotationsCount.toString(), icon: FileCheck, color: "text-yellow-500", description: "Awaiting response" },
+    { title: "Conversion Rate", value: quotationStats.conversionRate !== null ? `${quotationStats.conversionRate.toFixed(1)}%` : "N/A", icon: TrendingUp, color: quotationStats.conversionRate !== null && quotationStats.conversionRate >= 50 ? "text-green-500" : "text-orange-500", description: "Acceptance rate" },
+    { title: `Avg. Quotation Value (${dateFilterLabel})`, value: `Rs. ${quotationStats.averageQuotationValue !== null ? quotationStats.averageQuotationValue.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '0.00'}`, icon: BarChartHorizontalBig, color: "text-indigo-500", description: "All quotations" },
+  ];
+
+  const statCards = analyticsType === 'invoices' ? invoiceStatCards : quotationStatCards;
+
   const revenueChartConfig = {
     revenue: { label: "Revenue (Rs.)", color: "hsl(var(--chart-1))" },
   };
-  const statusChartConfig = invoiceStatusData.reduce((acc, item) => {
-    acc[item.name.toLowerCase()] = { label: item.name, color: item.fill };
-    return acc;
-  }, {} as any);
+  
+  const quotationChartConfig = {
+    quotationValue: { label: "Quotation Value (Rs.)", color: "hsl(var(--chart-3))" },
+  };
+  
+  const statusChartConfig = analyticsType === 'invoices' 
+    ? invoiceStatusData.reduce((acc, item) => {
+        acc[item.name.toLowerCase()] = { label: item.name, color: item.fill };
+        return acc;
+      }, {} as any)
+    : quotationStatusData.reduce((acc, item) => {
+        acc[item.name.toLowerCase()] = { label: item.name, color: item.fill };
+        return acc;
+      }, {} as any);
 
-  const hasMeaningfulStats = stats.invoicesCreatedCount > 0 || stats.totalRevenue > 0 || stats.activeClientsCount > 0 || stats.momRevenueGrowth !== null || stats.averageInvoiceValue !== null;
+  const hasMeaningfulStats = analyticsType === 'invoices'
+    ? stats.invoicesCreatedCount > 0 || stats.totalRevenue > 0 || stats.activeClientsCount > 0 || stats.momRevenueGrowth !== null || stats.averageInvoiceValue !== null
+    : quotationStats.quotationsCreatedCount > 0 || quotationStats.totalQuotationValue > 0 || quotationStats.conversionRate !== null || quotationStats.averageQuotationValue !== null;
 
   if (loadingAuth) { 
     return (
@@ -388,9 +608,32 @@ export default function DashboardPage() {
           <h1 className="text-3xl font-headline font-bold tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground">Welcome back! Here's an overview of your business.</p>
         </div>
-        <div className="flex items-center gap-4 w-full md:w-auto">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full md:w-auto">
+          <div className="flex items-center gap-2 p-1 bg-muted rounded-lg">
+            <Button
+              variant={analyticsType === 'invoices' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setAnalyticsType('invoices')}
+              className={`flex items-center gap-2 transition-all duration-200 ${analyticsType === 'invoices' ? 'bg-background shadow-sm' : 'hover:bg-background/50'}`}
+              disabled={loadingStats || !currentUser}
+            >
+              <FileText className="h-4 w-4" />
+              Invoices
+            </Button>
+            <Button
+              variant={analyticsType === 'quotations' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setAnalyticsType('quotations')}
+              className={`flex items-center gap-2 transition-all duration-200 ${analyticsType === 'quotations' ? 'bg-background shadow-sm' : 'hover:bg-background/50'}`}
+              disabled={loadingStats || !currentUser}
+            >
+              <Quote className="h-4 w-4" />
+              Quotations
+            </Button>
+          </div>
+          <div className="flex items-center gap-4 w-full sm:w-auto">
             <Select value={dateFilter} onValueChange={(value: DateFilterOption) => setDateFilter(value)} disabled={loadingStats || !currentUser}>
-                <SelectTrigger className="w-full md:w-[180px]">
+                <SelectTrigger className="w-full sm:w-[180px]">
                     <SelectValue placeholder="Filter by date" />
                 </SelectTrigger>
                 <SelectContent>
@@ -399,9 +642,12 @@ export default function DashboardPage() {
                     <SelectItem value="allTime">All Time</SelectItem>
                 </SelectContent>
             </Select>
-            <Button asChild className="bg-accent hover:bg-accent/90 text-accent-foreground w-full md:w-auto" disabled={!currentUser}>
-                <Link href="/dashboard/invoices/new">Create Invoice</Link>
+            <Button asChild className="bg-accent hover:bg-accent/90 text-accent-foreground w-full sm:w-auto" disabled={!currentUser}>
+                <Link href={analyticsType === 'invoices' ? "/dashboard/invoices/new" : "/dashboard/quotations/new"}>
+                  {analyticsType === 'invoices' ? 'Create Invoice' : 'Create Quotation'}
+                </Link>
             </Button>
+          </div>
         </div>
       </div>
 
@@ -440,16 +686,23 @@ export default function DashboardPage() {
       <div className="grid gap-6 lg:grid-cols-5">
         <Card className="lg:col-span-3 hover:shadow-lg transition-shadow duration-200">
           <CardHeader>
-            <CardTitle className="font-headline">Monthly Revenue (Last 6 Months)</CardTitle>
-            <CardDescription>Track your paid invoice revenue over time.</CardDescription>
+            <CardTitle className="font-headline">
+              {analyticsType === 'invoices' ? 'Monthly Revenue (Last 6 Months)' : 'Monthly Quotation Value (Last 6 Months)'}
+            </CardTitle>
+            <CardDescription>
+              {analyticsType === 'invoices' 
+                ? 'Track your paid invoice revenue over time.'
+                : 'Track your quotation values over time.'
+              }
+            </CardDescription>
           </CardHeader>
           <CardContent>
             {loadingCharts ? (
               <div className="h-[300px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /> <p className="ml-2">Loading chart...</p></div>
-            ) : monthlyRevenueData.length > 0 ? (
-              <ChartContainer config={revenueChartConfig} className="h-[300px] w-full">
+            ) : (analyticsType === 'invoices' ? monthlyRevenueData.length > 0 : monthlyQuotationData.length > 0) ? (
+              <ChartContainer config={analyticsType === 'invoices' ? revenueChartConfig : quotationChartConfig} className="h-[300px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={monthlyRevenueData} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
+                  <LineChart data={analyticsType === 'invoices' ? monthlyRevenueData : monthlyQuotationData} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis dataKey="month" tickLine={false} axisLine={false} stroke="hsl(var(--muted-foreground))" fontSize={12} />
                     <YAxis 
@@ -463,31 +716,59 @@ export default function DashboardPage() {
                       content={<ChartTooltipContent indicator="dot" hideLabel />}
                       cursor={{ stroke: "hsl(var(--primary))", strokeWidth: 1, strokeDasharray: "3 3" }}
                     />
-                    <Line type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 4, fill: "hsl(var(--primary))", strokeWidth:0 }} activeDot={{r:6}} />
+                    <Line 
+                      type="monotone" 
+                      dataKey={analyticsType === 'invoices' ? 'revenue' : 'quotationValue'} 
+                      stroke={analyticsType === 'invoices' ? 'hsl(var(--primary))' : 'hsl(var(--chart-3))'} 
+                      strokeWidth={2} 
+                      dot={{ r: 4, fill: analyticsType === 'invoices' ? 'hsl(var(--primary))' : 'hsl(var(--chart-3))', strokeWidth:0 }} 
+                      activeDot={{r:6}} 
+                    />
                   </LineChart>
                 </ResponsiveContainer>
               </ChartContainer>
             ) : (
-              <p className="text-muted-foreground h-[300px] flex items-center justify-center">No revenue data to display for the period.</p>
+              <p className="text-muted-foreground h-[300px] flex items-center justify-center">
+                {analyticsType === 'invoices' 
+                  ? 'No revenue data to display for the period.'
+                  : 'No quotation data to display for the period.'
+                }
+              </p>
             )}
           </CardContent>
         </Card>
 
         <Card className="lg:col-span-2 hover:shadow-lg transition-shadow duration-200">
           <CardHeader>
-            <CardTitle className="font-headline">Invoice Status Overview</CardTitle>
-            <CardDescription>Current breakdown of all your invoices.</CardDescription>
+            <CardTitle className="font-headline">
+              {analyticsType === 'invoices' ? 'Invoice Status Overview' : 'Quotation Status Overview'}
+            </CardTitle>
+            <CardDescription>
+              {analyticsType === 'invoices' 
+                ? 'Current breakdown of all your invoices.'
+                : 'Current breakdown of all your quotations.'
+              }
+            </CardDescription>
           </CardHeader>
           <CardContent className="flex justify-center items-center">
             {loadingCharts ? (
                <div className="h-[300px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /> <p className="ml-2">Loading chart...</p></div>
-            ) : invoiceStatusData.length > 0 ? (
+            ) : (analyticsType === 'invoices' ? invoiceStatusData.length > 0 : quotationStatusData.length > 0) ? (
               <ChartContainer config={statusChartConfig} className="h-[300px] w-full max-w-xs aspect-square">
                  <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <RechartsTooltip content={<ChartTooltipContent nameKey="name" hideIndicator />} />
-                      <Pie data={invoiceStatusData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} labelLine={false} label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}>
-                        {invoiceStatusData.map((entry, index) => (
+                      <Pie 
+                        data={analyticsType === 'invoices' ? invoiceStatusData : quotationStatusData} 
+                        dataKey="value" 
+                        nameKey="name" 
+                        cx="50%" 
+                        cy="50%" 
+                        outerRadius={100} 
+                        labelLine={false} 
+                        label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                      >
+                        {(analyticsType === 'invoices' ? invoiceStatusData : quotationStatusData).map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.fill} />
                         ))}
                       </Pie>
@@ -496,7 +777,12 @@ export default function DashboardPage() {
                  </ResponsiveContainer>
               </ChartContainer>
             ) : (
-              <p className="text-muted-foreground h-[300px] flex items-center justify-center">No invoice status data available.</p>
+              <p className="text-muted-foreground h-[300px] flex items-center justify-center">
+                {analyticsType === 'invoices' 
+                  ? 'No invoice status data available.'
+                  : 'No quotation status data available.'
+                }
+              </p>
             )}
           </CardContent>
         </Card>
@@ -506,15 +792,31 @@ export default function DashboardPage() {
         <Card className="hover:shadow-lg transition-shadow duration-200">
           <CardHeader>
             <CardTitle className="font-headline">Recent Activity</CardTitle>
-            <CardDescription>Latest invoices and client additions.</CardDescription>
+            <CardDescription>
+              {analyticsType === 'invoices' 
+                ? 'Latest invoice and client updates'
+                : 'Latest quotation and client updates'
+              }
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {loadingActivities ? (
               [...Array(4)].map((_, i) => (
                 <div key={i} className="flex items-start gap-3"> <Skeleton className="h-5 w-5 mt-1 rounded-full" /> <div className="w-full"> <Skeleton className="h-4 w-3/4 mb-1" /> <Skeleton className="h-3 w-1/2" /> </div> </div>
               ))
-            ) : recentActivities.length > 0 ? (
-              recentActivities.map((activity) => (
+            ) : recentActivities.filter(activity => 
+              analyticsType === 'invoices' 
+                ? activity.type === 'invoice' || activity.type === 'client'
+                : activity.type === 'quotation' || activity.type === 'client'
+            ).length > 0 ? (
+              recentActivities
+                .filter(activity => 
+                  analyticsType === 'invoices' 
+                    ? activity.type === 'invoice' || activity.type === 'client'
+                    : activity.type === 'quotation' || activity.type === 'client'
+                )
+                .slice(0, 4)
+                .map((activity) => (
                 <div key={activity.id + activity.type} className="flex items-start gap-3">
                   <activity.icon className={`h-5 w-5 mt-1 ${activity.color || 'text-primary'}`} />
                   <div> <p className="text-sm font-medium">{activity.action}</p> <p className="text-xs text-muted-foreground">{activity.time}</p> </div>
@@ -522,7 +824,12 @@ export default function DashboardPage() {
                 </div>
               ))
             ) : (
-              <p className="text-muted-foreground">No recent activity found.</p>
+              <p className="text-muted-foreground">
+                {analyticsType === 'invoices' 
+                  ? 'No recent invoice activity found.'
+                  : 'No recent quotation activity found.'
+                }
+              </p>
             )}
           </CardContent>
         </Card>
@@ -530,12 +837,36 @@ export default function DashboardPage() {
         <Card className="hover:shadow-lg transition-shadow duration-200">
           <CardHeader>
             <CardTitle className="font-headline">Quick Actions</CardTitle>
-            <CardDescription>Get things done faster.</CardDescription>
+            <CardDescription>
+              {analyticsType === 'invoices' 
+                ? 'Common invoice tasks to get you started'
+                : 'Common quotation tasks to get you started'
+              }
+            </CardDescription>
           </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-4">
-            <Button variant="outline" asChild><Link href="/dashboard/invoices">View All Invoices</Link></Button>
-            <Button variant="outline" asChild><Link href="/dashboard/clients">Manage Clients</Link></Button>
-            <Button variant="outline" asChild><Link href="/dashboard/reports" className="disabled opacity-50 cursor-not-allowed">View Reports</Link></Button>
+          <CardContent className="space-y-3">
+            <Button asChild className="w-full justify-start" variant="outline" disabled={!currentUser}>
+              <Link href={analyticsType === 'invoices' ? "/dashboard/invoices/new" : "/dashboard/quotations/new"}>
+                {analyticsType === 'invoices' ? (
+                  <FileText className="mr-2 h-4 w-4" />
+                ) : (
+                  <Quote className="mr-2 h-4 w-4" />
+                )}
+                {analyticsType === 'invoices' ? 'Create New Invoice' : 'Create New Quotation'}
+              </Link>
+            </Button>
+            <Button asChild className="w-full justify-start" variant="outline" disabled={!currentUser}>
+              <Link href="/dashboard/clients/new">
+                <Users className="mr-2 h-4 w-4" />
+                Add New Client
+              </Link>
+            </Button>
+            <Button asChild className="w-full justify-start" variant="outline" disabled={!currentUser}>
+              <Link href={analyticsType === 'invoices' ? "/dashboard/invoices" : "/dashboard/quotations"}>
+                <FileCheck className="mr-2 h-4 w-4" />
+                {analyticsType === 'invoices' ? 'View All Invoices' : 'View All Quotations'}
+              </Link>
+            </Button>
             <Button variant="outline" asChild><Link href="/dashboard/settings">Account Settings</Link></Button>
           </CardContent>
         </Card>
