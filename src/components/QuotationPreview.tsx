@@ -30,26 +30,125 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
     if (!contentRef.current) return;
 
     try {
-      const canvas = await html2canvas(contentRef.current, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff',
-      });
+      // Wait for all images to load
+      const images = contentRef.current.querySelectorAll('img');
+      await Promise.all(Array.from(images).map(img => {
+        if (img.complete) return Promise.resolve();
+        return new Promise(resolve => {
+          img.onload = resolve;
+          img.onerror = resolve;
+        });
+      }));
 
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
+      // Create a clone of the content for PDF generation
+      const elementToCapture = contentRef.current.cloneNode(true) as HTMLElement;
       
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = canvas.width;
-      const imgHeight = canvas.height;
-      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
-      const imgX = (pdfWidth - imgWidth * ratio) / 2;
-      const imgY = 30;
+      // Apply PDF-specific styles to the cloned element
+      elementToCapture.style.backgroundColor = '#ffffff';
+      elementToCapture.style.fontFamily = 'Arial, sans-serif';
+      elementToCapture.style.fontSize = '14px';
+      elementToCapture.style.lineHeight = '1.5';
+      elementToCapture.style.color = '#000000';
+      elementToCapture.style.width = '900px';
+      elementToCapture.style.maxWidth = 'none';
+      elementToCapture.style.padding = '24px';
+      elementToCapture.style.margin = '0';
+      elementToCapture.style.boxSizing = 'border-box';
+      
+      // Remove any buttons or interactive elements
+      const buttons = elementToCapture.querySelectorAll('button');
+      buttons.forEach(button => button.remove());
+      
+      // Temporarily add to DOM for rendering
+      elementToCapture.style.position = 'absolute';
+      elementToCapture.style.left = '-9999px';
+      elementToCapture.style.top = '0';
+      document.body.appendChild(elementToCapture);
 
-      pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
-      pdf.save(`quotation-${quotation.quotationNumber}.pdf`);
+      try {
+        // Create canvas
+        const canvas = await html2canvas(elementToCapture, {
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+          logging: false,
+          backgroundColor: '#ffffff',
+          width: 900,
+          height: elementToCapture.scrollHeight
+        });
+
+        // Create PDF
+        const pdf = new jsPDF({
+          orientation: 'portrait',
+          unit: 'mm',
+          format: 'a4',
+          compress: true
+        });
+
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const margin = 10;
+        const availableWidth = pdfWidth - (margin * 2);
+        const availableHeight = pdfHeight - (margin * 2);
+
+        // Convert canvas to image
+        const imgData = canvas.toDataURL('image/png', 1.0);
+        const canvasWidth = canvas.width;
+        const canvasHeight = canvas.height;
+        
+        // Convert pixels to mm
+        const pxToMm = 25.4 / 96;
+        const imgWidthMm = canvasWidth * pxToMm / 2;
+        const imgHeightMm = canvasHeight * pxToMm / 2;
+        
+        // Calculate how many pages we need
+        const pageHeight = availableHeight;
+        const totalPages = Math.ceil(imgHeightMm / pageHeight);
+        
+        // Add pages to PDF
+        for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
+          if (pageIndex > 0) {
+            pdf.addPage();
+          }
+          
+          // Calculate the portion of the image for this page
+          const sourceY = (pageIndex * pageHeight * 2) / pxToMm; // Convert back to pixels
+          const sourceHeight = Math.min((pageHeight * 2) / pxToMm, canvasHeight - sourceY);
+          
+          // Create a temporary canvas for this page
+          const pageCanvas = document.createElement('canvas');
+          const pageCtx = pageCanvas.getContext('2d');
+          pageCanvas.width = canvasWidth;
+          pageCanvas.height = sourceHeight;
+          
+          if (pageCtx) {
+            pageCtx.fillStyle = '#ffffff';
+            pageCtx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+            pageCtx.drawImage(canvas, 0, -sourceY);
+            
+            const pageImgData = pageCanvas.toDataURL('image/png', 1.0);
+            const pageImgHeightMm = (sourceHeight * pxToMm) / 2;
+            
+            // Scale to fit width
+            const scale = availableWidth / imgWidthMm;
+            const finalWidth = imgWidthMm * scale;
+            const finalHeight = pageImgHeightMm * scale;
+            
+            const x = (pdfWidth - finalWidth) / 2;
+            const y = margin;
+            
+            pdf.addImage(pageImgData, 'PNG', x, y, finalWidth, finalHeight, undefined, 'FAST');
+          }
+        }
+        
+        // Save the PDF
+        pdf.save(`quotation-${quotation.quotationNumber || 'document'}.pdf`);
+        
+      } finally {
+        // Clean up temporary element
+        document.body.removeChild(elementToCapture);
+      }
+      
     } catch (error) {
       console.error('Error generating PDF:', error);
     }
@@ -183,11 +282,11 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
           <div className="grid md:grid-cols-3 gap-4 mb-6">
             <div>
               <p className="text-sm font-medium">Quotation Date</p>
-              <p className="text-sm text-muted-foreground">{formatDate(quotation.quotationDate)}</p>
+              <p className="text-sm text-muted-foreground">{formatDate(quotation.quotationDate instanceof Date ? quotation.quotationDate : quotation.quotationDate.toDate())}</p>
             </div>
             <div>
               <p className="text-sm font-medium">Valid Until</p>
-              <p className="text-sm text-muted-foreground">{formatDate(quotation.validUntil)}</p>
+              <p className="text-sm text-muted-foreground">{formatDate(quotation.validUntil instanceof Date ? quotation.validUntil : quotation.validUntil.toDate())}</p>
             </div>
             <div>
               <p className="text-sm font-medium">Currency</p>
@@ -217,8 +316,8 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
                   {row.items.map((item, itemIndex) => (
                     <div
                       key={item.id}
-                      className={`col-span-${Math.max(1, Math.floor(item.width / 8.33))}`}
-                      style={{ gridColumn: `span ${Math.max(1, Math.floor(item.width / 8.33))}` }}
+                      className={`col-span-${Math.max(1, Math.floor((item.width || 100) / 8.33))}`}
+                      style={{ gridColumn: `span ${Math.max(1, Math.floor((item.width || 100) / 8.33))}` }}
                     >
                       {item.label}
                     </div>
@@ -228,10 +327,10 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
                   {row.items.map((item, itemIndex) => (
                     <div
                       key={`${item.id}-value`}
-                      className={`col-span-${Math.max(1, Math.floor(item.width / 8.33))} flex items-center`}
-                      style={{ gridColumn: `span ${Math.max(1, Math.floor(item.width / 8.33))}` }}
+                      className={`col-span-${Math.max(1, Math.floor((item.width || 100) / 8.33))} flex items-center`}
+                      style={{ gridColumn: `span ${Math.max(1, Math.floor((item.width || 100) / 8.33))}` }}
                     >
-                      {renderItemValue(item)}
+                      {typeof renderItemValue(item) === 'string' ? renderItemValue(item) : String(renderItemValue(item))}
                     </div>
                   ))}
                 </div>
