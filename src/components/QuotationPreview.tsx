@@ -8,10 +8,11 @@ import { Button } from "@/components/ui/button";
 import type { Quotation, QuotationRow, QuotationItem } from "@/lib/types";
 import { format } from "date-fns";
 import Image from "next/image";
-import { Download } from "lucide-react";
+import { Download, Edit, FileText, Calendar, DollarSign } from "lucide-react";
 import React, { forwardRef, useImperativeHandle, useRef } from "react";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
+import Link from "next/link";
 
 interface QuotationPreviewProps {
   quotation: Quotation;
@@ -208,19 +209,45 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
   return (
     <div className="max-w-4xl mx-auto space-y-6 bg-white">
       {showHeader && (
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-3xl font-bold">Quotation</h1>
-            <p className="text-muted-foreground">#{quotation.quotationNumber}</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <Button onClick={downloadPdf} className="flex items-center gap-2">
-              <Download className="h-4 w-4" />
-              Download PDF
-            </Button>
-            <Badge className={getStatusColor(quotation.status)}>
-              {quotation.status.charAt(0).toUpperCase() + quotation.status.slice(1)}
-            </Badge>
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 rounded-lg p-6 border border-blue-200 dark:border-blue-800">
+          <div className="flex justify-between items-start">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <FileText className="h-6 w-6 text-blue-600" />
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Quotation Preview</h1>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="bg-white dark:bg-gray-800 px-3 py-1 rounded-md border">
+                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Number:</span>
+                  <span className="ml-1 font-bold text-blue-600 dark:text-blue-400">#{quotation.quotationNumber}</span>
+                </div>
+                <Badge className={getStatusColor(quotation.status)}>
+                  {quotation.status.charAt(0).toUpperCase() + quotation.status.slice(1)}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+                <div className="flex items-center gap-1">
+                  <Calendar className="h-4 w-4" />
+                  <span>Created: {format(quotation.quotationDate instanceof Date ? quotation.quotationDate : quotation.quotationDate.toDate(), 'MMM dd, yyyy')}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <DollarSign className="h-4 w-4" />
+                  <span className="font-semibold">Total: {quotation.currency} {quotation.grandTotal?.toFixed(2) || '0.00'}</span>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button variant="outline" asChild className="flex items-center gap-2">
+                <Link href={`/dashboard/quotations/${quotation.id}/edit`}>
+                  <Edit className="h-4 w-4" />
+                  Edit
+                </Link>
+              </Button>
+              <Button onClick={downloadPdf} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700">
+                <Download className="h-4 w-4" />
+                Download PDF
+              </Button>
+            </div>
           </div>
         </div>
       )}
