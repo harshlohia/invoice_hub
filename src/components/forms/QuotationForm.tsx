@@ -26,7 +26,7 @@ import { QuotationPreview } from "@/components/QuotationPreview";
 import { cn } from "@/lib/utils";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { format, addDays } from "date-fns";
-import { CalendarIcon, PlusCircle, Trash2, GripVertical, Image, Type, Hash, Calendar as CalendarClock, Loader2, DollarSign } from "lucide-react";
+import { CalendarIcon, PlusCircle, Trash2, GripVertical, Image, Type, Hash, Calendar as CalendarClock, Loader2, DollarSign, Percent, ChevronUp, ChevronDown } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import { collection, getDocs, addDoc, doc, getDoc, serverTimestamp, Timestamp, query, where, updateDoc } from 'firebase/firestore';
@@ -35,7 +35,7 @@ import { onAuthStateChanged, type User, type Auth } from "firebase/auth";
 
 const quotationItemSchema = z.object({
   id: z.string().default(() => crypto.randomUUID()),
-  type: z.enum(['text', 'image', 'number', 'date', 'amount']),
+  type: z.enum(['text', 'image', 'number', 'date', 'amount', 'tax']),
   label: z.string().min(1, "Label is required"),
   value: z.union([z.string(), z.number(), z.date()]),
   width: z.number().min(1).max(100).default(25),
@@ -80,6 +80,7 @@ const itemTypeIcons = {
   number: Hash,
   date: CalendarClock,
   amount: DollarSign,
+  tax: Percent,
 };
 
 export function QuotationForm({ initialData, isEdit = false }: QuotationFormProps) {
@@ -206,15 +207,63 @@ export function QuotationForm({ initialData, isEdit = false }: QuotationFormProp
   });
 
   const addNewRow = () => {
+    const defaultItems = [
+      { id: crypto.randomUUID(), type: 'text', label: 'Description', value: '', width: 50, order: 0 },
+      { id: crypto.randomUUID(), type: 'number', label: 'Quantity', value: 1, width: 15, order: 1 },
+      { id: crypto.randomUUID(), type: 'number', label: 'Rate', value: 0, width: 20, order: 2 },
+      { id: crypto.randomUUID(), type: 'amount', label: 'Amount', value: 0, width: 15, order: 3 },
+    ] as QuotationItem[];
+    
+    const adjustedItems = adjustWidths(defaultItems);
+    
     appendRow({
       id: crypto.randomUUID(),
       order: rowFields.length,
-      items: [
-        { id: crypto.randomUUID(), type: 'text', label: 'Description', value: '', width: 50, order: 0 },
-        { id: crypto.randomUUID(), type: 'number', label: 'Quantity', value: 1, width: 15, order: 1 },
-        { id: crypto.randomUUID(), type: 'number', label: 'Rate', value: 0, width: 20, order: 2 },
-        { id: crypto.randomUUID(), type: 'amount', label: 'Amount', value: 0, width: 15, order: 3 },
-      ]
+      items: adjustedItems
+    });
+  };
+
+  const adjustWidths = (items: QuotationItem[]) => {
+    const totalItems = items.length;
+    if (totalItems === 0) return items;
+
+    // Find description item (usually the first text item)
+    const descriptionIndex = items.findIndex(item => item.type === 'text');
+    
+    // Calculate optimal widths based on item count
+    let widths: number[];
+    if (totalItems === 1) {
+      widths = [100];
+    } else if (totalItems === 2) {
+      widths = [70, 30]; // Description gets 70%, other gets 30%
+    } else if (totalItems === 3) {
+      widths = [60, 20, 20]; // Description gets 60%, others get 20% each
+    } else if (totalItems === 4) {
+      widths = [50, 15, 20, 15]; // Description gets 50%, others distributed
+    } else if (totalItems === 5) {
+      widths = [40, 15, 15, 15, 15]; // Description gets 40%, others get 15% each
+    } else {
+      // For more than 5 items, distribute more evenly
+      const remainingWidth = 100 - 35; // Reserve 35% for description
+      const otherItemWidth = Math.floor(remainingWidth / (totalItems - 1));
+      widths = [35, ...Array(totalItems - 1).fill(otherItemWidth)];
+      
+      // Adjust last item to make total exactly 100
+      const currentTotal = widths.reduce((sum, w) => sum + w, 0);
+      if (currentTotal !== 100) {
+        widths[widths.length - 1] += (100 - currentTotal);
+      }
+    }
+
+    // Apply widths, ensuring description item gets the largest width
+    return items.map((item, index) => {
+      let widthIndex = index;
+      if (descriptionIndex !== -1 && descriptionIndex !== 0) {
+        // If description is not first, swap its width with the first item
+        if (index === 0) widthIndex = descriptionIndex;
+        else if (index === descriptionIndex) widthIndex = 0;
+      }
+      return { ...item, width: widths[widthIndex] };
     });
   };
 
@@ -228,32 +277,85 @@ export function QuotationForm({ initialData, isEdit = false }: QuotationFormProp
       width: 25,
       order: currentRow.items.length
     };
-    form.setValue(`rows.${rowIndex}.items`, [...currentRow.items, newItem]);
+    const updatedItems = adjustWidths([...currentRow.items, newItem]);
+    form.setValue(`rows.${rowIndex}.items`, updatedItems);
   };
 
   const removeItemFromRow = (rowIndex: number, itemIndex: number) => {
     const currentRow = form.getValues(`rows.${rowIndex}`);
     if (currentRow.items.length > 1) {
-      const updatedItems = currentRow.items.filter((_, index) => index !== itemIndex);
+      const filteredItems = currentRow.items.filter((_, index) => index !== itemIndex);
+      const updatedItems = adjustWidths(filteredItems);
       form.setValue(`rows.${rowIndex}.items`, updatedItems);
     }
+  };
+
+  const moveItemUp = (rowIndex: number, itemIndex: number) => {
+    if (itemIndex === 0) return; // Can't move first item up
+    
+    const currentRow = form.getValues(`rows.${rowIndex}`);
+    const items = [...currentRow.items];
+    
+    // Swap with previous item
+    [items[itemIndex - 1], items[itemIndex]] = [items[itemIndex], items[itemIndex - 1]];
+    
+    // Update order values
+    items.forEach((item, index) => {
+      item.order = index;
+    });
+    
+    form.setValue(`rows.${rowIndex}.items`, items);
+  };
+
+  const moveItemDown = (rowIndex: number, itemIndex: number) => {
+    const currentRow = form.getValues(`rows.${rowIndex}`);
+    if (itemIndex === currentRow.items.length - 1) return; // Can't move last item down
+    
+    const items = [...currentRow.items];
+    
+    // Swap with next item
+    [items[itemIndex], items[itemIndex + 1]] = [items[itemIndex + 1], items[itemIndex]];
+    
+    // Update order values
+    items.forEach((item, index) => {
+      item.order = index;
+    });
+    
+    form.setValue(`rows.${rowIndex}.items`, items);
   };
 
   const calculateTotals = () => {
     const rows = form.watch("rows");
     let subTotal = 0;
+    let totalTax = 0;
 
     rows.forEach(row => {
-      // Only consider items with type 'amount' for subtotal calculation
+      // Calculate row subtotal from 'amount' type items
+      let rowSubTotal = 0;
       const amountItems = row.items.filter(item => item.type === 'amount');
       amountItems.forEach(item => {
         if (typeof item.value === 'number') {
-          subTotal += item.value;
+          rowSubTotal += item.value;
         }
       });
+      
+      // Add to overall subtotal
+      subTotal += rowSubTotal;
+
+      // Calculate tax for this row based on row's amount
+      const taxItems = row.items.filter(item => item.type === 'tax');
+      let rowTaxPercentage = 0;
+      taxItems.forEach(item => {
+        if (typeof item.value === 'number') {
+          rowTaxPercentage += item.value;
+        }
+      });
+      
+      // Calculate tax amount for this row
+      const rowTax = (rowSubTotal * rowTaxPercentage) / 100;
+      totalTax += rowTax;
     });
 
-    const totalTax = subTotal * 0.18; // 18% GST
     const grandTotal = subTotal + totalTax;
 
     return { subTotal, totalTax, grandTotal };
@@ -551,7 +653,12 @@ export function QuotationForm({ initialData, isEdit = false }: QuotationFormProp
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel className={itemIndex > 0 ? "sr-only" : ""}>Type</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value}>
+                                <Select onValueChange={(value) => {
+                                  field.onChange(value);
+                                  if (value === 'tax') {
+                                    form.setValue(`rows.${rowIndex}.items.${itemIndex}.label`, 'Tax %');
+                                  }
+                                }} value={field.value}>
                                   <FormControl>
                                     <SelectTrigger>
                                       <SelectValue>
@@ -593,6 +700,12 @@ export function QuotationForm({ initialData, isEdit = false }: QuotationFormProp
                                         Amount
                                       </div>
                                     </SelectItem>
+                                    <SelectItem value="tax">
+                                      <div className="flex items-center">
+                                        <Percent className="h-4 w-4 mr-2" />
+                                        Tax
+                                      </div>
+                                    </SelectItem>
                                   </SelectContent>
                                 </Select>
                                 <FormMessage />
@@ -625,11 +738,11 @@ export function QuotationForm({ initialData, isEdit = false }: QuotationFormProp
                               <FormItem>
                                 <FormLabel className={itemIndex > 0 ? "sr-only" : ""}>Value</FormLabel>
                                 <FormControl>
-                                  {item.type === 'number' || item.type === 'amount' ? (
+                                  {item.type === 'number' || item.type === 'amount' || item.type === 'tax' ? (
                                     <Input
                                       type="number"
-                                      placeholder={item.type === 'amount' ? "0.00" : "0"}
-                                      step={item.type === 'amount' ? "0.01" : "1"}
+                                      placeholder={item.type === 'amount' ? "0.00" : item.type === 'tax' ? "0.00" : "0"}
+                                      step={item.type === 'amount' || item.type === 'tax' ? "0.01" : "1"}
                                       {...field}
                                       value={typeof field.value === 'number' ? field.value.toString() : field.value as string}
                                       onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
@@ -704,17 +817,49 @@ export function QuotationForm({ initialData, isEdit = false }: QuotationFormProp
                         </div>
 
                         <div className="col-span-1">
-                          {form.watch(`rows.${rowIndex}.items`).length > 1 && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => removeItemFromRow(rowIndex, itemIndex)}
-                              className="text-destructive hover:bg-destructive/10"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          )}
+                          <div className="flex items-center gap-1">
+                            {/* Move Up Button */}
+                            {itemIndex > 0 && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => moveItemUp(rowIndex, itemIndex)}
+                                className="text-muted-foreground hover:bg-muted"
+                                title="Move up"
+                              >
+                                <ChevronUp className="h-4 w-4" />
+                              </Button>
+                            )}
+                            
+                            {/* Move Down Button */}
+                            {itemIndex < form.watch(`rows.${rowIndex}.items`).length - 1 && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => moveItemDown(rowIndex, itemIndex)}
+                                className="text-muted-foreground hover:bg-muted"
+                                title="Move down"
+                              >
+                                <ChevronDown className="h-4 w-4" />
+                              </Button>
+                            )}
+                            
+                            {/* Remove Button */}
+                            {form.watch(`rows.${rowIndex}.items`).length > 1 && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeItemFromRow(rowIndex, itemIndex)}
+                                className="text-destructive hover:bg-destructive/10"
+                                title="Remove item"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     );
@@ -740,7 +885,7 @@ export function QuotationForm({ initialData, isEdit = false }: QuotationFormProp
               <span>Rs. {totals.subTotal.toFixed(2)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Tax (18%):</span>
+              <span className="text-muted-foreground">Tax:</span>
               <span>Rs. {totals.totalTax.toFixed(2)}</span>
             </div>
             <Separator />

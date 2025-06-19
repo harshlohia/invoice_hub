@@ -318,7 +318,7 @@ export const DEFAULT_TEMPLATE_STYLE: TemplateStyle = {
 // Quotation Types
 export interface QuotationItem {
   id: string;
-  type: 'text' | 'image' | 'number' | 'date' | 'amount';
+  type: 'text' | 'image' | 'number' | 'date' | 'amount' | 'tax';
   label: string;
   value: string | number | Date;
   width: number; // Column width percentage

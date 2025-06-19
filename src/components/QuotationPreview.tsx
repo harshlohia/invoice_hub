@@ -257,6 +257,10 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
         return item.value ? formatDate(item.value as Date) : '';
       case 'number':
         return typeof item.value === 'number' ? item.value.toFixed(2) : (item.value?.toString() || '');
+      case 'amount':
+        return typeof item.value === 'number' ? `Rs. ${item.value.toFixed(2)}` : (item.value?.toString() || '');
+      case 'tax':
+        return typeof item.value === 'number' ? `${item.value}%` : (item.value?.toString() || '');
       default:
         return item.value?.toString() || '';
     }
@@ -395,24 +399,16 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
           <div className="space-y-4">
             {quotation.rows.map((row: QuotationRow, rowIndex: number) => (
               <div key={row.id} className="border rounded-lg overflow-hidden">
-                <div className="grid grid-cols-12 gap-2 bg-gray-50 p-3 text-sm font-medium">
+                <div className="grid gap-4 bg-gray-50 p-4 text-sm font-medium" style={{ gridTemplateColumns: row.items.map(item => `${item.width || 100}fr`).join(' ') }}>
                   {row.items.map((item, itemIndex) => (
-                    <div
-                      key={item.id}
-                      className={`col-span-${Math.max(1, Math.floor((item.width || 100) / 8.33))}`}
-                      style={{ gridColumn: `span ${Math.max(1, Math.floor((item.width || 100) / 8.33))}` }}
-                    >
+                    <div key={item.id} className="text-left">
                       {item.label}
                     </div>
                   ))}
                 </div>
-                <div className="grid grid-cols-12 gap-2 p-3 text-sm">
+                <div className="grid gap-4 p-4 text-sm" style={{ gridTemplateColumns: row.items.map(item => `${item.width || 100}fr`).join(' ') }}>
                   {row.items.map((item, itemIndex) => (
-                    <div
-                      key={`${item.id}-value`}
-                      className={`col-span-${Math.max(1, Math.floor((item.width || 100) / 8.33))} flex items-center`}
-                      style={{ gridColumn: `span ${Math.max(1, Math.floor((item.width || 100) / 8.33))}` }}
-                    >
+                    <div key={`${item.id}-value`} className="flex items-center text-left">
                       {renderItemValue(item)}
                     </div>
                   ))}
@@ -434,7 +430,7 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
             <span>{quotation.currency} {quotation.subTotal?.toFixed(2) || '0.00'}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Tax (18%):</span>
+            <span className="text-muted-foreground">Tax:</span>
             <span>{quotation.currency} {quotation.totalTax?.toFixed(2) || '0.00'}</span>
           </div>
           <Separator />
