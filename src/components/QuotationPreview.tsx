@@ -56,6 +56,22 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
       elementToCapture.style.margin = '0';
       elementToCapture.style.boxSizing = 'border-box';
       
+      // Add specific styling for Terms & Conditions to prevent cutting
+      const termsCards = elementToCapture.querySelectorAll('[data-terms-card]');
+      termsCards.forEach(card => {
+        (card as HTMLElement).style.pageBreakInside = 'avoid';
+        (card as HTMLElement).style.breakInside = 'avoid';
+        (card as HTMLElement).style.marginBottom = '20px';
+      });
+      
+      // Ensure proper spacing for all cards
+      const allCards = elementToCapture.querySelectorAll('[data-card]');
+      allCards.forEach(card => {
+        (card as HTMLElement).style.marginBottom = '16px';
+        (card as HTMLElement).style.pageBreakInside = 'avoid';
+        (card as HTMLElement).style.breakInside = 'avoid';
+      });
+      
       // Remove any buttons or interactive elements
       const buttons = elementToCapture.querySelectorAll('button');
       buttons.forEach(button => button.remove());
@@ -64,10 +80,21 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
       elementToCapture.style.position = 'absolute';
       elementToCapture.style.left = '-9999px';
       elementToCapture.style.top = '0';
+      elementToCapture.style.paddingBottom = '50px'; // Add extra padding at bottom
       document.body.appendChild(elementToCapture);
 
+      // Wait for DOM to settle
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Get the actual content height including all elements
+      const actualHeight = Math.max(
+        elementToCapture.scrollHeight,
+        elementToCapture.offsetHeight,
+        elementToCapture.getBoundingClientRect().height
+      );
+
       try {
-        // Create canvas
+        // Create canvas with better handling for long content
         const canvas = await html2canvas(elementToCapture, {
           scale: 2,
           useCORS: true,
@@ -75,7 +102,11 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
           logging: false,
           backgroundColor: '#ffffff',
           width: 900,
-          height: elementToCapture.scrollHeight
+          height: actualHeight + 100, // Add extra buffer
+          scrollX: 0,
+          scrollY: 0,
+          windowWidth: 900,
+          windowHeight: actualHeight + 100
         });
 
         // Create PDF
@@ -102,11 +133,19 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
         const imgWidthMm = canvasWidth * pxToMm / 2;
         const imgHeightMm = canvasHeight * pxToMm / 2;
         
-        // Calculate how many pages we need
+        // Calculate how many pages we need with better page break handling
         const pageHeight = availableHeight;
         const totalPages = Math.ceil(imgHeightMm / pageHeight);
         
-        // Add pages to PDF
+        console.log('PDF Generation Debug:', {
+          canvasHeight,
+          imgHeightMm,
+          pageHeight,
+          totalPages,
+          actualContentHeight: actualHeight
+        });
+        
+        // Add pages to PDF with improved content handling
         for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
           if (pageIndex > 0) {
             pdf.addPage();
@@ -114,13 +153,23 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
           
           // Calculate the portion of the image for this page
           const sourceY = (pageIndex * pageHeight * 2) / pxToMm; // Convert back to pixels
-          const sourceHeight = Math.min((pageHeight * 2) / pxToMm, canvasHeight - sourceY);
+          let sourceHeight = Math.min((pageHeight * 2) / pxToMm, canvasHeight - sourceY);
+          
+          // For the last page, ensure we capture ALL remaining content
+          if (pageIndex === totalPages - 1) {
+            sourceHeight = Math.max(canvasHeight - sourceY, 100); // Ensure minimum content
+          }
+          
+          // Skip if no content to render
+          if (sourceHeight <= 0 || sourceY >= canvasHeight) {
+            continue;
+          }
           
           // Create a temporary canvas for this page
           const pageCanvas = document.createElement('canvas');
           const pageCtx = pageCanvas.getContext('2d');
           pageCanvas.width = canvasWidth;
-          pageCanvas.height = sourceHeight;
+          pageCanvas.height = Math.max(sourceHeight, 1); // Ensure minimum height
           
           if (pageCtx) {
             pageCtx.fillStyle = '#ffffff';
@@ -128,10 +177,10 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
             pageCtx.drawImage(canvas, 0, -sourceY);
             
             const pageImgData = pageCanvas.toDataURL('image/png', 1.0);
-            const pageImgHeightMm = (sourceHeight * pxToMm) / 2;
+            const pageImgHeightMm = (pageCanvas.height * pxToMm) / 2;
             
-            // Scale to fit width
-            const scale = availableWidth / imgWidthMm;
+            // Scale to fit width while maintaining aspect ratio
+            const scale = Math.min(availableWidth / imgWidthMm, availableHeight / pageImgHeightMm);
             const finalWidth = imgWidthMm * scale;
             const finalHeight = pageImgHeightMm * scale;
             
@@ -139,6 +188,13 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
             const y = margin;
             
             pdf.addImage(pageImgData, 'PNG', x, y, finalWidth, finalHeight, undefined, 'FAST');
+            
+            console.log(`Page ${pageIndex + 1}:`, {
+              sourceY,
+              sourceHeight,
+              pageImgHeightMm,
+              finalHeight
+            });
           }
         }
         
@@ -368,7 +424,7 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
       </Card>
 
       {/* Summary */}
-      <Card>
+      <Card data-card="true">
         <CardHeader>
           <CardTitle>Summary</CardTitle>
         </CardHeader>
@@ -393,22 +449,24 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
       {(quotation.notes || quotation.termsAndConditions) && (
         <div className="grid md:grid-cols-2 gap-6">
           {quotation.notes && (
-            <Card>
+            <Card data-card="true">
               <CardHeader>
                 <CardTitle className="text-lg">Notes</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-sm whitespace-pre-wrap">{quotation.notes}</p>
+                <p className="text-sm whitespace-pre-wrap leading-relaxed">{quotation.notes}</p>
               </CardContent>
             </Card>
           )}
           {quotation.termsAndConditions && (
-            <Card>
+            <Card data-card="true" data-terms-card="true">
               <CardHeader>
                 <CardTitle className="text-lg">Terms & Conditions</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-sm whitespace-pre-wrap">{quotation.termsAndConditions}</p>
+                <div className="text-sm whitespace-pre-wrap leading-relaxed break-words">
+                  {quotation.termsAndConditions}
+                </div>
               </CardContent>
             </Card>
           )}
