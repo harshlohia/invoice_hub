@@ -26,7 +26,7 @@ import { QuotationPreview } from "@/components/QuotationPreview";
 import { cn } from "@/lib/utils";
 import { ImageUpload } from "@/components/ui/image-upload";
 import { format, addDays } from "date-fns";
-import { CalendarIcon, PlusCircle, Trash2, GripVertical, Image, Type, Hash, Calendar as CalendarClock, Loader2 } from "lucide-react";
+import { CalendarIcon, PlusCircle, Trash2, GripVertical, Image, Type, Hash, Calendar as CalendarClock, Loader2, DollarSign } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import { collection, getDocs, addDoc, doc, getDoc, serverTimestamp, Timestamp, query, where, updateDoc } from 'firebase/firestore';
@@ -35,7 +35,7 @@ import { onAuthStateChanged, type User, type Auth } from "firebase/auth";
 
 const quotationItemSchema = z.object({
   id: z.string().default(() => crypto.randomUUID()),
-  type: z.enum(['text', 'image', 'number', 'date']),
+  type: z.enum(['text', 'image', 'number', 'date', 'amount']),
   label: z.string().min(1, "Label is required"),
   value: z.union([z.string(), z.number(), z.date()]),
   width: z.number().min(1).max(100).default(25),
@@ -79,6 +79,7 @@ const itemTypeIcons = {
   image: Image,
   number: Hash,
   date: CalendarClock,
+  amount: DollarSign,
 };
 
 export function QuotationForm({ initialData, isEdit = false }: QuotationFormProps) {
@@ -110,7 +111,7 @@ export function QuotationForm({ initialData, isEdit = false }: QuotationFormProp
             { id: crypto.randomUUID(), type: 'text', label: 'Description', value: '', width: 50, order: 0 },
             { id: crypto.randomUUID(), type: 'number', label: 'Quantity', value: 1, width: 15, order: 1 },
             { id: crypto.randomUUID(), type: 'number', label: 'Rate', value: 0, width: 20, order: 2 },
-            { id: crypto.randomUUID(), type: 'number', label: 'Amount', value: 0, width: 15, order: 3 },
+            { id: crypto.randomUUID(), type: 'amount', label: 'Amount', value: 0, width: 15, order: 3 },
           ]
         }
       ],
@@ -212,7 +213,7 @@ export function QuotationForm({ initialData, isEdit = false }: QuotationFormProp
         { id: crypto.randomUUID(), type: 'text', label: 'Description', value: '', width: 50, order: 0 },
         { id: crypto.randomUUID(), type: 'number', label: 'Quantity', value: 1, width: 15, order: 1 },
         { id: crypto.randomUUID(), type: 'number', label: 'Rate', value: 0, width: 20, order: 2 },
-        { id: crypto.randomUUID(), type: 'number', label: 'Amount', value: 0, width: 15, order: 3 },
+        { id: crypto.randomUUID(), type: 'amount', label: 'Amount', value: 0, width: 15, order: 3 },
       ]
     });
   };
@@ -243,10 +244,13 @@ export function QuotationForm({ initialData, isEdit = false }: QuotationFormProp
     let subTotal = 0;
 
     rows.forEach(row => {
-      const amountItem = row.items.find(item => item.label.toLowerCase().includes('amount') || item.label.toLowerCase().includes('total'));
-      if (amountItem && typeof amountItem.value === 'number') {
-        subTotal += amountItem.value;
-      }
+      // Only consider items with type 'amount' for subtotal calculation
+      const amountItems = row.items.filter(item => item.type === 'amount');
+      amountItems.forEach(item => {
+        if (typeof item.value === 'number') {
+          subTotal += item.value;
+        }
+      });
     });
 
     const totalTax = subTotal * 0.18; // 18% GST
@@ -583,6 +587,12 @@ export function QuotationForm({ initialData, isEdit = false }: QuotationFormProp
                                         Image
                                       </div>
                                     </SelectItem>
+                                    <SelectItem value="amount">
+                                      <div className="flex items-center">
+                                        <DollarSign className="h-4 w-4 mr-2" />
+                                        Amount
+                                      </div>
+                                    </SelectItem>
                                   </SelectContent>
                                 </Select>
                                 <FormMessage />
@@ -615,11 +625,13 @@ export function QuotationForm({ initialData, isEdit = false }: QuotationFormProp
                               <FormItem>
                                 <FormLabel className={itemIndex > 0 ? "sr-only" : ""}>Value</FormLabel>
                                 <FormControl>
-                                  {item.type === 'number' ? (
+                                  {item.type === 'number' || item.type === 'amount' ? (
                                     <Input
                                       type="number"
-                                      placeholder="0"
+                                      placeholder={item.type === 'amount' ? "0.00" : "0"}
+                                      step={item.type === 'amount' ? "0.01" : "1"}
                                       {...field}
+                                      value={typeof field.value === 'number' ? field.value.toString() : field.value as string}
                                       onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
                                     />
                                   ) : item.type === 'date' ? (
@@ -805,8 +817,8 @@ export function QuotationForm({ initialData, isEdit = false }: QuotationFormProp
                   subTotal: totals.subTotal,
                   totalTax: totals.totalTax,
                   grandTotal: totals.grandTotal,
-                  createdAt: new Date(),
-                  updatedAt: new Date(),
+                  createdAt: Timestamp.fromDate(new Date()),
+                  updatedAt: Timestamp.fromDate(new Date()),
                 } as Quotation}
                 showHeader={false}
               />

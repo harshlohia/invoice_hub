@@ -318,10 +318,10 @@ export const DEFAULT_TEMPLATE_STYLE: TemplateStyle = {
 // Quotation Types
 export interface QuotationItem {
   id: string;
-  type: 'text' | 'image' | 'number' | 'date';
+  type: 'text' | 'image' | 'number' | 'date' | 'amount';
   label: string;
   value: string | number | Date;
-  width?: number; // Column width percentage
+  width: number; // Column width percentage
   order: number; // Display order
 }
 
