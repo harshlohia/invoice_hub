@@ -175,7 +175,7 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
     }
   };
 
-  const renderItemValue = (item: QuotationItem) => {
+  const renderItemValue = (item: QuotationItem): React.ReactNode => {
     switch (item.type) {
       case 'image':
         if (item.value && typeof item.value === 'string') {
@@ -199,7 +199,7 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
       case 'date':
         return item.value ? formatDate(item.value as Date) : '';
       case 'number':
-        return typeof item.value === 'number' ? item.value.toFixed(2) : item.value;
+        return typeof item.value === 'number' ? item.value.toFixed(2) : (item.value?.toString() || '');
       default:
         return item.value?.toString() || '';
     }
@@ -330,7 +330,7 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
                       className={`col-span-${Math.max(1, Math.floor((item.width || 100) / 8.33))} flex items-center`}
                       style={{ gridColumn: `span ${Math.max(1, Math.floor((item.width || 100) / 8.33))}` }}
                     >
-                      {typeof renderItemValue(item) === 'string' ? renderItemValue(item) : String(renderItemValue(item))}
+                      {renderItemValue(item)}
                     </div>
                   ))}
                 </div>
