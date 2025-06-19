@@ -47,24 +47,24 @@ body {
   }
 
   .dark {
-    --background: 222 47% 11.2%; /* Dark Blue-Gray */
-    --foreground: 210 40% 98%; /* Light Gray / Off-white */
-    --card: 222 47% 14.2%; /* Slightly lighter than background for cards */
-    --card-foreground: 210 40% 98%;
-    --popover: 222 47% 11.2%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 221 83% 63%; /* Lighter blue for dark mode */
-    --primary-foreground: 210 40% 98%;
-    --secondary: 217.2 32.6% 17.5%; /* Darker Gray */
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 250 70% 65%; /* Lighter Indigo/Purple for dark mode CTAs */
+    --background: 0 0% 8%; /* Deep Black */
+    --foreground: 0 0% 95%; /* Pure White / Off-white */
+    --card: 0 0% 12%; /* Dark Gray for cards */
+    --card-foreground: 0 0% 95%;
+    --popover: 0 0% 8%;
+    --popover-foreground: 0 0% 95%;
+    --primary: 221 83% 63%; /* Keep the blue primary for contrast */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 16%; /* Dark Gray */
+    --secondary-foreground: 0 0% 95%;
+    --muted: 0 0% 16%;
+    --muted-foreground: 0 0% 65%;
+    --accent: 250 70% 65%; /* Keep the purple accent for modern look */
     --accent-foreground: 0 0% 100%;
     --destructive: 0 62.8% 50.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 217.2 32.6% 22.5%; /* Darker Gray border */
-    --input: 217.2 32.6% 22.5%;
+    --border: 0 0% 20%; /* Dark Gray border */
+    --input: 0 0% 20%;
     --ring: 221 83% 63%;
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
@@ -73,13 +73,13 @@ body {
     --chart-5: 340 75% 55%;
 
     /* Sidebar specific colors for dark theme */
-    --sidebar-background: 222 47% 10.2%; /* Slightly darker than main dark background */
-    --sidebar-foreground: 210 40% 98%;
+    --sidebar-background: 0 0% 6%; /* Even darker black for sidebar */
+    --sidebar-foreground: 0 0% 95%;
     --sidebar-primary: 250 70% 65%; /* Match app accent for dark mode */
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 217.2 32.6% 20.5%; /* Darker hover for sidebar items */
-    --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 217.2 32.6% 18.5%;
+    --sidebar-accent: 0 0% 18%; /* Dark hover for sidebar items */
+    --sidebar-accent-foreground: 0 0% 95%;
+    --sidebar-border: 0 0% 15%;
     --sidebar-ring: 250 70% 65%;
   }
 }

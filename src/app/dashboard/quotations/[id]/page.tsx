@@ -91,14 +91,6 @@ export default function ViewQuotationPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-headline font-bold tracking-tight">
-          Quotation {quotation.quotationNumber}
-        </h1>
-        <p className="text-muted-foreground">
-          Created for {quotation.client.name}
-        </p>
-      </div>
       <QuotationPreview quotation={quotation} />
     </div>
   );

@@ -223,12 +223,12 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'draft': return 'bg-gray-100 text-gray-800';
-      case 'sent': return 'bg-blue-100 text-blue-800';
-      case 'accepted': return 'bg-green-100 text-green-800';
-      case 'declined': return 'bg-red-100 text-red-800';
-      case 'expired': return 'bg-orange-100 text-orange-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'draft': return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200';
+      case 'sent': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+      case 'accepted': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+      case 'declined': return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
+      case 'expired': return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200';
+      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200';
     }
   };
 
@@ -237,7 +237,7 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
       case 'image':
         if (item.value && typeof item.value === 'string') {
           return (
-            <div className="relative w-16 h-16 border border-gray-200 rounded overflow-hidden bg-gray-50">
+            <div className="relative w-16 h-16 border border-border rounded overflow-hidden bg-muted">
               <Image
                 src={item.value}
                 alt={item.label}
@@ -249,7 +249,7 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
           );
         }
         return (
-          <div className="w-16 h-16 border border-gray-200 rounded flex items-center justify-center bg-gray-50 text-gray-400 text-xs">
+          <div className="w-16 h-16 border border-border rounded flex items-center justify-center bg-muted text-muted-foreground text-xs">
             No image
           </div>
         );
@@ -267,25 +267,25 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 bg-white">
+    <div className="max-w-4xl mx-auto space-y-6 bg-background">
       {showHeader && (
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 rounded-lg p-6 border border-blue-200 dark:border-blue-800">
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-card dark:to-card rounded-lg p-6 border border-blue-200 dark:border-border">
           <div className="flex justify-between items-start">
             <div className="space-y-2">
               <div className="flex items-center gap-2">
-                <FileText className="h-6 w-6 text-blue-600" />
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Quotation Preview</h1>
+                <FileText className="h-6 w-6 text-blue-600 dark:text-primary" />
+                <h1 className="text-2xl font-bold text-foreground">Quotation Preview</h1>
               </div>
               <div className="flex items-center gap-4">
-                <div className="bg-white dark:bg-gray-800 px-3 py-1 rounded-md border">
-                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Number:</span>
-                  <span className="ml-1 font-bold text-blue-600 dark:text-blue-400">#{quotation.quotationNumber}</span>
+                <div className="bg-background px-3 py-1 rounded-md border border-border">
+                  <span className="text-sm font-medium text-muted-foreground">Number:</span>
+                  <span className="ml-1 font-bold text-primary">#{quotation.quotationNumber}</span>
                 </div>
                 <Badge className={getStatusColor(quotation.status)}>
                   {quotation.status.charAt(0).toUpperCase() + quotation.status.slice(1)}
                 </Badge>
               </div>
-              <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+              <div className="flex items-center gap-4 text-sm text-muted-foreground">
                 <div className="flex items-center gap-1">
                   <Calendar className="h-4 w-4" />
                   <span>Created: {format(quotation.quotationDate instanceof Date ? quotation.quotationDate : quotation.quotationDate.toDate(), 'MMM dd, yyyy')}</span>
@@ -303,7 +303,7 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
                   Edit
                 </Link>
               </Button>
-              <Button onClick={downloadPdf} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700">
+              <Button onClick={downloadPdf} className="flex items-center gap-2 bg-primary hover:bg-primary/90">
                 <Download className="h-4 w-4" />
                 Download PDF
               </Button>
@@ -398,8 +398,8 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
         <CardContent>
           <div className="space-y-4">
             {quotation.rows.map((row: QuotationRow, rowIndex: number) => (
-              <div key={row.id} className="border rounded-lg overflow-hidden">
-                <div className="grid gap-4 bg-gray-50 p-4 text-sm font-medium" style={{ gridTemplateColumns: row.items.map(item => `${item.width || 100}fr`).join(' ') }}>
+              <div key={row.id} className="border border-border rounded-lg overflow-hidden">
+                <div className="grid gap-4 bg-muted p-4 text-sm font-medium" style={{ gridTemplateColumns: row.items.map(item => `${item.width || 100}fr`).join(' ') }}>
                   {row.items.map((item, itemIndex) => (
                     <div key={item.id} className="text-left">
                       {item.label}
