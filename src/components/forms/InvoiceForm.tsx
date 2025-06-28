@@ -26,6 +26,7 @@ import type { Invoice, Client, LineItem, BillerInfo } from "@/lib/types";
 import { GSTIN_REGEX } from "@/lib/constants";
 import { isInterStateTax } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { InvoicePreview } from "@/components/InvoicePreview";
 import { format, addDays } from "date-fns";
 import { CalendarIcon, PlusCircle, Trash2, Edit2, Loader2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -94,30 +95,85 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
   const [loadingBillerInfo, setLoadingBillerInfo] = useState(!initialData); 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
+  const [generatedInvoiceNumber, setGeneratedInvoiceNumber] = useState<string>(
+    initialData?.invoiceNumber || ""
+  );
+
+  useEffect(() => {
+    if (!initialData?.invoiceNumber && generatedInvoiceNumber === "") {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const randomNum = Math.floor(Math.random() * 1000) + 1;
+      setGeneratedInvoiceNumber(`INV-${year}${month}-${randomNum}`);
+    }
+  }, [initialData?.invoiceNumber, generatedInvoiceNumber]);
+
+  const [initialLineItems, setInitialLineItems] = useState<any[]>(
+    initialData?.lineItems || []
+  );
+
+  useEffect(() => {
+    if (initialData?.lineItems) {
+      setInitialLineItems(initialData.lineItems.map(item => ({
+        id: item.id || `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        productName: item.productName,
+        amount: item.amount,
+        date: item.date ? new Date(item.date) : new Date()
+      })));
+    } else if (initialLineItems.length === 0) {
+      setInitialLineItems([{ 
+        id: `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, 
+        productName: "", 
+        amount: 0, 
+        date: new Date() 
+      }]);
+    }
+  }, [initialData?.lineItems]);
+
+  const generateStableId = useCallback(() => {
+    return `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  }, []);
 
   const form = useForm<InvoiceFormValues>({
     resolver: zodResolver(invoiceFormSchema),
+    mode: "onChange",
     defaultValues: {
-      invoiceNumber: initialData?.invoiceNumber || `INV-${String(new Date().getFullYear())}${String(new Date().getMonth() + 1).padStart(2, '0')}-${Math.floor(Math.random()*1000)+1}`,
+      invoiceNumber: initialData?.invoiceNumber || "",
       invoiceDate: initialData?.invoiceDate ? (initialData.invoiceDate instanceof Timestamp ? initialData.invoiceDate.toDate() : new Date(initialData.invoiceDate)) : new Date(),
       dueDate: initialData?.dueDate ? (initialData.dueDate instanceof Timestamp ? initialData.dueDate.toDate() : new Date(initialData.dueDate)) : addDays(new Date(), 15),
       clientId: initialData ? initialData.client.id : searchParams.get('clientId') || "",
       status: initialData ? initialData.status : 'draft',
       isInterState: initialData ? initialData.isInterState : false,
-      lineItems: initialData 
-        ? initialData.lineItems.map(item => ({ 
-            id: item.id || crypto.randomUUID(), 
-            productName: item.productName, 
-            amount: item.amount,
-            date: item.date ? new Date(item.date) : new Date()
-          }))
-        : [{ id: crypto.randomUUID(), productName: "", amount: 0, date: new Date() }],
+      lineItems: initialData?.lineItems || [],
       notes: initialData?.notes || "",
       termsAndConditions: initialData?.termsAndConditions || "Thank you for your business! Payment is due within the specified date.",
       billerInfo: initialData ? initialData.billerInfo : defaultBillerInfo,
       currency: initialData?.currency || "INR",
     },
   });
+
+  // Watch form values for real-time preview updates
+  const watchedValues = form.watch();
+
+  // Reset form values once stable values are generated
+  useEffect(() => {
+    if (generatedInvoiceNumber && initialLineItems.length > 0) {
+      form.reset({
+        invoiceNumber: generatedInvoiceNumber,
+        invoiceDate: initialData?.invoiceDate ? (initialData.invoiceDate instanceof Timestamp ? initialData.invoiceDate.toDate() : new Date(initialData.invoiceDate)) : new Date(),
+        dueDate: initialData?.dueDate ? (initialData.dueDate instanceof Timestamp ? initialData.dueDate.toDate() : new Date(initialData.dueDate)) : addDays(new Date(), 15),
+        clientId: initialData ? initialData.client.id : searchParams.get('clientId') || "",
+        status: initialData ? initialData.status : 'draft',
+        isInterState: initialData ? initialData.isInterState : false,
+        lineItems: initialLineItems,
+        notes: initialData?.notes || "",
+        termsAndConditions: initialData?.termsAndConditions || "Thank you for your business! Payment is due within the specified date.",
+        billerInfo: initialData ? initialData.billerInfo : defaultBillerInfo,
+        currency: initialData?.currency || "INR",
+      });
+    }
+  }, [generatedInvoiceNumber, initialLineItems, form, initialData, searchParams, defaultBillerInfo]);
 
   useEffect(() => {
     const authInstance: Auth = getFirebaseAuthInstance();
@@ -186,7 +242,7 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
         status: initialData.status,
         isInterState: initialData.isInterState,
         lineItems: initialData.lineItems.map(item => ({
-          id: item.id || crypto.randomUUID(),
+          id: item.id || generateStableId(),
           productName: item.productName,
           amount: item.amount,
           date: item.date ? new Date(item.date) : new Date(),
@@ -277,7 +333,10 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
       return;
     }
     
-    const billerInfoForInvoice = values.billerInfo; 
+    const billerInfoForInvoice = {
+      ...values.billerInfo,
+      gstin: values.billerInfo?.gstin || ""
+    }; 
     if (!billerInfoForInvoice?.businessName && !initialData?.billerInfo?.businessName) {
          toast({ title: "Biller Info Missing", description: "Your business information is required. Please check settings.", variant: "destructive" });
         return;
@@ -568,7 +627,7 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
                 )}
               </div>
             ))}
-            <Button type="button" variant="outline" onClick={() => append({ id: crypto.randomUUID(), productName: "", amount: 0, date: new Date() })}>
+            <Button type="button" variant="outline" onClick={() => append({ id: generateStableId(), productName: "", amount: 0, date: new Date() })}>
               <PlusCircle className="mr-2 h-4 w-4" /> Add Item
             </Button>
           </CardContent>
@@ -621,6 +680,95 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
                      </FormControl>
                      <FormDescription>To add/change logo, update Business Information in Settings. It will appear on the PDF.</FormDescription>
                  </FormItem>
+            </CardContent>
+        </Card>
+
+        {/* Invoice Preview Section */}
+        <Card className="mt-6">
+            <CardHeader>
+                <CardTitle className="text-xl font-headline">Invoice Preview</CardTitle>
+                <p className="text-sm text-muted-foreground">Preview how your invoice will look before creating it</p>
+            </CardHeader>
+            <CardContent>
+                <InvoicePreview 
+                    showActions={false}
+                    invoice={{
+                        id: watchedValues.invoiceNumber || "PREVIEW",
+                        invoiceNumber: watchedValues.invoiceNumber || "PREVIEW",
+                        invoiceDate: watchedValues.invoiceDate || new Date(),
+                        dueDate: watchedValues.dueDate || addDays(new Date(), 30),
+                        status: watchedValues.status || "draft",
+                        isInterState: watchedValues.isInterState || false,
+                        client: selectedClientData || {
+                            id: "",
+                            name: "Select a client",
+                            gstin: "",
+                            addressLine1: "",
+                            addressLine2: "",
+                            city: "",
+                            state: "",
+                            postalCode: "",
+                            country: "India",
+                            email: "",
+                            phone: "",
+                            userId: "",
+                            defaultTaxRate: 18
+                        },
+                        lineItems: (watchedValues.lineItems || []).map(item => ({
+                            ...item,
+                            cgst: 0,
+                            sgst: 0,
+                            igst: 0,
+                            totalAmount: item.amount || 0,
+                            taxRate: 18,
+                            quantity: 1,
+                            rate: item.amount || 0,
+                            discountPercentage: 0
+                        })),
+                        subTotal: watchedValues.lineItems?.reduce((sum, item) => sum + (item.amount || 0), 0) || 0,
+                        totalCGST: (() => {
+                            const subtotal = watchedValues.lineItems?.reduce((sum, item) => sum + (item.amount || 0), 0) || 0;
+                            const isInterState = watchedValues.isInterState || false;
+                            return isInterState ? 0 : subtotal * 0.09;
+                        })(),
+                        totalSGST: (() => {
+                            const subtotal = watchedValues.lineItems?.reduce((sum, item) => sum + (item.amount || 0), 0) || 0;
+                            const isInterState = watchedValues.isInterState || false;
+                            return isInterState ? 0 : subtotal * 0.09;
+                        })(),
+                        totalIGST: (() => {
+                            const subtotal = watchedValues.lineItems?.reduce((sum, item) => sum + (item.amount || 0), 0) || 0;
+                            const isInterState = watchedValues.isInterState || false;
+                            return isInterState ? subtotal * 0.18 : 0;
+                        })(),
+                        grandTotal: (() => {
+                            const subtotal = watchedValues.lineItems?.reduce((sum, item) => sum + (item.amount || 0), 0) || 0;
+                            return subtotal * 1.18;
+                        })(),
+                        notes: watchedValues.notes || "",
+                        termsAndConditions: watchedValues.termsAndConditions || "",
+                        billerInfo: {
+                            businessName: watchedValues.billerInfo?.businessName || "",
+                            gstin: watchedValues.billerInfo?.gstin || "",
+                            addressLine1: watchedValues.billerInfo?.addressLine1 || "",
+                            addressLine2: watchedValues.billerInfo?.addressLine2,
+                            city: watchedValues.billerInfo?.city || "",
+                            state: watchedValues.billerInfo?.state || "",
+                            postalCode: watchedValues.billerInfo?.postalCode || "",
+                            country: watchedValues.billerInfo?.country || "India",
+                            email: watchedValues.billerInfo?.email,
+                            phone: watchedValues.billerInfo?.phone,
+                            bankName: watchedValues.billerInfo?.bankName,
+                            accountNumber: watchedValues.billerInfo?.accountNumber,
+                            ifscCode: watchedValues.billerInfo?.ifscCode,
+                            upiId: watchedValues.billerInfo?.upiId,
+                            logoUrl: watchedValues.billerInfo?.logoUrl
+                        },
+                        userId: currentUser?.uid || "",
+                        createdAt: Timestamp.now(),
+                        updatedAt: Timestamp.now()
+                    }}
+                />
             </CardContent>
         </Card>
 
