@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Link from 'next/link';
-import { IndianRupee, FileText, Users, AlertTriangle, CheckCircle2, TrendingUp, PieChart as PieChartIcon, BarChartHorizontalBig, ExternalLink, Loader2, Quote, FileCheck } from "lucide-react";
+import { IndianRupee, FileText, Users, AlertTriangle, CheckCircle2, TrendingUp, PieChart as PieChartIcon, BarChartHorizontalBig, ExternalLink, Loader2, Quote, FileCheck, Send } from "lucide-react";
 import { db, getFirebaseAuthInstance } from '@/lib/firebase';
 import { collection, query, where, getDocs, Timestamp, orderBy, limit } from 'firebase/firestore';
 import type { User as FirebaseAuthUser, Auth } from 'firebase/auth';
@@ -43,7 +43,7 @@ interface DashboardStats {
   overdueInvoicesCount: number;
   overdueInvoicesAmount: number;
   momRevenueGrowth: number | null;
-  averageInvoiceValue: number | null;
+  totalSentAmountThisMonth: number;
 }
 
 interface QuotationStats {
@@ -63,7 +63,7 @@ const initialDashboardStats: DashboardStats = {
   overdueInvoicesCount: 0,
   overdueInvoicesAmount: 0,
   momRevenueGrowth: null,
-  averageInvoiceValue: null,
+  totalSentAmountThisMonth: 0,
 };
 
 const initialQuotationStats: QuotationStats = {
@@ -196,6 +196,12 @@ export default function DashboardPage() {
       let invoicesCreatedCount = fetchedInvoices.length;
       let overdueInvoicesCount = 0;
       let overdueInvoicesAmount = 0;
+      let totalSentAmountThisMonth = 0;
+
+      // Calculate total sent amount for this month only
+      const now = new Date();
+      const thisMonthStart = startOfMonth(now);
+      const thisMonthEnd = endOfMonth(now);
 
       fetchedInvoices.forEach(inv => {
         if (inv.status === 'paid') {
@@ -206,9 +212,11 @@ export default function DashboardPage() {
           overdueInvoicesCount++;
           overdueInvoicesAmount += inv.grandTotal;
         }
+        // Calculate sent invoices for this month specifically
+        if (inv.status === 'sent' && inv.invoiceDate >= thisMonthStart && inv.invoiceDate <= thisMonthEnd) {
+          totalSentAmountThisMonth += inv.grandTotal;
+        }
       });
-      
-      const averageInvoiceValue = paidInvoicesCount > 0 ? totalRevenue / paidInvoicesCount : 0;
 
       const clientsRef = collection(db, "clients");
       const clientsQuery = query(clientsRef, where("userId", "==", userId));
@@ -222,7 +230,7 @@ export default function DashboardPage() {
         activeClientsCount,
         overdueInvoicesCount,
         overdueInvoicesAmount,
-        averageInvoiceValue,
+        totalSentAmountThisMonth,
       }));
 
     } catch (err) {
@@ -541,11 +549,11 @@ export default function DashboardPage() {
   
   const invoiceStatCards = [
     { title: `Total Revenue (${dateFilterLabel})`, value: `Rs. ${stats.totalRevenue.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`, icon: IndianRupee, color: "text-green-500", description: "" },
-    { title: `Invoices Created (${dateFilterLabel})`, value: stats.invoicesCreatedCount.toString(), icon: FileText, color: "text-blue-500", description: "" },
-    { title: "Total Active Clients", value: stats.activeClientsCount.toString(), icon: Users, color: "text-purple-500", description: "" },
     { title: `Overdue Invoices (${dateFilterLabel})`, value: `${stats.overdueInvoicesCount} (Rs. ${stats.overdueInvoicesAmount.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})})`, icon: AlertTriangle, color: "text-red-500", description: stats.overdueInvoicesCount > 0 ? "Action required" : "No overdue invoices" },
     { title: "MoM Revenue Growth", value: stats.momRevenueGrowth !== null ? `${stats.momRevenueGrowth.toFixed(1)}%` : "N/A", icon: TrendingUp, color: stats.momRevenueGrowth !== null && stats.momRevenueGrowth >= 0 ? "text-green-500" : "text-red-500", description: "Prev. full month" },
-    { title: `Avg. Invoice Value (${dateFilterLabel})`, value: `Rs. ${stats.averageInvoiceValue !== null ? stats.averageInvoiceValue.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '0.00'}`, icon: BarChartHorizontalBig, color: "text-indigo-500", description: "Based on paid invoices" },
+    { title: "Sent Invoices (MTD)", value: `Rs. ${stats.totalSentAmountThisMonth.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`, icon: Send, color: "text-indigo-500", description: "Sent invoices this month" },
+    { title: `Invoices Created (${dateFilterLabel})`, value: stats.invoicesCreatedCount.toString(), icon: FileText, color: "text-blue-500", description: "" },
+    { title: "Total Active Clients", value: stats.activeClientsCount.toString(), icon: Users, color: "text-purple-500", description: "" },
   ];
 
   const quotationStatCards = [
@@ -578,7 +586,7 @@ export default function DashboardPage() {
       }, {} as any);
 
   const hasMeaningfulStats = analyticsType === 'invoices'
-    ? stats.invoicesCreatedCount > 0 || stats.totalRevenue > 0 || stats.activeClientsCount > 0 || stats.momRevenueGrowth !== null || stats.averageInvoiceValue !== null
+    ? stats.invoicesCreatedCount > 0 || stats.totalRevenue > 0 || stats.activeClientsCount > 0 || stats.momRevenueGrowth !== null || stats.totalSentAmountThisMonth > 0
     : quotationStats.quotationsCreatedCount > 0 || quotationStats.totalQuotationValue > 0 || quotationStats.conversionRate !== null || quotationStats.averageQuotationValue !== null;
 
   if (loadingAuth) { 
