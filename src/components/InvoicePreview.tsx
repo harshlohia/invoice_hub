@@ -103,7 +103,7 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
         });
       }));
 
-      // Create PDF with proper A4 dimensions
+      // Create PDF with standard A4 dimensions
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
@@ -111,92 +111,145 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
         compress: true
       });
 
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const margin = 10; // 10mm margin
-      const availableWidth = pdfWidth - (margin * 2);
-      const availableHeight = pdfHeight - (margin * 2);
+      const pdfWidth = pdf.internal.pageSize.getWidth(); // 210mm
+      const pdfHeight = pdf.internal.pageSize.getHeight(); // 297mm
+      const margin = 15; // Standard 15mm margin for professional appearance
+      const availableWidth = pdfWidth - (margin * 2); // 180mm
+      const availableHeight = pdfHeight - (margin * 2); // 267mm
 
-      // Calculate how many line items can fit per page
-      const headerHeight = 80; // Approximate height for header section in mm
-      const footerHeight = 60; // Approximate height for totals and footer in mm
-      const lineItemHeight = 8; // Height per line item row in mm
-      const maxLineItemsPerPage = Math.floor((availableHeight - headerHeight - footerHeight) / lineItemHeight);
+      // Hide elements that shouldn't appear in PDF
+      const elementsToHide = elementToCapture.querySelectorAll('.do-not-print-in-pdf');
+      const originalDisplayValues: string[] = [];
       
-      const totalLineItems = invoice.lineItems.length;
-      const totalPages = Math.ceil(totalLineItems / maxLineItemsPerPage);
+      elementsToHide.forEach((element, index) => {
+        const htmlElement = element as HTMLElement;
+        originalDisplayValues[index] = htmlElement.style.display;
+        htmlElement.style.display = 'none';
+      });
 
-      // Generate each page
-      for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
-        if (pageIndex > 0) {
-          pdf.addPage();
-        }
+      // Optimize content spacing for PDF
+      const cardContent = elementToCapture.querySelector('[style*="padding: 24px"]') as HTMLElement;
+      const originalCardContentStyle = cardContent?.style.cssText || '';
+      if (cardContent) {
+        cardContent.style.padding = '16px';
+      }
+      
+      // Reduce digital signature spacing
+      const digitalSignature = elementToCapture.querySelector('[style*="marginTop: 32px"]') as HTMLElement;
+      const originalSignatureStyle = digitalSignature?.style.cssText || '';
+      if (digitalSignature) {
+        digitalSignature.style.marginTop = '20px';
+        digitalSignature.style.marginBottom = '16px';
+      }
 
-        // Calculate line items for this page
-        const startIndex = pageIndex * maxLineItemsPerPage;
-        const endIndex = Math.min(startIndex + maxLineItemsPerPage, totalLineItems);
-        const pageLineItems = invoice.lineItems.slice(startIndex, endIndex);
+      // Force layout recalculation
+      elementToCapture.offsetHeight;
+      
+      // Capture content with optimal settings
+      const canvas = await html2canvas(elementToCapture, {
+        scale: 2, // Good quality without being excessive
+        useCORS: true,
+        allowTaint: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        width: 900,
+        height: elementToCapture.scrollHeight,
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: 900,
+        windowHeight: elementToCapture.scrollHeight
+      });
+      
+      // Restore original styles
+      elementsToHide.forEach((element, index) => {
+        const htmlElement = element as HTMLElement;
+        htmlElement.style.display = originalDisplayValues[index];
+      });
+      
+      if (cardContent && originalCardContentStyle) {
+        cardContent.style.cssText = originalCardContentStyle;
+      }
+      
+      if (digitalSignature && originalSignatureStyle) {
+        digitalSignature.style.cssText = originalSignatureStyle;
+      }
+
+      const imgData = canvas.toDataURL('image/png', 0.95);
+      const canvasWidth = canvas.width;
+      const canvasHeight = canvas.height;
+      
+      // Convert canvas dimensions to mm (assuming 96 DPI)
+      const pxToMm = 25.4 / 96;
+      const imgWidthMm = (canvasWidth / 2) * pxToMm; // Divide by scale factor
+      const imgHeightMm = (canvasHeight / 2) * pxToMm;
+      
+      // Calculate scaling based on width only to preserve natural content flow
+      const scaleToFitWidth = availableWidth / imgWidthMm;
+      const optimalScale = Math.min(scaleToFitWidth, 1.0); // Only scale down if content is too wide
+      
+      const finalWidth = imgWidthMm * optimalScale;
+      const finalHeight = imgHeightMm * optimalScale;
+      
+      // Check if content fits on a single page (based on actual height, not scaled)
+      if (finalHeight <= availableHeight) {
+        // Single page - center content properly
+        const x = margin + (availableWidth - finalWidth) / 2;
+        const y = margin;
         
-        // Create a temporary container for this page's content
-        const pageContainer = document.createElement('div');
-        pageContainer.style.backgroundColor = '#ffffff';
-        pageContainer.style.fontFamily = 'Arial, sans-serif';
-        pageContainer.style.fontSize = '14px';
-        pageContainer.style.lineHeight = '1.5';
-        pageContainer.style.color = '#000000';
-        pageContainer.style.width = '900px';
-        pageContainer.style.padding = '0';
-        pageContainer.style.margin = '0';
-
-        // Add content to page container
-        pageContainer.innerHTML = `
-          ${pageIndex === 0 ? generateHeaderHTML(invoice) : generateContinuationHeaderHTML(invoice, pageIndex + 1)}
-          ${generateLineItemsTableHTML(pageLineItems, startIndex, invoice.currency)}
-          ${pageIndex === totalPages - 1 ? generateFooterHTML(invoice) : generateContinuationFooterHTML(pageIndex + 1, totalPages)}
-        `;
-
-        // Temporarily add to DOM for rendering
-        document.body.appendChild(pageContainer);
-
-        try {
-          // Create canvas for this page
-          const canvas = await html2canvas(pageContainer, {
-            scale: 2,
-            useCORS: true,
-            allowTaint: true,
-            logging: false,
-            backgroundColor: '#ffffff',
-            width: 900,
-            height: Math.min(pageContainer.scrollHeight, 1200) // Limit height per page
-          });
-
-          // Convert to image and add to PDF
-          const imgData = canvas.toDataURL('image/png', 1.0);
+        pdf.addImage(imgData, 'PNG', x, y, finalWidth, finalHeight, undefined, 'FAST');
+        
+        console.log(`Single page PDF: ${finalWidth.toFixed(1)}x${finalHeight.toFixed(1)}mm at scale ${optimalScale.toFixed(3)}`);
+      } else {
+        // Multi-page - split content evenly
+        const contentPerPage = availableHeight / optimalScale; // How much original content fits per page
+        const totalPages = Math.ceil(imgHeightMm / contentPerPage);
+        
+        console.log(`Multi-page PDF: ${totalPages} pages needed, ${contentPerPage.toFixed(1)}mm content per page`);
+        
+        for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
+          if (pageIndex > 0) {
+            pdf.addPage();
+          }
           
-          const canvasWidth = canvas.width;
-          const canvasHeight = canvas.height;
+          // Calculate content slice for this page
+          const contentStart = pageIndex * contentPerPage;
+          const contentEnd = Math.min((pageIndex + 1) * contentPerPage, imgHeightMm);
+          const pageContentHeight = contentEnd - contentStart;
           
-          // Convert pixels to mm
-          const pxToMm = 25.4 / 96;
-          const imgWidthMm = canvasWidth * pxToMm / 2;
-          const imgHeightMm = canvasHeight * pxToMm / 2;
+          // Convert to pixel coordinates
+          const pixelStart = (contentStart / imgHeightMm) * canvasHeight;
+          const pixelHeight = (pageContentHeight / imgHeightMm) * canvasHeight;
           
-          // Scale to fit
-          const scaleX = availableWidth / imgWidthMm;
-          const scaleY = availableHeight / imgHeightMm;
-          const scale = Math.min(scaleX, scaleY, 1);
+          // Create canvas for this page slice
+          const pageCanvas = document.createElement('canvas');
+          pageCanvas.width = canvasWidth;
+          pageCanvas.height = pixelHeight;
+          const pageCtx = pageCanvas.getContext('2d');
           
-          const finalWidth = imgWidthMm * scale;
-          const finalHeight = imgHeightMm * scale;
+          if (!pageCtx) {
+            throw new Error('Failed to create canvas context for page slice');
+          }
           
-          const x = (pdfWidth - finalWidth) / 2;
+          // Draw the content slice
+          pageCtx.drawImage(
+            canvas,
+            0, pixelStart, canvasWidth, pixelHeight, // source
+            0, 0, canvasWidth, pixelHeight // destination
+          );
+          
+          const pageImgData = pageCanvas.toDataURL('image/png', 0.95);
+          
+          // Calculate dimensions for this page
+          const pageImgHeightMm = pageContentHeight;
+          const scaledPageHeight = pageImgHeightMm * optimalScale;
+          
+          // Position content with proper margins
+          const x = margin + (availableWidth - finalWidth) / 2;
           const y = margin;
-
-          pdf.addImage(imgData, 'PNG', x, y, finalWidth, finalHeight, undefined, 'FAST');
           
-        } finally {
-          // Clean up temporary element
-          document.body.removeChild(pageContainer);
+          pdf.addImage(pageImgData, 'PNG', x, y, finalWidth, scaledPageHeight, undefined, 'FAST');
+          
+          console.log(`Page ${pageIndex + 1}: ${finalWidth.toFixed(1)}x${scaledPageHeight.toFixed(1)}mm`);
         }
       }
       
@@ -205,7 +258,7 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
       
       toast({
         title: "Success",
-        description: `Multi-page invoice ${invoice.invoiceNumber}.pdf downloaded successfully.`,
+        description: `Invoice ${invoice.invoiceNumber}.pdf downloaded successfully.`,
       });
 
     } catch (error) {
@@ -229,7 +282,18 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
   const currencySymbol = invoice.currency === "INR" ? "Rs." : (invoice.currency || "Rs.");
 
   return (
-    <Card className="max-w-4xl mx-auto shadow-lg">
+    <>
+      <style jsx global>{`
+        .do-not-print-in-pdf {
+          /* This class is used to hide elements from PDF output */
+        }
+        @media print {
+          .do-not-print-in-pdf {
+            display: none !important;
+          }
+        }
+      `}</style>
+      <Card className="max-w-4xl mx-auto shadow-lg">
       <div ref={invoiceCardRef} data-invoice-content style={{
         backgroundColor: '#ffffff',
         fontFamily: 'Arial, sans-serif',
@@ -237,7 +301,9 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
         lineHeight: '1.5',
         color: '#000000',
         width: '900px',
-        maxWidth: 'none'
+        maxWidth: 'none',
+        minHeight: 'auto',
+        overflow: 'hidden'
       }}> 
         <CardHeader style={{
           backgroundColor: '#f8f9fa',
@@ -338,8 +404,8 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
                 margin: '0 0 12px 0'
               }}># {invoice.invoiceNumber}</p>
               
-              {/* Status */}
-              <div style={{
+              {/* Status - Hidden in PDF */}
+              <div className="do-not-print-in-pdf" style={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'flex-end',
@@ -375,7 +441,7 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
           </div>
         </CardHeader>
 
-        <CardContent style={{ padding: '24px' }}>
+        <CardContent style={{ padding: '24px', paddingBottom: '16px' }}>
           {/* Bill To Section */}
           <div style={{
             display: 'grid',
@@ -893,6 +959,7 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
         </CardFooter>
       )}
     </Card>
+    </>
   );
 });
 
