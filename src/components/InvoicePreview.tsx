@@ -798,121 +798,116 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
 
           {/* Digital Signature */}
           <div style={{
-            marginTop: '32px',
+            marginTop: '40px',
             display: 'flex',
             justifyContent: 'flex-end',
             alignItems: 'center'
           }}>
+            {/* Digital Certificate Stamp */}
             <div style={{
-              position: 'relative',
-              display: 'inline-block'
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              position: 'relative'
             }}>
-              {/* Green Stamp Background */}
+              {/* Certificate Badge */}
               <div style={{
-                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                borderRadius: '50%',
-                width: '120px',
-                height: '120px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)',
-                border: '3px solid #065f46',
+                border: '2px solid #059669',
+                borderRadius: '8px',
+                padding: '12px 16px',
+                backgroundColor: '#f0fdf4',
                 position: 'relative',
-                transform: 'rotate(-5deg)'
+                boxShadow: '0 2px 8px rgba(5, 150, 105, 0.15)'
               }}>
-                {/* Inner Circle */}
+                {/* Certificate Header */}
                 <div style={{
-                  background: 'rgba(255, 255, 255, 0.1)',
-                  borderRadius: '50%',
-                  width: '100px',
-                  height: '100px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  border: '2px solid rgba(255, 255, 255, 0.3)',
                   textAlign: 'center',
-                  padding: '8px'
+                  marginBottom: '8px'
                 }}>
-                  {/* Business Name */}
                   <div style={{
-                    color: '#ffffff',
-                    fontSize: '10px',
-                    fontWeight: 'bold',
+                    fontSize: '8px',
+                    color: '#059669',
+                    fontWeight: '700',
                     textTransform: 'uppercase',
                     letterSpacing: '0.5px',
-                    lineHeight: '1.1',
-                    textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)',
-                    wordWrap: 'break-word',
-                    maxWidth: '80px'
+                    marginBottom: '2px'
+                  }}>
+                    DIGITALLY VERIFIED
+                  </div>
+                  <div style={{
+                    width: '40px',
+                    height: '1px',
+                    backgroundColor: '#059669',
+                    margin: '0 auto'
+                  }}></div>
+                </div>
+
+                {/* Certificate Body */}
+                <div style={{
+                  textAlign: 'center',
+                  marginBottom: '8px'
+                }}>
+                  <div style={{
+                    fontSize: '10px',
+                    color: '#065f46',
+                    fontWeight: '600',
+                    lineHeight: '1.2',
+                    maxWidth: '120px'
                   }}>
                     {invoice.billerInfo.businessName}
                   </div>
-                  
-                  {/* Separator Line */}
                   <div style={{
-                    width: '60px',
-                    height: '1px',
-                    backgroundColor: 'rgba(255, 255, 255, 0.6)',
-                    margin: '4px 0'
-                  }}></div>
-                  
-                  {/* Authorized Signature Text */}
-                  <div style={{
-                    color: '#ffffff',
-                    fontSize: '7px',
-                    fontWeight: '600',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.3px',
-                    textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)'
+                    fontSize: '8px',
+                    color: '#6b7280',
+                    marginTop: '4px',
+                    fontWeight: '500'
                   }}>
-                    Authorized
-                  </div>
-                  <div style={{
-                    color: '#ffffff',
-                    fontSize: '7px',
-                    fontWeight: '600',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.3px',
-                    textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)'
-                  }}>
-                    Signature
+                    Certificate ID: {invoice.id?.slice(-8).toUpperCase() || 'N/A'}
                   </div>
                 </div>
-                
-                {/* Decorative Stars */}
+
+                {/* Certificate Footer */}
+                <div style={{
+                  textAlign: 'center',
+                  borderTop: '1px solid #d1fae5',
+                  paddingTop: '6px'
+                }}>
+                  <div style={{
+                    fontSize: '7px',
+                    color: '#6b7280',
+                    fontWeight: '500'
+                  }}>
+                    Signed on {format(new Date(), "dd MMM yyyy")}
+                  </div>
+                  <div style={{
+                    fontSize: '7px',
+                    color: '#6b7280',
+                    marginTop: '1px'
+                  }}>
+                    Valid Certificate
+                  </div>
+                </div>
+
+                {/* Security Icon */}
                 <div style={{
                   position: 'absolute',
-                  top: '8px',
-                  left: '50%',
-                  transform: 'translateX(-50%)',
-                  color: '#ffffff',
-                  fontSize: '8px',
-                  opacity: '0.8'
-                }}>★</div>
-                <div style={{
-                  position: 'absolute',
-                  bottom: '8px',
-                  left: '50%',
-                  transform: 'translateX(-50%)',
-                  color: '#ffffff',
-                  fontSize: '8px',
-                  opacity: '0.8'
-                }}>★</div>
-              </div>
-              
-              {/* Date stamp */}
-              <div style={{
-                position: 'absolute',
-                bottom: '-20px',
-                right: '10px',
-                fontSize: '9px',
-                color: '#6b7280',
-                fontWeight: '500',
-                transform: 'rotate(-5deg)'
-              }}>
-                {format(new Date(), "dd/MM/yyyy")}
+                  top: '-6px',
+                  right: '-6px',
+                  backgroundColor: '#059669',
+                  borderRadius: '50%',
+                  width: '16px',
+                  height: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: '2px solid #ffffff'
+                }}>
+                  <div style={{
+                    color: '#ffffff',
+                    fontSize: '8px',
+                    fontWeight: 'bold'
+                  }}>✓</div>
+                </div>
               </div>
             </div>
           </div>
