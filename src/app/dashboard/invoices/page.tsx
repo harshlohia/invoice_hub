@@ -8,8 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { InvoiceCard } from '@/components/InvoiceCard';
 import type { Invoice } from '@/lib/types'; 
-import { PlusCircle, Search, Filter, Loader2, AlertTriangle, FileText, CalendarDays } from 'lucide-react';
-import { collection, query, where, getDocs, orderBy, Timestamp } from 'firebase/firestore';
+import { PlusCircle, Search, Filter, Loader2, AlertTriangle, FileText, CalendarDays, ChevronDown, CheckCircle } from 'lucide-react';
+import { collection, query, where, getDocs, orderBy, Timestamp, limit, startAfter, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { db, getFirebaseAuthInstance } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { onAuthStateChanged, type User, type Auth } from 'firebase/auth';
@@ -17,59 +17,82 @@ import { startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear } from 'dat
 
 type DateRangeKey = "all" | "currentMonth" | "lastMonth" | "last3Months" | "thisYear";
 
+const INVOICES_PER_PAGE = 10;
+
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateRangeFilter, setDateRangeFilter] = useState<DateRangeKey>("all");
+  const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [hasMore, setHasMore] = useState(true);
   const { toast } = useToast();
 
-  const fetchInvoices = useCallback(async (userId: string, currentStatusFilter: string, currentDateRangeFilter: DateRangeKey) => {
-    setLoading(true);
+  const buildQuery = useCallback((userId: string, currentDateRangeFilter: DateRangeKey, lastDocument?: QueryDocumentSnapshot<DocumentData> | null) => {
+    const invoicesRef = collection(db, "invoices");
+    let q = query(invoicesRef, where("userId", "==", userId));
+
+    const now = new Date();
+    let startDate: Date | null = null;
+    let endDate: Date | null = null;
+
+    switch (currentDateRangeFilter) {
+      case "currentMonth":
+        startDate = startOfMonth(now);
+        endDate = endOfMonth(now);
+        break;
+      case "lastMonth":
+        startDate = startOfMonth(subMonths(now, 1));
+        endDate = endOfMonth(subMonths(now, 1));
+        break;
+      case "last3Months":
+        startDate = startOfMonth(subMonths(now, 2)); 
+        endDate = endOfMonth(now);
+        break;
+      case "thisYear":
+        startDate = startOfYear(now);
+        endDate = endOfYear(now);
+        break;
+      case "all":
+      default:
+        break;
+    }
+
+    if (startDate) {
+      q = query(q, where("invoiceDate", ">=", Timestamp.fromDate(startDate)));
+    }
+    if (endDate) {
+      q = query(q, where("invoiceDate", "<=", Timestamp.fromDate(endDate)));
+    }
+    
+    q = query(q, orderBy("invoiceDate", "desc"), limit(INVOICES_PER_PAGE));
+    
+    if (lastDocument) {
+      q = query(q, startAfter(lastDocument));
+    }
+    
+    return q;
+  }, []);
+
+  const fetchInvoices = useCallback(async (userId: string, currentDateRangeFilter: DateRangeKey, isLoadMore = false, currentLastDoc?: QueryDocumentSnapshot<DocumentData> | null) => {
+    if (isLoadMore) {
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
+      setInvoices([]);
+      setLastDoc(null);
+      setHasMore(true);
+    }
     setError(null);
+    
     try {
-      const invoicesRef = collection(db, "invoices");
-      let q = query(invoicesRef, where("userId", "==", userId));
-
-      const now = new Date();
-      let startDate: Date | null = null;
-      let endDate: Date | null = null;
-
-      switch (currentDateRangeFilter) {
-        case "currentMonth":
-          startDate = startOfMonth(now);
-          endDate = endOfMonth(now);
-          break;
-        case "lastMonth":
-          startDate = startOfMonth(subMonths(now, 1));
-          endDate = endOfMonth(subMonths(now, 1));
-          break;
-        case "last3Months":
-          startDate = startOfMonth(subMonths(now, 2)); 
-          endDate = endOfMonth(now);
-          break;
-        case "thisYear":
-          startDate = startOfYear(now);
-          endDate = endOfYear(now);
-          break;
-        case "all":
-        default:
-          break;
-      }
-
-      if (startDate) {
-        q = query(q, where("invoiceDate", ">=", Timestamp.fromDate(startDate)));
-      }
-      if (endDate) {
-        q = query(q, where("invoiceDate", "<=", Timestamp.fromDate(endDate)));
-      }
-      
-      q = query(q, orderBy("invoiceDate", "desc"));
-      
+      const q = buildQuery(userId, currentDateRangeFilter, isLoadMore ? currentLastDoc : null);
       const querySnapshot = await getDocs(q);
+      
       const invoicesData = querySnapshot.docs.map(doc => {
         const data = doc.data();
         return { 
@@ -81,34 +104,58 @@ export default function InvoicesPage() {
           updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : data.updatedAt ? new Date(data.updatedAt) : undefined,
         } as Invoice;
       });
-      setInvoices(invoicesData);
+      
+      if (isLoadMore) {
+        setInvoices(prev => [...prev, ...invoicesData]);
+      } else {
+        setInvoices(invoicesData);
+      }
+      
+      // Update pagination state
+      const lastVisible = querySnapshot.docs[querySnapshot.docs.length - 1];
+      setLastDoc(lastVisible || null);
+      setHasMore(querySnapshot.docs.length === INVOICES_PER_PAGE);
+      
     } catch (err) {
       console.error("Detailed error fetching invoices:", err);
       setError("Failed to load invoices. Please try again. Check the browser console for more details.");
       toast({ title: "Error", description: "Could not fetch invoices. Check console.", variant: "destructive" });
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
-  }, [toast]);
+  }, [toast, buildQuery]);
+
+  const loadMoreInvoices = useCallback(() => {
+    if (currentUser && hasMore && !loadingMore) {
+      fetchInvoices(currentUser.uid, dateRangeFilter, true, lastDoc);
+    }
+  }, [currentUser, hasMore, loadingMore, fetchInvoices, dateRangeFilter, lastDoc]);
 
   useEffect(() => {
     const authInstance: Auth = getFirebaseAuthInstance();
     const unsubscribe = onAuthStateChanged(authInstance, (user) => {
       setCurrentUser(user);
       if (user) {
-        fetchInvoices(user.uid, statusFilter, dateRangeFilter);
+        fetchInvoices(user.uid, dateRangeFilter);
       } else {
         setLoading(false);
         setInvoices([]);
       }
     });
     return () => unsubscribe();
-  }, [fetchInvoices, statusFilter, dateRangeFilter]);
+  }, []);
+
+  useEffect(() => {
+    if (currentUser) {
+      fetchInvoices(currentUser.uid, dateRangeFilter);
+    }
+  }, [dateRangeFilter, currentUser, fetchInvoices]);
   
   const handleInvoiceStatusUpdate = (invoiceId: string, newStatus: Invoice['status']) => {
     setInvoices(prevInvoices =>
       prevInvoices.map(inv =>
-        inv.id === invoiceId ? { ...inv, status: newStatus, updatedAt: new Date() } : inv
+        inv.id === invoiceId ? { ...inv, status: newStatus, updatedAt: Timestamp.now() } : inv
       )
     );
     // Optional: Re-apply client-side filters if necessary, though usually not needed just for status change
@@ -135,7 +182,7 @@ export default function InvoicesPage() {
   const handleDateRangeFilterChange = (value: DateRangeKey) => {
     setDateRangeFilter(value);
     if (currentUser) {
-      fetchInvoices(currentUser.uid, statusFilter, value); // Refetch when date range changes
+      fetchInvoices(currentUser.uid, value); // Refetch when date range changes
     }
   };
 
@@ -204,7 +251,7 @@ export default function InvoicesPage() {
           <AlertTriangle className="mx-auto h-12 w-12 text-destructive" />
           <h3 className="mt-2 text-xl font-semibold">Error Loading Invoices</h3>
           <p className="mt-1 text-sm text-muted-foreground">{error}</p>
-           <Button onClick={() => currentUser && fetchInvoices(currentUser.uid, statusFilter, dateRangeFilter)} className="mt-4">Retry</Button>
+           <Button onClick={() => currentUser && fetchInvoices(currentUser.uid, dateRangeFilter)} className="mt-4">Retry</Button>
         </div>
       )}
       
@@ -218,11 +265,64 @@ export default function InvoicesPage() {
       )}
 
       {!loading && !error && currentUser && filteredInvoices.length > 0 && (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {filteredInvoices.map((invoice) => (
-            <InvoiceCard key={invoice.id} invoice={invoice} onStatusUpdate={handleInvoiceStatusUpdate} />
-          ))}
-        </div>
+        <>
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {filteredInvoices.map((invoice) => (
+              <InvoiceCard key={invoice.id} invoice={invoice} onStatusUpdate={handleInvoiceStatusUpdate} />
+            ))}
+          </div>
+          
+          {/* Load More Section */}
+           {hasMore && searchTerm === "" && statusFilter === "all" && (
+             <div className="flex flex-col items-center pt-8 space-y-4">
+               <Button 
+                 onClick={loadMoreInvoices}
+                 disabled={loadingMore}
+                 variant="outline"
+                 size="lg"
+                 className="min-w-[200px] h-12 text-base font-medium border-2 hover:bg-accent/50 hover:border-accent transition-all duration-200 shadow-sm hover:shadow-md"
+               >
+                 {loadingMore ? (
+                   <>
+                     <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                     Loading more...
+                   </>
+                 ) : (
+                   <>
+                     <ChevronDown className="mr-2 h-5 w-5" />
+                     Load More Invoices
+                   </>
+                 )}
+               </Button>
+               
+               {/* Loading skeleton for new invoices */}
+               {loadingMore && (
+                 <div className="w-full grid gap-6 md:grid-cols-2 lg:grid-cols-3 opacity-50">
+                   {Array.from({ length: 3 }).map((_, index) => (
+                     <div key={`skeleton-${index}`} className="animate-pulse">
+                       <div className="bg-muted rounded-lg h-48 w-full"></div>
+                     </div>
+                   ))}
+                 </div>
+               )}
+             </div>
+           )}
+          
+          {/* Pagination Info */}
+          {searchTerm === "" && statusFilter === "all" && (
+            <div className="text-center text-sm text-muted-foreground pt-4">
+              {!hasMore && invoices.length > 0 && (
+                <p className="flex items-center justify-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                  All invoices loaded ({invoices.length} total)
+                </p>
+              )}
+              {hasMore && invoices.length > 0 && (
+                <p>Showing {invoices.length} invoices • More available</p>
+              )}
+            </div>
+          )}
+        </>
       )}
       
       {!loading && !error && currentUser && filteredInvoices.length === 0 && (

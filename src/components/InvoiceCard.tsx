@@ -95,7 +95,7 @@ export function InvoiceCard({ invoice: initialInvoice, onStatusUpdate }: Invoice
   };
 
   return (
-    <Card className="group hover:shadow-xl hover:shadow-blue-500/10 transition-all duration-300 hover:-translate-y-1 flex flex-col border-0 shadow-[0_8px_30px_rgb(0,0,0,0.12)] bg-gradient-to-br from-card to-card/80 backdrop-blur-sm">
+    <Card className="group hover:shadow-xl hover:shadow-blue-500/10 transition-all duration-300 hover:-translate-y-2 hover:scale-[1.02] flex flex-col border border-border/50 hover:border-blue-200/60 dark:hover:border-blue-800/60 bg-card/50 hover:bg-card backdrop-blur-sm">
       <CardHeader className="pb-4">
         <div className="flex justify-between items-start">
           <div className="space-y-2">
@@ -112,7 +112,7 @@ export function InvoiceCard({ invoice: initialInvoice, onStatusUpdate }: Invoice
           <DropdownMenu>
             <DropdownMenuTrigger asChild disabled={isUpdatingStatus}>
               <Badge 
-                className={`capitalize cursor-pointer hover:opacity-80 transition-all duration-200 shadow-sm ${statusStyles[invoice.status]}`}
+                className={`capitalize cursor-pointer hover:opacity-90 hover:scale-105 transition-all duration-200 ${statusStyles[invoice.status]}`}
               >
                 {isUpdatingStatus ? <Loader2 className="h-4 w-4 animate-spin" /> : statusIcons[invoice.status]}
                 <span className="ml-1.5 font-medium">{invoice.status}</span>
@@ -137,7 +137,7 @@ export function InvoiceCard({ invoice: initialInvoice, onStatusUpdate }: Invoice
         <div className="space-y-3">
           <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 rounded-xl p-4 border border-green-200/50 dark:border-green-800/30">
             <div className="flex items-center gap-3 mb-2">
-              <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center shadow-lg">
+              <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center">
                 <User className="h-5 w-5 text-white" />
               </div>
               <div>
@@ -175,7 +175,7 @@ export function InvoiceCard({ invoice: initialInvoice, onStatusUpdate }: Invoice
             variant="default" 
             size="sm" 
             asChild 
-            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg transition-all duration-200"
+            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white hover:shadow-md transition-all duration-200"
           >
             <Link href={`/dashboard/invoices/${invoice.id}`}>
               <Eye className="mr-1.5 h-4 w-4" /> 
