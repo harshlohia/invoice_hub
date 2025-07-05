@@ -269,7 +269,7 @@ export const QuotationPreview = forwardRef<QuotationPreviewHandle, QuotationPrev
   return (
     <div className="max-w-4xl mx-auto space-y-6 bg-background">
       {showHeader && (
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-card dark:to-card rounded-lg p-6 border border-blue-200 dark:border-border">
+        <div className="bg-gradient-to-r from-blue-50 to-blue-100 dark:from-card dark:to-card rounded-lg p-6 border border-blue-200 dark:border-border">
           <div className="flex justify-between items-start">
             <div className="space-y-2">
               <div className="flex items-center gap-2">

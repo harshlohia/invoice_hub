@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -79,6 +79,7 @@ export function Header() {
             </Button>
           </SheetTrigger>
           <SheetContent side="left" className="flex flex-col p-0">
+            <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
             <div className="p-4 border-b">
               <AppLogo hideTextOnMobile={false} />
             </div>

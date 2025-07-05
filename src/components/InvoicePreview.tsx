@@ -980,7 +980,7 @@ function generateHeaderHTML(invoice: Invoice): string {
             <p style="margin: 2px 0;">${invoice.billerInfo.city}, ${invoice.billerInfo.state} - ${invoice.billerInfo.postalCode}</p>
             ${invoice.billerInfo.gstin ? `
               <div style="margin-top: 8px; display: inline-block;">
-                <span style="font-weight: 600; color: #3f51b5; background-color: #eff6ff; padding: 6px 12px; border-radius: 6px; border: 1px solid #bfdbfe; font-size: 11px; letter-spacing: 0.5px; display: inline-block;">GSTIN: ${invoice.billerInfo.gstin}</span>
+                <span style="font-weight: 600; color: #2563eb; background-color: #eff6ff; padding: 6px 12px; border-radius: 6px; border: 1px solid #bfdbfe; font-size: 11px; letter-spacing: 0.5px; display: inline-block;">GSTIN: ${invoice.billerInfo.gstin}</span>
               </div>
             ` : ''}
           </div>

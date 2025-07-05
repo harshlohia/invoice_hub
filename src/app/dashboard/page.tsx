@@ -559,9 +559,9 @@ export default function DashboardPage() {
     { title: `Total Revenue (${dateFilterLabel})`, value: `Rs. ${stats.totalRevenue.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`, icon: IndianRupee, color: "text-green-500", description: "" },
     { title: `Overdue Invoices (${dateFilterLabel})`, value: `${stats.overdueInvoicesCount} (Rs. ${stats.overdueInvoicesAmount.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})})`, icon: AlertTriangle, color: "text-red-500", description: stats.overdueInvoicesCount > 0 ? "Action required" : "No overdue invoices" },
     { title: "MoM Revenue Growth", value: stats.momRevenueGrowth !== null ? `${stats.momRevenueGrowth.toFixed(1)}%` : "N/A", icon: TrendingUp, color: stats.momRevenueGrowth !== null && stats.momRevenueGrowth >= 0 ? "text-green-500" : "text-red-500", description: "Prev. full month" },
-    { title: `Sent Invoices (${dateFilterLabel})`, value: `Rs. ${stats.totalSentAmountForPeriod.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`, icon: Send, color: "text-indigo-500", description: `Sent invoices ${dateFilterLabel.toLowerCase()}` },
+    { title: `Sent Invoices (${dateFilterLabel})`, value: `Rs. ${stats.totalSentAmountForPeriod.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`, icon: Send, color: "text-blue-500", description: `Sent invoices ${dateFilterLabel.toLowerCase()}` },
     { title: `Invoices Created (${dateFilterLabel})`, value: stats.invoicesCreatedCount.toString(), icon: FileText, color: "text-blue-500", description: "" },
-    { title: "Total Active Clients", value: stats.activeClientsCount.toString(), icon: Users, color: "text-purple-500", description: "" },
+    { title: "Total Active Clients", value: stats.activeClientsCount.toString(), icon: Users, color: "text-blue-500", description: "" },
   ];
 
   const quotationStatCards = [
@@ -570,7 +570,7 @@ export default function DashboardPage() {
     { title: "Accepted Quotations", value: quotationStats.acceptedQuotationsCount.toString(), icon: CheckCircle2, color: "text-green-500", description: "Successfully converted" },
     { title: "Pending Quotations", value: quotationStats.pendingQuotationsCount.toString(), icon: FileCheck, color: "text-yellow-500", description: "Awaiting response" },
     { title: "Conversion Rate", value: quotationStats.conversionRate !== null ? `${quotationStats.conversionRate.toFixed(1)}%` : "N/A", icon: TrendingUp, color: quotationStats.conversionRate !== null && quotationStats.conversionRate >= 50 ? "text-green-500" : "text-orange-500", description: "Acceptance rate" },
-    { title: `Avg. Quotation Value (${dateFilterLabel})`, value: `Rs. ${quotationStats.averageQuotationValue !== null ? quotationStats.averageQuotationValue.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '0.00'}`, icon: BarChartHorizontalBig, color: "text-indigo-500", description: "All quotations" },
+    { title: `Avg. Quotation Value (${dateFilterLabel})`, value: `Rs. ${quotationStats.averageQuotationValue !== null ? quotationStats.averageQuotationValue.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '0.00'}`, icon: BarChartHorizontalBig, color: "text-blue-500", description: "All quotations" },
   ];
 
   const statCards = analyticsType === 'invoices' ? invoiceStatCards : quotationStatCards;
@@ -630,7 +630,7 @@ export default function DashboardPage() {
               variant={analyticsType === 'invoices' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setAnalyticsType('invoices')}
-              className={`flex items-center gap-2 transition-all duration-200 ${analyticsType === 'invoices' ? 'bg-background shadow-sm' : 'hover:bg-background/50'}`}
+              className="flex items-center gap-2 transition-all duration-200"
               disabled={loadingStats || !currentUser}
             >
               <FileText className="h-4 w-4" />
@@ -640,7 +640,7 @@ export default function DashboardPage() {
               variant={analyticsType === 'quotations' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setAnalyticsType('quotations')}
-              className={`flex items-center gap-2 transition-all duration-200 ${analyticsType === 'quotations' ? 'bg-background shadow-sm' : 'hover:bg-background/50'}`}
+              className="flex items-center gap-2 transition-all duration-200"
               disabled={loadingStats || !currentUser}
             >
               <Quote className="h-4 w-4" />
