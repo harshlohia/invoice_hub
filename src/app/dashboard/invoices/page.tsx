@@ -186,57 +186,171 @@ export default function InvoicesPage() {
     }
   };
 
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-headline font-bold tracking-tight">Invoices</h1>
-          <p className="text-muted-foreground">Manage all your business invoices here.</p>
-        </div>
-        <Button asChild className="bg-accent hover:bg-accent/90 text-accent-foreground">
-          <Link href="/dashboard/invoices/new">
-            <PlusCircle className="mr-2 h-5 w-5" /> Create New Invoice
-          </Link>
-        </Button>
-      </div>
+  // Calculate statistics for the header
+  const totalInvoices = invoices.length;
+  const totalAmount = invoices.reduce((sum, invoice) => sum + invoice.grandTotal, 0);
+  const paidInvoices = invoices.filter(inv => inv.status === 'paid').length;
+  const pendingInvoices = invoices.filter(inv => inv.status === 'sent' || inv.status === 'overdue').length;
+  const currencySymbol = invoices.length > 0 ? (invoices[0].currency === 'USD' ? '$' : invoices[0].currency === 'EUR' ? '€' : 'Rs.') : 'Rs.';
 
-      <div className="flex flex-col md:flex-row gap-4 p-4 border rounded-lg bg-card shadow">
-        <div className="relative flex-grow">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-          <Input 
-            placeholder="Search by invoice #, client name..." 
-            className="pl-10 w-full" 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+  return (
+    <div className="space-y-8">
+      {/* Modern Header Section */}
+      <div className="relative overflow-hidden">
+        {/* Background Gradient */}
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-50/50 via-indigo-50/30 to-purple-50/50 dark:from-blue-950/20 dark:via-indigo-950/10 dark:to-purple-950/20 rounded-2xl" />
+        
+        <div className="relative p-8">
+          {/* Header Content */}
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-8">
+            <div className="space-y-2">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
+                  <FileText className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-4xl font-headline font-bold tracking-tight bg-gradient-to-r from-gray-900 to-gray-600 dark:from-gray-100 dark:to-gray-300 bg-clip-text text-transparent">
+                    Invoices
+                  </h1>
+                  <p className="text-lg text-muted-foreground font-medium">Manage and track your business invoices</p>
+                </div>
+              </div>
+            </div>
+            
+            <Button 
+              asChild 
+              size="lg"
+              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5 px-6 py-3 text-base font-semibold"
+            >
+              <Link href="/dashboard/invoices/new">
+                <PlusCircle className="mr-2 h-5 w-5" /> 
+                Create Invoice
+              </Link>
+            </Button>
+          </div>
+
+          {/* Statistics Cards */}
+          {!loading && currentUser && invoices.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+              <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm rounded-xl p-4 border border-white/20 dark:border-gray-700/20 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Total Invoices</p>
+                    <p className="text-2xl font-bold text-foreground">{totalInvoices}</p>
+                  </div>
+                  <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                    <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm rounded-xl p-4 border border-white/20 dark:border-gray-700/20 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Total Value</p>
+                    <p className="text-2xl font-bold text-foreground">{currencySymbol}{totalAmount.toLocaleString('en-IN')}</p>
+                  </div>
+                  <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                    <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm rounded-xl p-4 border border-white/20 dark:border-gray-700/20 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Paid</p>
+                    <p className="text-2xl font-bold text-green-600 dark:text-green-400">{paidInvoices}</p>
+                  </div>
+                  <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                    <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm rounded-xl p-4 border border-white/20 dark:border-gray-700/20 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Pending</p>
+                    <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">{pendingInvoices}</p>
+                  </div>
+                  <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
+                    <AlertTriangle className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Enhanced Search and Filter Section */}
+          <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl p-6 border border-white/20 dark:border-gray-700/20 shadow-sm">
+            <div className="flex flex-col lg:flex-row gap-4">
+              {/* Search Input */}
+              <div className="relative flex-1">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                <Input 
+                  placeholder="Search invoices by number, client name..." 
+                  className="pl-12 h-12 text-base bg-white/50 dark:bg-gray-900/50 border-gray-200/50 dark:border-gray-700/50 focus:border-blue-500 focus:ring-blue-500/20 transition-all duration-200" 
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+              
+              {/* Date Range Filter */}
+              <Select value={dateRangeFilter} onValueChange={handleDateRangeFilterChange}>
+                <SelectTrigger className="w-full lg:w-[200px] h-12 bg-white/50 dark:bg-gray-900/50 border-gray-200/50 dark:border-gray-700/50 focus:border-blue-500 focus:ring-blue-500/20">
+                  <CalendarDays className="mr-2 h-4 w-4 text-muted-foreground" />
+                  <SelectValue placeholder="Date Range" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Time</SelectItem>
+                  <SelectItem value="currentMonth">Current Month</SelectItem>
+                  <SelectItem value="lastMonth">Last Month</SelectItem>
+                  <SelectItem value="last3Months">Last 3 Months</SelectItem>
+                  <SelectItem value="thisYear">This Year</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              {/* Status Filter */}
+              <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
+                <SelectTrigger className="w-full lg:w-[180px] h-12 bg-white/50 dark:bg-gray-900/50 border-gray-200/50 dark:border-gray-700/50 focus:border-blue-500 focus:ring-blue-500/20">
+                  <Filter className="mr-2 h-4 w-4 text-muted-foreground" />
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="draft">Draft</SelectItem>
+                  <SelectItem value="sent">Sent</SelectItem>
+                  <SelectItem value="paid">Paid</SelectItem>
+                  <SelectItem value="overdue">Overdue</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {/* Active Filters Display */}
+            {(searchTerm || statusFilter !== 'all' || dateRangeFilter !== 'all') && (
+              <div className="flex flex-wrap items-center gap-2 mt-4 pt-4 border-t border-gray-200/50 dark:border-gray-700/50">
+                <span className="text-sm font-medium text-muted-foreground">Active filters:</span>
+                {searchTerm && (
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                    Search: "{searchTerm}"
+                  </span>
+                )}
+                {statusFilter !== 'all' && (
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300">
+                    Status: {statusFilter}
+                  </span>
+                )}
+                {dateRangeFilter !== 'all' && (
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                    Period: {dateRangeFilter.replace(/([A-Z])/g, ' $1').toLowerCase()}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
         </div>
-        <Select value={dateRangeFilter} onValueChange={handleDateRangeFilterChange}>
-          <SelectTrigger className="w-full md:w-[180px]">
-            <CalendarDays className="mr-2 h-4 w-4 text-muted-foreground" />
-            <SelectValue placeholder="Filter by date" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Time</SelectItem>
-            <SelectItem value="currentMonth">Current Month</SelectItem>
-            <SelectItem value="lastMonth">Last Month</SelectItem>
-            <SelectItem value="last3Months">Last 3 Months</SelectItem>
-            <SelectItem value="thisYear">This Year</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
-          <SelectTrigger className="w-full md:w-[180px]">
-            <Filter className="mr-2 h-4 w-4 text-muted-foreground" />
-            <SelectValue placeholder="Filter by status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="draft">Draft</SelectItem>
-            <SelectItem value="sent">Sent</SelectItem>
-            <SelectItem value="paid">Paid</SelectItem>
-            <SelectItem value="overdue">Overdue</SelectItem>
-            <SelectItem value="cancelled">Cancelled</SelectItem>
-          </SelectContent>
-        </Select>
       </div>
 
       {loading && (

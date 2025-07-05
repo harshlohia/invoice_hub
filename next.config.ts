@@ -29,6 +29,12 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'tiimg.tistatic.com',
+        port: '',
+        pathname: '/**',
+      },
     ],
   },
 };
