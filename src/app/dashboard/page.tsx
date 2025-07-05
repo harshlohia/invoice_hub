@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Link from 'next/link';
-import { IndianRupee, FileText, Users, AlertTriangle, CheckCircle2, TrendingUp, PieChart as PieChartIcon, BarChartHorizontalBig, ExternalLink, Loader2, Quote, FileCheck, Send } from "lucide-react";
+import { IndianRupee, FileText, Users, AlertTriangle, CheckCircle2, TrendingUp, PieChart as PieChartIcon, BarChartHorizontalBig, ExternalLink, Loader2, Quote, FileCheck, Send, Activity, Zap, ChevronRight, Settings } from "lucide-react";
 import { db, getFirebaseAuthInstance } from '@/lib/firebase';
 import { collection, query, where, getDocs, Timestamp, orderBy, limit } from 'firebase/firestore';
 import type { User as FirebaseAuthUser, Auth } from 'firebase/auth';
@@ -128,6 +128,19 @@ const QUOTATION_PIE_CHART_COLORS: Record<Quotation['status'], string> = {
   declined: "hsl(var(--destructive))",
   draft: "hsl(var(--muted-foreground))",
   expired: "hsl(var(--chart-5))",
+};
+
+// Helper function for icon backgrounds
+const getIconBackground = (index: number): string => {
+  const backgrounds = [
+    'from-blue-500 to-blue-600',
+    'from-green-500 to-green-600', 
+    'from-purple-500 to-purple-600',
+    'from-orange-500 to-orange-600',
+    'from-pink-500 to-pink-600',
+    'from-indigo-500 to-indigo-600'
+  ];
+  return backgrounds[index % backgrounds.length];
 };
 
 export default function DashboardPage() {
@@ -618,274 +631,497 @@ export default function DashboardPage() {
   }
   
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-headline font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground">Welcome back! Here's an overview of your business.</p>
-        </div>
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full md:w-auto">
-          <div className="flex items-center gap-2 p-1 bg-muted rounded-lg">
-            <Button
-              variant={analyticsType === 'invoices' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setAnalyticsType('invoices')}
-              className="flex items-center gap-2 transition-all duration-200"
-              disabled={loadingStats || !currentUser}
-            >
-              <FileText className="h-4 w-4" />
-              Invoices
-            </Button>
-            <Button
-              variant={analyticsType === 'quotations' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setAnalyticsType('quotations')}
-              className="flex items-center gap-2 transition-all duration-200"
-              disabled={loadingStats || !currentUser}
-            >
-              <Quote className="h-4 w-4" />
-              Quotations
-            </Button>
-          </div>
-          <div className="flex items-center gap-4 w-full sm:w-auto">
-            <Select value={dateFilter} onValueChange={(value: DateFilterOption) => setDateFilter(value)} disabled={loadingStats || !currentUser}>
-                <SelectTrigger className="w-full sm:w-[180px]">
-                    <SelectValue placeholder="Filter by date" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="thisMonth">This Month</SelectItem>
-                    <SelectItem value="lastMonth">Last Month</SelectItem>
-                    <SelectItem value="allTime">All Time</SelectItem>
-                </SelectContent>
-            </Select>
-            <Button asChild className="bg-accent hover:bg-accent/90 text-accent-foreground w-full sm:w-auto" disabled={!currentUser}>
-                <Link href={analyticsType === 'invoices' ? "/dashboard/invoices/new" : "/dashboard/quotations/new"}>
-                  {analyticsType === 'invoices' ? 'Create Invoice' : 'Create Quotation'}
-                </Link>
-            </Button>
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
+      {/* Hero Section */}
+      <div className="relative overflow-hidden bg-gradient-to-r from-primary/5 via-accent/5 to-primary/10 border-b border-border/50">
+        <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
+        <div className="relative px-6 py-12">
+          <div className="max-w-7xl mx-auto">
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8">
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+                    <PieChartIcon className="h-6 w-6 text-white" />
+                  </div>
+                  <div>
+                    <h1 className="text-4xl lg:text-5xl font-headline font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+                      Dashboard
+                    </h1>
+                    <p className="text-lg text-muted-foreground mt-1">Welcome back! Here's your business overview</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></div>
+                    <span>Live data</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4" />
+                    <span>Real-time analytics</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full lg:w-auto">
+                {/* Analytics Type Toggle */}
+                <div className="flex items-center gap-1 p-1 bg-background/80 backdrop-blur-sm rounded-xl border border-border/50 shadow-sm">
+                  <Button
+                    variant={analyticsType === 'invoices' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setAnalyticsType('invoices')}
+                    className={`flex items-center gap-2 transition-all duration-300 rounded-lg px-4 py-2 ${
+                      analyticsType === 'invoices' 
+                        ? 'bg-primary text-primary-foreground shadow-md' 
+                        : 'hover:bg-muted/50'
+                    }`}
+                    disabled={loadingStats || !currentUser}
+                  >
+                    <FileText className="h-4 w-4" />
+                    <span className="font-medium">Invoices</span>
+                  </Button>
+                  <Button
+                    variant={analyticsType === 'quotations' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setAnalyticsType('quotations')}
+                    className={`flex items-center gap-2 transition-all duration-300 rounded-lg px-4 py-2 ${
+                      analyticsType === 'quotations' 
+                        ? 'bg-primary text-primary-foreground shadow-md' 
+                        : 'hover:bg-muted/50'
+                    }`}
+                    disabled={loadingStats || !currentUser}
+                  >
+                    <Quote className="h-4 w-4" />
+                    <span className="font-medium">Quotations</span>
+                  </Button>
+                </div>
+                
+                {/* Controls */}
+                <div className="flex items-center gap-3 w-full sm:w-auto">
+                  <Select value={dateFilter} onValueChange={(value: DateFilterOption) => setDateFilter(value)} disabled={loadingStats || !currentUser}>
+                    <SelectTrigger className="w-full sm:w-[180px] bg-background/80 backdrop-blur-sm border-border/50">
+                      <SelectValue placeholder="Filter by date" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="thisMonth">This Month</SelectItem>
+                      <SelectItem value="lastMonth">Last Month</SelectItem>
+                      <SelectItem value="allTime">All Time</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button 
+                    asChild 
+                    className="bg-gradient-to-r from-accent to-primary hover:from-accent/90 hover:to-primary/90 text-white shadow-lg hover:shadow-xl transition-all duration-300 w-full sm:w-auto px-6" 
+                    disabled={!currentUser}
+                  >
+                    <Link href={analyticsType === 'invoices' ? "/dashboard/invoices/new" : "/dashboard/quotations/new"}>
+                      <span className="font-medium">
+                        {analyticsType === 'invoices' ? 'Create Invoice' : 'Create Quotation'}
+                      </span>
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
+      
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
 
-      {loadingStats ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-          {[...Array(6)].map((_, i) => (
-             <Card key={i}><CardHeader><Skeleton className="h-5 w-3/4" /></CardHeader><CardContent><Skeleton className="h-8 w-1/2 mb-2" /><Skeleton className="h-4 w-full" /></CardContent></Card>
-          ))}
-        </div>
-      ) : error && !loadingAuth ? (
-         <div className="text-center py-12">
-          <AlertTriangle className="mx-auto h-12 w-12 text-destructive" />
-          <h3 className="mt-2 text-xl font-semibold">Error Loading Statistics</h3>
-          <p className="mt-1 text-sm text-muted-foreground">{error}</p>
-          <Button onClick={() => currentUser && fetchDashboardData(currentUser.uid, dateFilter)} className="mt-4">Retry</Button>
-        </div>
-      ) : hasMeaningfulStats ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-          {statCards.map((stat) => (
-            <Card key={stat.title} className="hover:shadow-lg transition-shadow duration-200">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
-                <stat.icon className={`h-5 w-5 ${stat.color || 'text-muted-foreground'}`} />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stat.value}</div>
-                <p className="text-xs text-muted-foreground">{stat.description}</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : (
-        <p className="text-muted-foreground py-4 text-center">No statistics available for the selected period. Start by creating some invoices!</p>
-      )}
+        {/* Stats Cards Section */}
+        {loadingStats ? (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            {[...Array(6)].map((_, i) => (
+              <Card key={i} className="border-0 shadow-md bg-gradient-to-br from-card to-card/50">
+                <CardHeader className="pb-3">
+                  <Skeleton className="h-4 w-3/4" />
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <Skeleton className="h-8 w-1/2 mb-2" />
+                  <Skeleton className="h-3 w-full" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : error && !loadingAuth ? (
+          <div className="text-center py-16">
+            <div className="mx-auto w-24 h-24 bg-destructive/10 rounded-full flex items-center justify-center mb-6">
+              <AlertTriangle className="h-12 w-12 text-destructive" />
+            </div>
+            <h3 className="text-2xl font-semibold mb-2">Error Loading Statistics</h3>
+            <p className="text-muted-foreground mb-6 max-w-md mx-auto">{error}</p>
+            <Button 
+              onClick={() => currentUser && fetchDashboardData(currentUser.uid, dateFilter)} 
+              className="bg-gradient-to-r from-accent to-primary hover:from-accent/90 hover:to-primary/90 text-white"
+            >
+              Try Again
+            </Button>
+          </div>
+        ) : hasMeaningfulStats ? (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            {statCards.map((stat, index) => (
+              <Card 
+                key={stat.title} 
+                className="group relative overflow-hidden border-0 shadow-md hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-card via-card to-card/80 hover:scale-[1.02]"
+              >
+                {/* Background Pattern */}
+                <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 relative z-10">
+                  <CardTitle className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors duration-300">
+                    {stat.title}
+                  </CardTitle>
+                  <div className={`p-2 rounded-lg bg-gradient-to-br ${getIconBackground(index)} group-hover:scale-110 transition-transform duration-300`}>
+                    <stat.icon className="h-4 w-4 text-white" />
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0 relative z-10">
+                  <div className="text-2xl font-bold mb-1 group-hover:text-primary transition-colors duration-300">
+                    {stat.value}
+                  </div>
+                  {stat.description && (
+                    <p className="text-xs text-muted-foreground group-hover:text-muted-foreground/80 transition-colors duration-300">
+                      {stat.description}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-16">
+            <div className="mx-auto w-24 h-24 bg-muted/50 rounded-full flex items-center justify-center mb-6">
+              <PieChartIcon className="h-12 w-12 text-muted-foreground" />
+            </div>
+            <h3 className="text-xl font-semibold mb-2">No Data Available</h3>
+            <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+              No statistics available for the selected period. Start by creating some {analyticsType}!
+            </p>
+            <Button asChild className="bg-gradient-to-r from-accent to-primary hover:from-accent/90 hover:to-primary/90 text-white">
+              <Link href={analyticsType === 'invoices' ? "/dashboard/invoices/new" : "/dashboard/quotations/new"}>
+                Create {analyticsType === 'invoices' ? 'Invoice' : 'Quotation'}
+              </Link>
+            </Button>
+          </div>
+        )}
 
-      <div className="grid gap-6 lg:grid-cols-5">
-        <Card className="lg:col-span-3 hover:shadow-lg transition-shadow duration-200">
-          <CardHeader>
-            <CardTitle className="font-headline">
-              {analyticsType === 'invoices' ? 'Monthly Revenue (Last 6 Months)' : 'Monthly Quotation Value (Last 6 Months)'}
-            </CardTitle>
-            <CardDescription>
-              {analyticsType === 'invoices' 
-                ? 'Track your paid invoice revenue over time.'
-                : 'Track your quotation values over time.'
-              }
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loadingCharts ? (
-              <div className="h-[300px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /> <p className="ml-2">Loading chart...</p></div>
-            ) : (analyticsType === 'invoices' ? monthlyRevenueData.length > 0 : monthlyQuotationData.length > 0) ? (
-              <ChartContainer config={analyticsType === 'invoices' ? revenueChartConfig : quotationChartConfig} className="h-[300px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={analyticsType === 'invoices' ? monthlyRevenueData : monthlyQuotationData} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis dataKey="month" tickLine={false} axisLine={false} stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                    <YAxis 
-                      tickFormatter={(value) => `Rs. ${value/1000}k`} 
-                      tickLine={false} 
-                      axisLine={false} 
-                      stroke="hsl(var(--muted-foreground))" 
-                      fontSize={12}
-                    />
-                    <RechartsTooltip
-                      content={<ChartTooltipContent indicator="dot" hideLabel />}
-                      cursor={{ stroke: "hsl(var(--primary))", strokeWidth: 1, strokeDasharray: "3 3" }}
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey={analyticsType === 'invoices' ? 'revenue' : 'quotationValue'} 
-                      stroke={analyticsType === 'invoices' ? 'hsl(var(--primary))' : 'hsl(var(--chart-3))'} 
-                      strokeWidth={2} 
-                      dot={{ r: 4, fill: analyticsType === 'invoices' ? 'hsl(var(--primary))' : 'hsl(var(--chart-3))', strokeWidth:0 }} 
-                      activeDot={{r:6}} 
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </ChartContainer>
-            ) : (
-              <p className="text-muted-foreground h-[300px] flex items-center justify-center">
-                {analyticsType === 'invoices' 
-                  ? 'No revenue data to display for the period.'
-                  : 'No quotation data to display for the period.'
-                }
-              </p>
-            )}
-          </CardContent>
-        </Card>
+        {/* Charts Section */}
+        <div className="grid gap-8 lg:grid-cols-5">
+          {/* Revenue/Quotation Chart */}
+          <Card className="lg:col-span-3 border-0 shadow-lg bg-gradient-to-br from-card via-card to-card/80 hover:shadow-xl transition-all duration-300">
+            <CardHeader className="pb-6">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 rounded-lg bg-gradient-to-br from-primary to-accent">
+                  <BarChartHorizontalBig className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <CardTitle className="font-headline text-xl">
+                    {analyticsType === 'invoices' ? 'Revenue Trends' : 'Quotation Trends'}
+                  </CardTitle>
+                  <CardDescription className="text-sm">
+                    {analyticsType === 'invoices' 
+                      ? 'Track your paid invoice revenue over the last 6 months'
+                      : 'Track your quotation values over the last 6 months'
+                    }
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {loadingCharts ? (
+                <div className="h-[350px] flex items-center justify-center">
+                  <div className="text-center">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-3" />
+                    <p className="text-sm text-muted-foreground">Loading chart data...</p>
+                  </div>
+                </div>
+              ) : (analyticsType === 'invoices' ? monthlyRevenueData.length > 0 : monthlyQuotationData.length > 0) ? (
+                <ChartContainer config={analyticsType === 'invoices' ? revenueChartConfig : quotationChartConfig} className="h-[350px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={analyticsType === 'invoices' ? monthlyRevenueData : monthlyQuotationData} margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
+                      <defs>
+                        <linearGradient id="colorGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={analyticsType === 'invoices' ? 'hsl(var(--primary))' : 'hsl(var(--chart-3))'} stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor={analyticsType === 'invoices' ? 'hsl(var(--primary))' : 'hsl(var(--chart-3))'} stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
+                      <XAxis 
+                        dataKey="month" 
+                        tickLine={false} 
+                        axisLine={false} 
+                        stroke="hsl(var(--muted-foreground))" 
+                        fontSize={12}
+                        tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                      />
+                      <YAxis 
+                        tickFormatter={(value) => `₹${value/1000}k`} 
+                        tickLine={false} 
+                        axisLine={false} 
+                        stroke="hsl(var(--muted-foreground))" 
+                        fontSize={12}
+                        tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                      />
+                      <RechartsTooltip
+                        content={<ChartTooltipContent indicator="dot" hideLabel />}
+                        cursor={{ stroke: "hsl(var(--primary))", strokeWidth: 1, strokeDasharray: "3 3" }}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey={analyticsType === 'invoices' ? 'revenue' : 'quotationValue'} 
+                        stroke={analyticsType === 'invoices' ? 'hsl(var(--primary))' : 'hsl(var(--chart-3))'} 
+                        strokeWidth={3} 
+                        dot={{ r: 5, fill: analyticsType === 'invoices' ? 'hsl(var(--primary))' : 'hsl(var(--chart-3))', strokeWidth: 2, stroke: 'white' }} 
+                        activeDot={{ r: 7, stroke: analyticsType === 'invoices' ? 'hsl(var(--primary))' : 'hsl(var(--chart-3))', strokeWidth: 2, fill: 'white' }} 
+                        fill="url(#colorGradient)"
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </ChartContainer>
+              ) : (
+                <div className="h-[350px] flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="mx-auto w-16 h-16 bg-muted/50 rounded-full flex items-center justify-center mb-4">
+                      <BarChartHorizontalBig className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                    <p className="text-muted-foreground">
+                      {analyticsType === 'invoices' 
+                        ? 'No revenue data to display for the period'
+                        : 'No quotation data to display for the period'
+                      }
+                    </p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-        <Card className="lg:col-span-2 hover:shadow-lg transition-shadow duration-200">
-          <CardHeader>
-            <CardTitle className="font-headline">
-              {analyticsType === 'invoices' ? 'Invoice Status Overview' : 'Quotation Status Overview'}
-            </CardTitle>
-            <CardDescription>
-              {analyticsType === 'invoices' 
-                ? 'Current breakdown of all your invoices.'
-                : 'Current breakdown of all your quotations.'
-              }
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex justify-center items-center">
-            {loadingCharts ? (
-               <div className="h-[300px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /> <p className="ml-2">Loading chart...</p></div>
-            ) : (analyticsType === 'invoices' ? invoiceStatusData.length > 0 : quotationStatusData.length > 0) ? (
-              <ChartContainer config={statusChartConfig} className="h-[300px] w-full max-w-xs aspect-square">
-                 <ResponsiveContainer width="100%" height="100%">
+          {/* Status Overview Chart */}
+          <Card className="lg:col-span-2 border-0 shadow-lg bg-gradient-to-br from-card via-card to-card/80 hover:shadow-xl transition-all duration-300">
+            <CardHeader className="pb-6">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 rounded-lg bg-gradient-to-br from-accent to-primary">
+                  <PieChartIcon className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <CardTitle className="font-headline text-xl">
+                    Status Overview
+                  </CardTitle>
+                  <CardDescription className="text-sm">
+                    {analyticsType === 'invoices' 
+                      ? 'Current breakdown of all your invoices'
+                      : 'Current breakdown of all your quotations'
+                    }
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0 flex justify-center items-center">
+              {loadingCharts ? (
+                <div className="h-[350px] flex items-center justify-center">
+                  <div className="text-center">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-3" />
+                    <p className="text-sm text-muted-foreground">Loading chart data...</p>
+                  </div>
+                </div>
+              ) : (analyticsType === 'invoices' ? invoiceStatusData.length > 0 : quotationStatusData.length > 0) ? (
+                <ChartContainer config={statusChartConfig} className="h-[350px] w-full max-w-sm aspect-square">
+                  <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <RechartsTooltip content={<ChartTooltipContent nameKey="name" hideIndicator />} />
+                      <RechartsTooltip 
+                        content={<ChartTooltipContent nameKey="name" hideIndicator />}
+                        cursor={{ fill: 'transparent' }}
+                      />
                       <Pie 
                         data={analyticsType === 'invoices' ? invoiceStatusData : quotationStatusData} 
                         dataKey="value" 
                         nameKey="name" 
                         cx="50%" 
                         cy="50%" 
-                        outerRadius={100} 
+                        outerRadius={120} 
+                        innerRadius={60}
+                        paddingAngle={2}
                         labelLine={false} 
-                        label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                        label={({ name, percent }) => percent > 5 ? `${name}\n${(percent * 100).toFixed(0)}%` : ''}
+                        fontSize={12}
                       >
                         {(analyticsType === 'invoices' ? invoiceStatusData : quotationStatusData).map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.fill} />
+                          <Cell key={`cell-${index}`} fill={entry.fill} stroke="white" strokeWidth={2} />
                         ))}
                       </Pie>
-                       <RechartsLegend content={<ChartLegendContent />} />
+                      <RechartsLegend 
+                        content={<ChartLegendContent />} 
+                        wrapperStyle={{ paddingTop: '20px', fontSize: '12px' }}
+                      />
                     </PieChart>
-                 </ResponsiveContainer>
-              </ChartContainer>
-            ) : (
-              <p className="text-muted-foreground h-[300px] flex items-center justify-center">
-                {analyticsType === 'invoices' 
-                  ? 'No invoice status data available.'
-                  : 'No quotation status data available.'
-                }
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card className="hover:shadow-lg transition-shadow duration-200">
-          <CardHeader>
-            <CardTitle className="font-headline">Recent Activity</CardTitle>
-            <CardDescription>
-              {analyticsType === 'invoices' 
-                ? 'Latest invoice and client updates'
-                : 'Latest quotation and client updates'
-              }
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {loadingActivities ? (
-              [...Array(4)].map((_, i) => (
-                <div key={i} className="flex items-start gap-3"> <Skeleton className="h-5 w-5 mt-1 rounded-full" /> <div className="w-full"> <Skeleton className="h-4 w-3/4 mb-1" /> <Skeleton className="h-3 w-1/2" /> </div> </div>
-              ))
-            ) : recentActivities.filter(activity => 
-              analyticsType === 'invoices' 
-                ? activity.type === 'invoice' || activity.type === 'client'
-                : activity.type === 'quotation' || activity.type === 'client'
-            ).length > 0 ? (
-              recentActivities
-                .filter(activity => 
-                  analyticsType === 'invoices' 
-                    ? activity.type === 'invoice' || activity.type === 'client'
-                    : activity.type === 'quotation' || activity.type === 'client'
-                )
-                .slice(0, 4)
-                .map((activity) => (
-                <div key={activity.id + activity.type} className="flex items-start gap-3">
-                  <activity.icon className={`h-5 w-5 mt-1 ${activity.color || 'text-primary'}`} />
-                  <div> <p className="text-sm font-medium">{activity.action}</p> <p className="text-xs text-muted-foreground">{activity.time}</p> </div>
-                  {activity.link && ( <Link href={activity.link} className="ml-auto text-primary hover:underline"> <ExternalLink className="h-4 w-4"/> </Link> )}
+                  </ResponsiveContainer>
+                </ChartContainer>
+              ) : (
+                <div className="h-[350px] flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="mx-auto w-16 h-16 bg-muted/50 rounded-full flex items-center justify-center mb-4">
+                      <PieChartIcon className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                    <p className="text-muted-foreground">
+                      {analyticsType === 'invoices' 
+                        ? 'No invoice status data available'
+                        : 'No quotation status data available'
+                      }
+                    </p>
+                  </div>
                 </div>
-              ))
-            ) : (
-              <p className="text-muted-foreground">
-                {analyticsType === 'invoices' 
-                  ? 'No recent invoice activity found.'
-                  : 'No recent quotation activity found.'
-                }
-              </p>
-            )}
-          </CardContent>
-        </Card>
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
-        <Card className="hover:shadow-lg transition-shadow duration-200">
-          <CardHeader>
-            <CardTitle className="font-headline">Quick Actions</CardTitle>
-            <CardDescription>
-              {analyticsType === 'invoices' 
-                ? 'Common invoice tasks to get you started'
-                : 'Common quotation tasks to get you started'
-              }
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Button asChild className="w-full justify-start" variant="outline" disabled={!currentUser}>
-              <Link href={analyticsType === 'invoices' ? "/dashboard/invoices/new" : "/dashboard/quotations/new"}>
-                {analyticsType === 'invoices' ? (
-                  <FileText className="mr-2 h-4 w-4" />
-                ) : (
-                  <Quote className="mr-2 h-4 w-4" />
-                )}
-                {analyticsType === 'invoices' ? 'Create New Invoice' : 'Create New Quotation'}
-              </Link>
-            </Button>
-            <Button asChild className="w-full justify-start" variant="outline" disabled={!currentUser}>
-              <Link href="/dashboard/clients/new">
-                <Users className="mr-2 h-4 w-4" />
-                Add New Client
-              </Link>
-            </Button>
-            <Button asChild className="w-full justify-start" variant="outline" disabled={!currentUser}>
-              <Link href={analyticsType === 'invoices' ? "/dashboard/invoices" : "/dashboard/quotations"}>
-                <FileCheck className="mr-2 h-4 w-4" />
-                {analyticsType === 'invoices' ? 'View All Invoices' : 'View All Quotations'}
-              </Link>
-            </Button>
-            <Button variant="outline" asChild><Link href="/dashboard/settings">Account Settings</Link></Button>
-          </CardContent>
-        </Card>
+        {/* Recent Activity & Quick Actions */}
+        <div className="grid gap-8 md:grid-cols-2">
+          {/* Recent Activity */}
+          <Card className="border-0 shadow-lg bg-gradient-to-br from-card via-card to-card/80 hover:shadow-xl transition-all duration-300">
+            <CardHeader className="pb-6">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600">
+                  <Activity className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <CardTitle className="font-headline text-xl">Recent Activity</CardTitle>
+                  <CardDescription className="text-sm">
+                    {analyticsType === 'invoices' 
+                      ? 'Latest invoice and client updates'
+                      : 'Latest quotation and client updates'
+                    }
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {loadingActivities ? (
+                <div className="space-y-4">
+                  {[...Array(4)].map((_, i) => (
+                    <div key={i} className="flex items-center space-x-4 p-4 rounded-xl bg-muted/30">
+                      <Skeleton className="h-12 w-12 rounded-full" />
+                      <div className="space-y-2 flex-1">
+                        <Skeleton className="h-4 w-3/4" />
+                        <Skeleton className="h-3 w-1/2" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : recentActivities.filter(activity => 
+                analyticsType === 'invoices' 
+                  ? activity.type === 'invoice' || activity.type === 'client'
+                  : activity.type === 'quotation' || activity.type === 'client'
+              ).length > 0 ? (
+                <div className="space-y-3">
+                  {recentActivities
+                    .filter(activity => 
+                      analyticsType === 'invoices' 
+                        ? activity.type === 'invoice' || activity.type === 'client'
+                        : activity.type === 'quotation' || activity.type === 'client'
+                    )
+                    .slice(0, 4)
+                    .map((activity) => (
+                    <div key={activity.id + activity.type} className="flex items-center space-x-4 p-4 rounded-xl hover:bg-muted/50 transition-all duration-200 group">
+                      <div className="flex-shrink-0">
+                        <div className={`p-2 rounded-lg ${
+                          activity.type === 'invoice' ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' :
+                          activity.type === 'quotation' ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' :
+                          'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400'
+                        }`}>
+                          <activity.icon className="h-4 w-4" />
+                        </div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">
+                          {activity.action}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {activity.time}
+                        </p>
+                      </div>
+                      {activity.link && (
+                        <Link href={activity.link} className="text-muted-foreground group-hover:text-primary transition-colors">
+                          <ExternalLink className="h-4 w-4" />
+                        </Link>
+                      )}
+                      <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <div className="mx-auto w-16 h-16 bg-muted/50 rounded-full flex items-center justify-center mb-4">
+                    <Activity className="h-8 w-8 text-muted-foreground" />
+                  </div>
+                  <p className="text-muted-foreground mb-2">
+                    {analyticsType === 'invoices' 
+                      ? 'No recent invoice activity found'
+                      : 'No recent quotation activity found'
+                    }
+                  </p>
+                  <p className="text-sm text-muted-foreground">Activities will appear here as you use the system</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Quick Actions */}
+          <Card className="border-0 shadow-lg bg-gradient-to-br from-card via-card to-card/80 hover:shadow-xl transition-all duration-300">
+            <CardHeader className="pb-6">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 rounded-lg bg-gradient-to-br from-orange-500 to-red-500">
+                  <Zap className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <CardTitle className="font-headline text-xl">Quick Actions</CardTitle>
+                  <CardDescription className="text-sm">
+                    {analyticsType === 'invoices' 
+                      ? 'Common invoice tasks to get you started'
+                      : 'Common quotation tasks to get you started'
+                    }
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0 space-y-3">
+              <Button asChild className="w-full justify-start h-12 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-white border-0 shadow-md hover:shadow-lg transition-all duration-200" disabled={!currentUser}>
+                <Link href={analyticsType === 'invoices' ? "/dashboard/invoices/new" : "/dashboard/quotations/new"}>
+                  {analyticsType === 'invoices' ? (
+                    <FileText className="mr-3 h-4 w-4" />
+                  ) : (
+                    <Quote className="mr-3 h-4 w-4" />
+                  )}
+                  {analyticsType === 'invoices' ? 'Create New Invoice' : 'Create New Quotation'}
+                </Link>
+              </Button>
+              <Button asChild className="w-full justify-start h-12 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white border-0 shadow-md hover:shadow-lg transition-all duration-200" disabled={!currentUser}>
+                <Link href="/dashboard/clients/new">
+                  <Users className="mr-3 h-4 w-4" />
+                  Add New Client
+                </Link>
+              </Button>
+              
+              <div className="pt-2 border-t border-border/50">
+                <p className="text-xs text-muted-foreground mb-3 font-medium">VIEW & MANAGE</p>
+                <div className="space-y-2">
+                  <Button asChild className="w-full justify-start h-10 text-sm" variant="outline" disabled={!currentUser}>
+                    <Link href={analyticsType === 'invoices' ? "/dashboard/invoices" : "/dashboard/quotations"}>
+                      <FileCheck className="mr-2 h-4 w-4" />
+                      {analyticsType === 'invoices' ? 'View All Invoices' : 'View All Quotations'}
+                    </Link>
+                  </Button>
+                  <Button variant="outline" asChild className="w-full justify-start h-10 text-sm">
+                    <Link href="/dashboard/settings">
+                      <Settings className="mr-2 h-4 w-4" />
+                      Account Settings
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
