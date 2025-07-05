@@ -44,6 +44,7 @@ interface DashboardStats {
   overdueInvoicesAmount: number;
   momRevenueGrowth: number | null;
   totalSentAmountThisMonth: number;
+  totalSentAmountForPeriod: number;
 }
 
 interface QuotationStats {
@@ -64,6 +65,7 @@ const initialDashboardStats: DashboardStats = {
   overdueInvoicesAmount: 0,
   momRevenueGrowth: null,
   totalSentAmountThisMonth: 0,
+  totalSentAmountForPeriod: 0,
 };
 
 const initialQuotationStats: QuotationStats = {
@@ -197,8 +199,9 @@ export default function DashboardPage() {
       let overdueInvoicesCount = 0;
       let overdueInvoicesAmount = 0;
       let totalSentAmountThisMonth = 0;
+      let totalSentAmountForPeriod = 0;
 
-      // Calculate total sent amount for this month only
+      // Calculate total sent amount for this month only (for MTD card)
       const now = new Date();
       const thisMonthStart = startOfMonth(now);
       const thisMonthEnd = endOfMonth(now);
@@ -216,6 +219,10 @@ export default function DashboardPage() {
         if (inv.status === 'sent' && inv.invoiceDate >= thisMonthStart && inv.invoiceDate <= thisMonthEnd) {
           totalSentAmountThisMonth += inv.grandTotal;
         }
+        // Calculate sent invoices for the selected period
+        if (inv.status === 'sent') {
+          totalSentAmountForPeriod += inv.grandTotal;
+        }
       });
 
       const clientsRef = collection(db, "clients");
@@ -231,6 +238,7 @@ export default function DashboardPage() {
         overdueInvoicesCount,
         overdueInvoicesAmount,
         totalSentAmountThisMonth,
+        totalSentAmountForPeriod,
       }));
 
     } catch (err) {
@@ -551,7 +559,7 @@ export default function DashboardPage() {
     { title: `Total Revenue (${dateFilterLabel})`, value: `Rs. ${stats.totalRevenue.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`, icon: IndianRupee, color: "text-green-500", description: "" },
     { title: `Overdue Invoices (${dateFilterLabel})`, value: `${stats.overdueInvoicesCount} (Rs. ${stats.overdueInvoicesAmount.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})})`, icon: AlertTriangle, color: "text-red-500", description: stats.overdueInvoicesCount > 0 ? "Action required" : "No overdue invoices" },
     { title: "MoM Revenue Growth", value: stats.momRevenueGrowth !== null ? `${stats.momRevenueGrowth.toFixed(1)}%` : "N/A", icon: TrendingUp, color: stats.momRevenueGrowth !== null && stats.momRevenueGrowth >= 0 ? "text-green-500" : "text-red-500", description: "Prev. full month" },
-    { title: "Sent Invoices (MTD)", value: `Rs. ${stats.totalSentAmountThisMonth.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`, icon: Send, color: "text-indigo-500", description: "Sent invoices this month" },
+    { title: `Sent Invoices (${dateFilterLabel})`, value: `Rs. ${stats.totalSentAmountForPeriod.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`, icon: Send, color: "text-indigo-500", description: `Sent invoices ${dateFilterLabel.toLowerCase()}` },
     { title: `Invoices Created (${dateFilterLabel})`, value: stats.invoicesCreatedCount.toString(), icon: FileText, color: "text-blue-500", description: "" },
     { title: "Total Active Clients", value: stats.activeClientsCount.toString(), icon: Users, color: "text-purple-500", description: "" },
   ];
@@ -586,7 +594,7 @@ export default function DashboardPage() {
       }, {} as any);
 
   const hasMeaningfulStats = analyticsType === 'invoices'
-    ? stats.invoicesCreatedCount > 0 || stats.totalRevenue > 0 || stats.activeClientsCount > 0 || stats.momRevenueGrowth !== null || stats.totalSentAmountThisMonth > 0
+    ? stats.invoicesCreatedCount > 0 || stats.totalRevenue > 0 || stats.activeClientsCount > 0 || stats.momRevenueGrowth !== null || stats.totalSentAmountThisMonth > 0 || stats.totalSentAmountForPeriod > 0
     : quotationStats.quotationsCreatedCount > 0 || quotationStats.totalQuotationValue > 0 || quotationStats.conversionRate !== null || quotationStats.averageQuotationValue !== null;
 
   if (loadingAuth) { 
