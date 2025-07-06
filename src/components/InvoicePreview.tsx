@@ -1034,7 +1034,7 @@ function generateContinuationHeaderHTML(invoice: Invoice, pageNumber: number): s
 }
 
 function generateLineItemsTableHTML(lineItems: any[], startIndex: number, currency?: string): string {
-  const currencySymbol = currency === "INR" ? "Rs." : (currency || "Rs.");
+  const currencySymbol = "Rs.";
   
   return `
     <div style="padding: 0 24px; margin-bottom: 24px;">
@@ -1063,7 +1063,7 @@ function generateLineItemsTableHTML(lineItems: any[], startIndex: number, curren
 }
 
 function generateFooterHTML(invoice: Invoice): string {
-  const currencySymbol = invoice.currency === "INR" ? "Rs." : (invoice.currency || "Rs.");
+  const currencySymbol = "Rs.";
   
   return `
     <div style="padding: 0 24px;">

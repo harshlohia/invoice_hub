@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { doc, getDoc, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Invoice, LineItem } from '@/lib/types';
-import { InvoiceForm } from "@/components/forms/InvoiceForm";
+import { ModernInvoiceForm } from "@/components/forms/ModernInvoiceForm";
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardHeader, CardContent } from '@/components/ui/card'; // Added Card, CardHeader, CardContent
 import { AlertTriangle, Loader2 } from 'lucide-react';
@@ -151,7 +151,7 @@ export default function EditInvoicePage() {
         <h1 className="text-3xl font-headline font-bold tracking-tight">Edit Invoice {invoice.invoiceNumber}</h1>
         <p className="text-muted-foreground">Update the details for this invoice.</p>
       </div>
-      <InvoiceForm initialData={invoice} />
+      <ModernInvoiceForm initialData={invoice} />
     </div>
   );
 }
