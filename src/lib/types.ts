@@ -70,7 +70,7 @@ export interface Invoice {
   totalSGST: number;
   totalIGST: number;
   grandTotal: number; 
-  status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
+  status: 'sent' | 'paid' | 'overdue' | 'cancelled';
   isInterState: boolean; 
   currency?: string; // Added currency field
   templateId?: string; // Reference to template used

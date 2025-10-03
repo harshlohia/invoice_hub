@@ -89,7 +89,7 @@ const invoiceFormSchema = z.object({
   invoiceDate: z.date({ required_error: "Invoice date is required."}),
   dueDate: z.date({ required_error: "Due date is required."}),
   clientId: z.string().min(1, "Client is required."),
-  status: z.enum(['draft', 'sent', 'paid', 'overdue', 'cancelled']).default('draft'),
+  status: z.enum(['sent', 'paid', 'overdue', 'cancelled']).default('sent'),
   isInterState: z.boolean().default(false),
   lineItems: z.array(lineItemSchema).min(1, "At least one line item is required."),
   notes: z.string().optional(),
@@ -181,7 +181,7 @@ export function ModernInvoiceForm({ initialData, onStepChange }: ModernInvoiceFo
       invoiceDate: initialData?.invoiceDate ? (initialData.invoiceDate instanceof Timestamp ? initialData.invoiceDate.toDate() : new Date(initialData.invoiceDate)) : new Date(),
       dueDate: initialData?.dueDate ? (initialData.dueDate instanceof Timestamp ? initialData.dueDate.toDate() : new Date(initialData.dueDate)) : addDays(new Date(), 15),
       clientId: initialData ? initialData.client.id : searchParams.get('clientId') || "",
-      status: initialData ? initialData.status : 'draft',
+      status: initialData ? initialData.status : 'sent',
       isInterState: initialData ? initialData.isInterState : false,
       lineItems: initialData?.lineItems || [],
       notes: initialData?.notes || "",
@@ -494,7 +494,7 @@ export function ModernInvoiceForm({ initialData, onStepChange }: ModernInvoiceFo
         invoiceDate: initialData?.invoiceDate ? (initialData.invoiceDate instanceof Timestamp ? initialData.invoiceDate.toDate() : new Date(initialData.invoiceDate)) : new Date(),
         dueDate: initialData?.dueDate ? (initialData.dueDate instanceof Timestamp ? initialData.dueDate.toDate() : new Date(initialData.dueDate)) : addDays(new Date(), 15),
         clientId: initialData ? initialData.client.id : searchParams.get('clientId') || "",
-        status: initialData ? initialData.status : 'draft',
+        status: initialData ? initialData.status : 'sent',
         isInterState: initialData ? initialData.isInterState : false,
         lineItems: initialLineItems,
         notes: initialData?.notes || "",
@@ -635,12 +635,7 @@ export function ModernInvoiceForm({ initialData, onStepChange }: ModernInvoiceFo
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="draft">
-                              <div className="flex items-center">
-                                <div className="w-2 h-2 bg-gray-400 rounded-full mr-2" />
-                                Draft
-                              </div>
-                            </SelectItem>
+
                             <SelectItem value="sent">
                               <div className="flex items-center">
                                 <div className="w-2 h-2 bg-blue-400 rounded-full mr-2" />

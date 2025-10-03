@@ -163,6 +163,12 @@ export default function InvoicesPage() {
     // The filteredInvoices computed value will handle this automatically.
   };
 
+  const handleInvoiceDelete = (invoiceId: string) => {
+    setInvoices(prevInvoices =>
+      prevInvoices.filter(inv => inv.id !== invoiceId)
+    );
+  };
+
   const filteredInvoices = invoices.filter(invoice => {
     const searchTermMatch = 
       invoice.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -319,7 +325,7 @@ export default function InvoicesPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="draft">Draft</SelectItem>
+
                   <SelectItem value="sent">Sent</SelectItem>
                   <SelectItem value="paid">Paid</SelectItem>
                   <SelectItem value="overdue">Overdue</SelectItem>
@@ -382,7 +388,7 @@ export default function InvoicesPage() {
         <>
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {filteredInvoices.map((invoice) => (
-              <InvoiceCard key={invoice.id} invoice={invoice} onStatusUpdate={handleInvoiceStatusUpdate} />
+              <InvoiceCard key={invoice.id} invoice={invoice} onStatusUpdate={handleInvoiceStatusUpdate} onDelete={handleInvoiceDelete} />
             ))}
           </div>
           

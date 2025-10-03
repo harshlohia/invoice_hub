@@ -36,7 +36,6 @@ const statusIcons: Record<Invoice['status'], React.ReactElement> = {
   paid: <CheckCircle className="h-4 w-4 text-green-500" />,
   sent: <Send className="h-4 w-4 text-blue-500" />, 
   overdue: <AlertCircle className="h-4 w-4 text-red-500" />,
-  draft: <FilePenLine className="h-4 w-4 text-gray-500" />,
   cancelled: <CancelIcon className="h-4 w-4 text-yellow-600" />,
 };
 
@@ -931,9 +930,8 @@ export const InvoicePreview = forwardRef<InvoicePreviewHandle, InvoicePreviewPro
               <DropdownMenuSeparator />
               {invoice.status !== 'sent' && <DropdownMenuItem onClick={() => handleUpdateStatus('sent')} disabled={isUpdatingStatus}>Sent</DropdownMenuItem>}
               {invoice.status !== 'paid' && <DropdownMenuItem onClick={() => handleUpdateStatus('paid')} disabled={isUpdatingStatus}>Paid</DropdownMenuItem>}
-              {invoice.status !== 'overdue' && (invoice.status === 'sent' || invoice.status === 'draft') && <DropdownMenuItem onClick={() => handleUpdateStatus('overdue')} disabled={isUpdatingStatus}>Overdue</DropdownMenuItem>}
+              {invoice.status !== 'overdue' && invoice.status === 'sent' && <DropdownMenuItem onClick={() => handleUpdateStatus('overdue')} disabled={isUpdatingStatus}>Overdue</DropdownMenuItem>}
               <DropdownMenuSeparator />
-              {invoice.status !== 'draft' && <DropdownMenuItem onClick={() => handleUpdateStatus('draft')} disabled={isUpdatingStatus}>Draft</DropdownMenuItem>}
               {invoice.status !== 'cancelled' && <DropdownMenuItem onClick={() => handleUpdateStatus('cancelled')} disabled={isUpdatingStatus || invoice.status === 'paid'} className="text-destructive focus:text-destructive focus:bg-destructive/10">Cancelled</DropdownMenuItem>}
             </DropdownMenuContent>
           </DropdownMenu>

@@ -65,7 +65,7 @@ const invoiceFormSchema = z.object({
   invoiceDate: z.date({ required_error: "Invoice date is required."}),
   dueDate: z.date({ required_error: "Due date is required."}),
   clientId: z.string().min(1, "Client is required."),
-  status: z.enum(['draft', 'sent', 'paid', 'overdue', 'cancelled']).default('draft'),
+  status: z.enum(['sent', 'paid', 'overdue', 'cancelled']).default('sent'),
   isInterState: z.boolean().default(false),
   lineItems: z.array(lineItemSchema).min(1, "At least one line item is required."),
   notes: z.string().optional(),
@@ -143,7 +143,7 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
       invoiceDate: initialData?.invoiceDate ? (initialData.invoiceDate instanceof Timestamp ? initialData.invoiceDate.toDate() : new Date(initialData.invoiceDate)) : new Date(),
       dueDate: initialData?.dueDate ? (initialData.dueDate instanceof Timestamp ? initialData.dueDate.toDate() : new Date(initialData.dueDate)) : addDays(new Date(), 15),
       clientId: initialData ? initialData.client.id : searchParams.get('clientId') || "",
-      status: initialData ? initialData.status : 'draft',
+      status: initialData ? initialData.status : 'sent',
       isInterState: initialData ? initialData.isInterState : false,
       lineItems: initialData?.lineItems || [],
       notes: initialData?.notes || "",
@@ -164,7 +164,7 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
         invoiceDate: initialData?.invoiceDate ? (initialData.invoiceDate instanceof Timestamp ? initialData.invoiceDate.toDate() : new Date(initialData.invoiceDate)) : new Date(),
         dueDate: initialData?.dueDate ? (initialData.dueDate instanceof Timestamp ? initialData.dueDate.toDate() : new Date(initialData.dueDate)) : addDays(new Date(), 15),
         clientId: initialData ? initialData.client.id : searchParams.get('clientId') || "",
-        status: initialData ? initialData.status : 'draft',
+        status: initialData ? initialData.status : 'sent',
         isInterState: initialData ? initialData.isInterState : false,
         lineItems: initialLineItems,
         notes: initialData?.notes || "",
@@ -516,7 +516,7 @@ export function InvoiceForm({ initialData }: InvoiceFormProps) {
                             <SelectValue placeholder="Select status" />
                         </SelectTrigger></FormControl>
                         <SelectContent>
-                            <SelectItem value="draft">Draft</SelectItem>
+        
                             <SelectItem value="sent">Sent</SelectItem>
                             <SelectItem value="paid">Paid</SelectItem>
                             <SelectItem value="overdue">Overdue</SelectItem>

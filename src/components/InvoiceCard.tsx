@@ -18,20 +18,30 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { db } from '@/lib/firebase';
-import { doc, updateDoc, serverTimestamp, Timestamp } from "firebase/firestore";
+import { doc, updateDoc, serverTimestamp, Timestamp, deleteDoc } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 
 interface InvoiceCardProps {
   invoice: Invoice;
   onStatusUpdate?: (invoiceId: string, newStatus: Invoice['status']) => void;
+  onDelete?: (invoiceId: string) => void;
 }
 
 const statusStyles: Record<Invoice['status'], string> = {
   paid: 'bg-green-100 text-green-700 dark:bg-green-700/30 dark:text-green-300 border-green-300 dark:border-green-500',
   sent: 'bg-blue-100 text-blue-700 dark:bg-blue-700/30 dark:text-blue-300 border-blue-300 dark:border-blue-500',
   overdue: 'bg-red-100 text-red-700 dark:bg-red-700/30 dark:text-red-300 border-red-300 dark:border-red-500',
-  draft: 'bg-gray-100 text-gray-700 dark:bg-gray-700/30 dark:text-gray-300 border-gray-300 dark:border-gray-500',
   cancelled: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-700/30 dark:text-yellow-300 border-yellow-300 dark:border-yellow-500',
 };
 
@@ -39,7 +49,6 @@ const statusIcons: Record<Invoice['status'], React.ReactElement> = {
   paid: <CheckCircle className="h-4 w-4" />,
   sent: <Send className="h-4 w-4" />,
   overdue: <AlertCircle className="h-4 w-4" />,
-  draft: <FilePenLine className="h-4 w-4" />,
   cancelled: <Trash2 className="h-4 w-4" />,
 };
 
@@ -52,9 +61,11 @@ const ensureDate = (dateValue: Date | FirestoreTimestamp | undefined): Date => {
 };
 
 
-export function InvoiceCard({ invoice: initialInvoice, onStatusUpdate }: InvoiceCardProps) {
+export function InvoiceCard({ invoice: initialInvoice, onStatusUpdate, onDelete }: InvoiceCardProps) {
   const [invoice, setInvoice] = useState<Invoice>(initialInvoice);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -94,6 +105,38 @@ export function InvoiceCard({ invoice: initialInvoice, onStatusUpdate }: Invoice
     }
   };
 
+  const handleDeleteInvoice = async () => {
+    if (!invoice.id) {
+      toast({ title: "Error", description: "Invoice ID is missing.", variant: "destructive" });
+      return;
+    }
+    
+    setIsDeleting(true);
+    try {
+      const invoiceRef = doc(db, 'invoices', invoice.id);
+      await deleteDoc(invoiceRef);
+      
+      if (onDelete && invoice.id) {
+        onDelete(invoice.id);
+      }
+
+      toast({ 
+        title: "Invoice Deleted", 
+        description: `Invoice ${invoice.invoiceNumber} has been permanently deleted.` 
+      });
+    } catch (error) {
+      console.error("Error deleting invoice:", error);
+      toast({ 
+        title: "Error", 
+        description: "Failed to delete invoice. Please try again.", 
+        variant: "destructive" 
+      });
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteDialog(false);
+    }
+  };
+
   return (
     <Card className="group hover:shadow-lg hover:shadow-blue-500/10 transition-all duration-300 hover:-translate-y-1 border border-border/50 hover:border-blue-200/60 dark:hover:border-blue-800/60 bg-card/50 hover:bg-card backdrop-blur-sm">
       <div className="p-4">
@@ -122,9 +165,8 @@ export function InvoiceCard({ invoice: initialInvoice, onStatusUpdate }: Invoice
               <DropdownMenuSeparator />
               {invoice.status !== 'sent' && <DropdownMenuItem onClick={() => handleUpdateStatusOnCard('sent')} disabled={isUpdatingStatus}>Sent</DropdownMenuItem>}
               {invoice.status !== 'paid' && <DropdownMenuItem onClick={() => handleUpdateStatusOnCard('paid')} disabled={isUpdatingStatus}>Paid</DropdownMenuItem>}
-              {invoice.status !== 'overdue' && (invoice.status === 'sent' || invoice.status === 'draft') && <DropdownMenuItem onClick={() => handleUpdateStatusOnCard('overdue')} disabled={isUpdatingStatus}>Overdue</DropdownMenuItem>}
+              {invoice.status !== 'overdue' && invoice.status === 'sent' && <DropdownMenuItem onClick={() => handleUpdateStatusOnCard('overdue')} disabled={isUpdatingStatus}>Overdue</DropdownMenuItem>}
               <DropdownMenuSeparator />
-              {invoice.status !== 'draft' && <DropdownMenuItem onClick={() => handleUpdateStatusOnCard('draft')} disabled={isUpdatingStatus}>Draft</DropdownMenuItem>}
               {invoice.status !== 'cancelled' && <DropdownMenuItem onClick={() => handleUpdateStatusOnCard('cancelled')} disabled={isUpdatingStatus || invoice.status === 'paid'} className="text-destructive focus:text-destructive focus:bg-destructive/10">Cancelled</DropdownMenuItem>}
             </DropdownMenuContent>
           </DropdownMenu>
@@ -165,16 +207,16 @@ export function InvoiceCard({ invoice: initialInvoice, onStatusUpdate }: Invoice
         </div>
 
         {/* Action Buttons */}
-        <div className="flex gap-2">
+        <div className="flex gap-1.5">
           <Button 
             variant="default" 
             size="sm" 
             asChild 
-            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white hover:shadow-md transition-all duration-200 h-8 text-xs"
+            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white hover:shadow-md transition-all duration-200 h-8 text-xs min-w-0"
           >
             <Link href={`/dashboard/invoices/${invoice.id}`}>
-              <Eye className="mr-1 h-3 w-3" /> 
-              View
+              <Eye className="mr-1 h-3 w-3 flex-shrink-0" /> 
+              <span className="truncate">View</span>
             </Link>
           </Button>
           
@@ -182,11 +224,11 @@ export function InvoiceCard({ invoice: initialInvoice, onStatusUpdate }: Invoice
             variant="outline" 
             size="sm" 
             asChild 
-            className="flex-1 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700 dark:hover:bg-blue-950/30 transition-all duration-200 h-8 text-xs"
+            className="flex-1 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700 dark:hover:bg-blue-950/30 transition-all duration-200 h-8 text-xs min-w-0"
           >
             <Link href={`/dashboard/invoices/${invoice.id}/edit`}>
-              <Edit className="mr-1 h-3 w-3" /> 
-              Edit
+              <Edit className="mr-1 h-3 w-3 flex-shrink-0" /> 
+              <span className="truncate">Edit</span>
             </Link>
           </Button>
           
@@ -194,14 +236,59 @@ export function InvoiceCard({ invoice: initialInvoice, onStatusUpdate }: Invoice
             variant="outline" 
             size="sm" 
             asChild 
-            className="hover:bg-green-50 hover:border-green-200 hover:text-green-700 dark:hover:bg-green-950/30 transition-all duration-200 h-8 text-xs px-2"
+            className="hover:bg-green-50 hover:border-green-200 hover:text-green-700 dark:hover:bg-green-950/30 transition-all duration-200 h-8 w-8 p-0 flex-shrink-0"
+            title="Download PDF"
           >
             <Link href={`/dashboard/invoices/${invoice.id}?initiatePdfDownload=true`}>
               <Download className="h-3 w-3" /> 
             </Link>
           </Button>
+
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setShowDeleteDialog(true)}
+            disabled={isDeleting}
+            className="hover:bg-red-50 hover:border-red-200 hover:text-red-700 dark:hover:bg-red-950/30 transition-all duration-200 h-8 w-8 p-0 flex-shrink-0"
+            title="Delete Invoice"
+          >
+            {isDeleting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+          </Button>
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete invoice "{invoice.invoiceNumber}" 
+              and remove all associated data from the database.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteInvoice}
+              disabled={isDeleting}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete Invoice
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }

@@ -186,7 +186,7 @@ export default function QuotationsPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="draft">Draft</SelectItem>
+
             <SelectItem value="sent">Sent</SelectItem>
             <SelectItem value="accepted">Accepted</SelectItem>
             <SelectItem value="declined">Declined</SelectItem>
